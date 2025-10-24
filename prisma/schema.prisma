@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////////
+
+enum PlanType {
+  DIGITAL
+  PHYSICAL
+  FULL
+}
+
+enum Interval {
+  MONTH
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELED
+}
+
+enum OrderType {
+  PREORDER
+  SUBSCRIPTION_RENEWAL
+  ONE_OFF
+}
+
+enum OrderStatus {
+  PENDING
+  REQUIRES_ACTION
+  PAID
+  CANCELED
+  REFUNDED
+  FAILED
+}
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum ShipmentStatus {
+  PENDING
+  PACKED
+  DISPATCHED
+  DELIVERED
+  FAILED
+}
+
+enum Hub {
+  HUB1
+  HUB2
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING_CUSTOMER
+  PENDING_SUPPORT
+  RESOLVED
+  CLOSED
+}
+
+enum TicketCategory {
+  LOGIN
+  PASSWORD_RESET
+  PAYMENT
+  SHIPPING
+  ACCESS
+  OTHER
+}
+
+//////////////////////////////////////////////////////////
+// CORE IDENTITY
+//////////////////////////////////////////////////////////
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name             String?
+  email            String    @unique
+  emailVerifiedAt  DateTime?
+  passwordHash     String?
+  stripeCustomerId String?   @unique
+
+  devices                 Device[]
+  sessions                Session[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  preorders               Preorder[]
+  subscriptions           Subscription[]
+  orders                  Order[]
+  payments                Payment[]
+  editionAccess           EditionAccess[]
+  addresses               Address[]
+  shipments               Shipment[]
+  supportTickets          SupportTicket[]
+  authoredMessages        SupportMessage[]         @relation("AuthorMessages")
+  emails                  EmailLog[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId, expiresAt])
+}
+
+//////////////////////////////////////////////////////////
+// DEVICES
+//////////////////////////////////////////////////////////
+
+model Device {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  fingerprint String
+  userAgent   String?
+  isActive    Boolean  @default(true)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, lastSeenAt])
+}
+
+//////////////////////////////////////////////////////////
+// EDITIONS & ACCESS
+//////////////////////////////////////////////////////////
+
+model Edition {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  number      Int       @unique
+  code        String    @unique
+  title       String
+  releaseDate DateTime?
+  hub         Hub?
+  isLimited   Boolean   @default(false)
+  maxCopies   Int?
+
+  preorders     Preorder[]
+  editionAccess EditionAccess[]
+  orders        Order[]
+  shipments     Shipment[]
+  orderItems    OrderItem[] // ✅ inverse for OrderItem.edition
+
+  @@index([number])
+}
+
+model EditionAccess {
+  id             String        @id @default(cuid())
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  edition        Edition       @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  editionId      String
+  unlockedAt     DateTime      @default(now())
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String?
+
+  @@unique([userId, editionId])
+  @@index([userId])
+  @@index([editionId])
+}
+
+//////////////////////////////////////////////////////////
+// PLANS & SUBSCRIPTIONS
+//////////////////////////////////////////////////////////
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  name          String
+  type          PlanType
+  interval      Interval       @default(MONTH)
+  priceCents    Int
+  currency      String         @default("GBP")
+  active        Boolean        @default(true)
+  stripePriceId String?        @unique
+  subscriptions Subscription[]
+
+  @@index([type, active])
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  plan                  SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  planId                String
+  status                SubscriptionStatus @default(ACTIVE)
+  startedAt             DateTime           @default(now())
+  canceledAt            DateTime?
+  cancelReason          String?
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  failedPaymentAttempts Int                @default(0)
+  stripeSubscriptionId  String?            @unique
+  editionAccess         EditionAccess[]
+  orders                Order[]
+
+  @@index([userId, status])
+  @@index([currentPeriodEnd])
+}
+
+//////////////////////////////////////////////////////////
+// PREORDERS
+//////////////////////////////////////////////////////////
+
+model WaitlistSignup {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  email     String
+  name      String?
+  source    String?
+
+  @@index([email])
+}
+
+model Preorder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  edition   Edition @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  editionId String
+
+  choice     PlanType
+  status     OrderStatus @default(PENDING)
+  totalCents Int
+  currency   String      @default("GBP")
+
+  // 💳 Stripe tracking fields
+  stripePaymentLinkId     String?   @unique
+  stripeCheckoutSessionId String?   @unique
+  stripePaymentIntentId   String?   @unique // keep for legacy / future use
+  stripeCustomerId        String?
+  completedAt             DateTime?
+
+  // 1-to-1 link to Order if you create it after payment
+  order   Order?  @relation(fields: [orderId], references: [id])
+  orderId String? @unique
+
+  @@index([editionId, status])
+  @@index([userId])
+}
+
+//////////////////////////////////////////////////////////
+// ORDERS & PAYMENTS
+//////////////////////////////////////////////////////////
+
+model Order {
+  id                    String        @id @default(cuid())
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  type                  OrderType
+  status                OrderStatus   @default(PENDING)
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  subscriptionId        String?
+  edition               Edition?      @relation(fields: [editionId], references: [id], onDelete: SetNull)
+  editionId             String?
+  totalCents            Int
+  currency              String        @default("GBP")
+  stripePaymentIntentId String?       @unique
+  payments              Payment[]
+  items                 OrderItem[]
+  preorder              Preorder?
+
+  @@index([userId, type, status])
+  @@index([subscriptionId])
+  @@index([editionId])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  edition     Edition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
+  editionId   String?
+  planType    PlanType
+  quantity    Int      @default(1)
+  amountCents Int
+  description String?
+
+  @@index([orderId])
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId           String
+  provider          PaymentProvider @default(STRIPE)
+  providerPaymentId String          @unique
+  status            PaymentStatus   @default(PENDING)
+  amountCents       Int
+  currency          String          @default("GBP")
+  capturedAt        DateTime?
+  failureReason     String?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+
+  @@index([orderId, status])
+  @@index([userId])
+}
+
+//////////////////////////////////////////////////////////
+// ADDRESSES & SHIPPING
+//////////////////////////////////////////////////////////
+
+model Address {
+  id         String     @id @default(cuid())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  fullName   String?
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String
+  country    String
+  phone      String?
+  isDefault  Boolean    @default(false)
+  shipments  Shipment[]
+
+  @@index([userId, isDefault])
+}
+
+model Shipment {
+  id             String         @id @default(cuid())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  edition        Edition        @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  editionId      String
+  address        Address        @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  addressId      String
+  status         ShipmentStatus @default(PENDING)
+  carrier        String?
+  trackingNumber String?        @unique
+  packedAt       DateTime?
+  dispatchedAt   DateTime?
+  deliveredAt    DateTime?
+  shippingMonth  DateTime?
+
+  @@index([userId, status])
+  @@index([editionId, status])
+}
+
+//////////////////////////////////////////////////////////
+// SUPPORT & EMAIL
+//////////////////////////////////////////////////////////
+
+model SupportTicket {
+  id        String           @id @default(cuid())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  email     String?
+  subject   String
+  category  TicketCategory   @default(OTHER)
+  status    TicketStatus     @default(OPEN)
+  messages  SupportMessage[]
+
+  @@index([userId, status])
+}
+
+model SupportMessage {
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now())
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId     String
+  authorUser   User?         @relation("AuthorMessages", fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorUserId String?
+  authorRole   String?
+  body         String
+}
+
+model EmailLog {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      String?
+  toEmail     String
+  templateKey String
+  subject     String
+  payloadJson Json?
+  providerId  String?
+  deliveredAt DateTime?
+}

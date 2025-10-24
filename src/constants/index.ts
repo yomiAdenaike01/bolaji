@@ -1,0 +1,5 @@
+const PRODUCT_PRICING_GBP = {
+  DIGITAL: 500,
+  PHYSICAL: 850,
+  FULL: 850,
+};
