@@ -1,4 +1,4 @@
-import { Db } from "@/infra";
+import { Db, TransactionClient } from "@/infra";
 import { AuthenticateUserInput, CreateUserInput } from "../schemas/users";
 import bcrypt from "bcrypt";
 import { Integrations } from "@/infra/integrations";
@@ -22,8 +22,8 @@ export class UserService {
     }
 
     const passwordHash = bcrypt.hashSync(input.password, 10);
-    const { device, user } = await this.db.$transaction(async (tx) => {
-      const user = await tx.user.create({
+    const { device, user } = await this.db.$transaction(async (trx) => {
+      const user = await trx.user.create({
         data: {
           name: input.name,
           email: input.email,
@@ -33,7 +33,7 @@ export class UserService {
 
       if (input.shippingAddress) {
         const { shippingAddress } = input;
-        await tx.address.create({
+        await trx.address.create({
           data: {
             line1: shippingAddress.addressLine1,
             line2: shippingAddress.addressLine2,
@@ -51,7 +51,7 @@ export class UserService {
       }
 
       const device = await this.findOrRegisterDevice({
-        tx: tx as unknown as Prisma.TransactionClient,
+        tx: trx,
         deviceFingerprint: input.deviceFingerprint,
         userId: user.id,
         userAgent: input.userAgent,
@@ -81,18 +81,18 @@ export class UserService {
       deviceId: device.id,
     };
   }
-  async findOrRegisterDevice({
+  async findOrRegisterDevice<T extends Prisma.TransactionClient>({
     tx,
     deviceFingerprint,
     userAgent,
     userId,
   }: {
-    tx?: Prisma.TransactionClient;
+    tx?: TransactionClient;
     deviceFingerprint: string;
     userAgent: string;
     userId: string;
   }) {
-    const db = this.db || tx;
+    const db = tx ?? this.db;
     const existing = await db.device.findUnique({
       where: {
         userId_fingerprint: {

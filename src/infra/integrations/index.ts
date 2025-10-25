@@ -7,6 +7,9 @@ export class Integrations {
   public readonly email: EmailIntegration;
   constructor(private readonly appConfig: Config) {
     this.payments = new StripeIntegration(this.appConfig.stripeApiKey);
-    this.email = new EmailIntegration();
+    this.email = new EmailIntegration(
+      appConfig.resendApiKey,
+      appConfig.sentFromEmailAddr,
+    );
   }
 }

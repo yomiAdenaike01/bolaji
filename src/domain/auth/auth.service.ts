@@ -28,7 +28,7 @@ export class AuthService {
       );
       if (!isSame) throw new Error("Incorrect password");
       const device = await this.userService.findOrRegisterDevice({
-        tx: tx as unknown as Prisma.TransactionClient,
+        tx: tx,
         deviceFingerprint: input.deviceFingerprint,
         userAgent: input.userAgent,
         userId: existingUser.id,
