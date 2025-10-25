@@ -1,10 +1,9 @@
-import { createDeviceFingerprint } from "@/utils";
 import { Domain } from "@/domain/domain";
-import e, { Request, Response } from "express";
 import { createUserSchema } from "@/domain/schemas/users";
-import { logger } from "@/lib/logger";
-import { invalidInputErrorResponse, createErrorResponse } from "./utils";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 
 export class UserController {
   constructor(private readonly domain: Domain) {}
@@ -12,7 +11,7 @@ export class UserController {
   handleCreateUser = async (req: Request, res: Response) => {
     const createUserInput = createUserSchema.safeParse({
       ...req.body,
-      userAgent: req.headers["user-agent"],
+      userAgent: getRequestUserAgent(req),
       deviceFingerprint: createDeviceFingerprint(req),
     });
 

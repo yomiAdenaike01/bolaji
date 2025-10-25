@@ -1,0 +1,133 @@
+import { Db } from "@/infra";
+import { AuthenticateUserInput, CreateUserInput } from "../schemas/users";
+import bcrypt from "bcrypt";
+import { Integrations } from "@/infra/integrations";
+import { EmailType } from "@/infra/integrations/email.integration";
+import { logger } from "@/lib/logger";
+import { Prisma } from "@/generated/prisma/client";
+
+export class UserService {
+  constructor(
+    private readonly db: Db,
+    private readonly integrations: Integrations,
+  ) {}
+
+  async registerUser(input: CreateUserInput) {
+    const existingUser = await this.db.user.findUnique({
+      where: { email: input.email },
+    });
+
+    if (existingUser) {
+      throw new Error("User already exists with that email.");
+    }
+
+    const passwordHash = bcrypt.hashSync(input.password, 10);
+    const { device, user } = await this.db.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: input.name,
+          email: input.email,
+          passwordHash,
+        },
+      });
+
+      if (input.shippingAddress) {
+        const { shippingAddress } = input;
+        await tx.address.create({
+          data: {
+            line1: shippingAddress.addressLine1,
+            line2: shippingAddress.addressLine2,
+            postalCode: shippingAddress.postalCode,
+            city: shippingAddress.city,
+            country: shippingAddress.country,
+            phone: input.phoneNumber,
+            user: {
+              connect: {
+                id: user.id,
+              },
+            },
+          },
+        });
+      }
+
+      const device = await this.findOrRegisterDevice({
+        tx: tx as unknown as Prisma.TransactionClient,
+        deviceFingerprint: input.deviceFingerprint,
+        userId: user.id,
+        userAgent: input.userAgent,
+      });
+      return {
+        device,
+        user,
+      };
+    });
+
+    if (!device.id) throw new Error("No device id found");
+
+    this.integrations.email
+      .sendEmail({
+        email: user.email,
+        type: EmailType.REGISTER,
+      })
+      .catch((err) => {
+        logger.error(err, "Failed to send email");
+      });
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt,
+      deviceId: device.id,
+    };
+  }
+  async findOrRegisterDevice({
+    tx,
+    deviceFingerprint,
+    userAgent,
+    userId,
+  }: {
+    tx?: Prisma.TransactionClient;
+    deviceFingerprint: string;
+    userAgent: string;
+    userId: string;
+  }) {
+    const db = this.db || tx;
+    const existing = await db.device.findUnique({
+      where: {
+        userId_fingerprint: {
+          userId,
+          fingerprint: deviceFingerprint,
+        },
+      },
+    });
+
+    if (existing) {
+      const updated = await db.device.update({
+        where: { id: existing.id },
+        data: { lastSeenAt: new Date(), isActive: true },
+      });
+      return updated;
+    }
+
+    const count = await db.device.count({
+      where: { userId },
+    });
+
+    if (count >= 5) {
+      throw new Error("Maximum device limit reached (5).");
+    }
+
+    const device = await db.device.create({
+      data: {
+        userId,
+        fingerprint: deviceFingerprint,
+        userAgent,
+      },
+    });
+
+    return device;
+
+    // First, check if the device already exists — cheap lookup using the unique composite key
+  }
+}

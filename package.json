@@ -32,6 +32,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "get-client-ip": "^3.0.4",
     "http-status-codes": "^2.3.0",
     "pino": "^10.1.0",
     "stripe": "^19.1.0"

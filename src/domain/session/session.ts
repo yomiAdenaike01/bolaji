@@ -1,6 +1,6 @@
 export class SessionService {
   constructor() {}
-  private get = (session: any, key: string) => {
+  private getOrThrow = (session: any, key: string) => {
     const data = session[key];
     if (!data) throw new Error(`${key} not defined on the session`);
     return data;
@@ -33,9 +33,9 @@ export class SessionService {
     this.setUserId(sess, userId);
   }
   getEmailOrThrow(sess: any) {
-    return this.get(sess, "email");
+    return this.getOrThrow(sess, "email");
   }
   getUserIdOrThrow(sess: any): string {
-    return this.get(sess, "userId");
+    return this.getOrThrow(sess, "userId");
   }
 }

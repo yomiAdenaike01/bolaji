@@ -30,6 +30,8 @@ const setupRouters = (controllers: Controllers, app: Application) => {
     "/preorders/create-user-preorder",
     controllers.preorders.handleCreateUserAndPreorder,
   );
+  router.post("/auth/authenticate", controllers.auth.handleAuthenticateUser);
+
   app.use("/api", router);
 };
 

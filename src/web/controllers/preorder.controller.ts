@@ -59,7 +59,9 @@ export class PreorderController {
 
   handleCreatePreorder = async (req: Request, res: Response) => {
     const createPreoderInput = createPreorderSchema.safeParse({
-      userId: this.domain.session.getUserId(req.session),
+      userId:
+        this.domain.session.getUserIdOrThrow(req.session) ||
+        "cmh583kf60000plviuy28xyyv",
       ...req.body,
     });
 
@@ -67,8 +69,9 @@ export class PreorderController {
       const { issues } = createPreoderInput.error;
       return invalidInputErrorResponse(res, issues, req.url);
     }
+    const { preorders, session } = this.domain;
 
-    const canAcceptPreorder = this.domain.preorders.canAcceptPreorder();
+    const canAcceptPreorder = preorders.canAcceptPreorder();
     if (!canAcceptPreorder)
       return createErrorResponse(res, {
         statusCode: StatusCodes.FORBIDDEN,
@@ -79,10 +82,10 @@ export class PreorderController {
     const { userId, choice } = createPreoderInput.data;
 
     const { preorderId, url, amount, currency } =
-      await this.domain.preorders.registerPreorder({
+      await preorders.registerPreorder({
         userId,
         choice,
-        email: this.domain.session.getEmailOrThrow(req.session),
+        email: session.getEmailOrThrow(req.session),
       });
   };
 }
