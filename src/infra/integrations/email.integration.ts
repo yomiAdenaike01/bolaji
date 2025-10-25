@@ -1,35 +1,12 @@
-import { Config } from "@/config";
 import { logger } from "@/lib/logger";
 import { Resend } from "resend";
 import z from "zod";
-
-export enum EmailType {
-  REGISTER = "REGISTER",
-}
-const retry = async <T>({
-  retryCount,
-  callback,
-  delay = 200,
-}: {
-  delay?: number;
-  retryCount: number;
-  callback: () => T;
-}) => {
-  let lastError = null;
-  for (let i = 0; i < retryCount; i++) {
-    try {
-      const result = await callback();
-      return result;
-    } catch (error) {
-      logger.error(
-        `Retry attempt ${i}/${retryCount} failed: ${error instanceof Error ? error.message : error}`,
-      );
-      lastError = error;
-      await new Promise((res) => setTimeout(res, delay));
-    }
-  }
-  throw lastError;
-};
+import {
+  EmailContentMap,
+  EmailType,
+  subjects,
+  templates,
+} from "./email.integrations.templates";
 
 export class EmailIntegration {
   private readonly integration!: Resend;
@@ -39,22 +16,25 @@ export class EmailIntegration {
   ) {
     this.integration = new Resend(apiKey);
   }
-  private getEmailTemplate(
-    emailType: EmailType,
-    content: Record<string, string>,
-  ): string {
-    return "";
+  private getEmailTemplate<K extends EmailType>(
+    emailType: K,
+    content: EmailContentMap[K],
+  ): { template: string; subject: string } {
+    return {
+      template: templates[emailType](content),
+      subject: subjects[emailType],
+    };
   }
-  async sendEmail<T extends Record<string, string>>(input: {
-    content: T;
+  async sendEmail<T extends EmailType>(input: {
+    content: EmailContentMap[T];
     email: string;
     type: EmailType;
-    subject: string;
+    subject?: string;
   }) {
     const { email, type, subject } = z
       .object({
         email: z.email().min(1),
-        subject: z.string().min(1),
+        subject: z.string().min(1).optional(),
         type: z.enum(EmailType),
         content: z.object(),
       })
@@ -62,11 +42,12 @@ export class EmailIntegration {
     logger.debug(
       `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
     );
+    const emailContent = this.getEmailTemplate(type, input.content);
     await this.integration.emails.send({
       from: this.sourceEmailAddr,
       to: email,
-      html: this.getEmailTemplate(type, input.content),
-      subject,
+      html: emailContent.template,
+      subject: subject || emailContent.subject,
     });
   }
 }

@@ -1,10 +1,11 @@
 import { Db, TransactionClient } from "@/infra";
-import { AuthenticateUserInput, CreateUserInput } from "../schemas/users";
+import { CreateUserInput } from "../schemas/users";
 import bcrypt from "bcrypt";
 import { Integrations } from "@/infra/integrations";
-import { EmailType } from "@/infra/integrations/email.integration";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma/client";
+import { EmailType } from "@/infra/integrations/email.integrations.templates";
+import z from "zod";
 
 export class UserService {
   constructor(
@@ -64,10 +65,21 @@ export class UserService {
 
     if (!device.id) throw new Error("No device id found");
 
+    const userDto = z
+      .object({
+        email: z.string().min(1),
+        name: z.string().min(1),
+      })
+      .parse(user);
+
     this.integrations.email
       .sendEmail({
-        email: user.email,
+        email: userDto.email,
         type: EmailType.REGISTER,
+        content: {
+          email: userDto.email,
+          name: userDto.name,
+        },
       })
       .catch((err) => {
         logger.error(err, "Failed to send email");
