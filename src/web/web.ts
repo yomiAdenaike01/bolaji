@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 import { HttpError } from "http-errors";
 import { StatusCodes } from "http-status-codes";
 import bodyParser from "body-parser";
+import { createErrorResponse } from "./controllers/utils";
 
 const setupMiddlewares = (app: Application, store: Store, config: Config) => {
   app.use(cors());
@@ -88,7 +89,7 @@ const setupRouters = (controllers: Controllers, app: Application) => {
   paymentsRouter.post(
     "/webhook",
     bodyParser.raw({ type: "application/json" }),
-    controllers.integrations.handlePaymentEvents,
+    controllers.stripePaymentWebhook,
   );
 
   integrationsRouter.use("/payments", paymentsRouter);

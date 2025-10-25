@@ -10,6 +10,7 @@ export const initConfig = () => {
     redisConnectionUrl: process.env.REDIS_URL || "",
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
     stripePaymentRedirectUrl: process.env.STRIPE_PAYMENT_REDIRECT_URL || "",
+    adminEmailAddresses: (process.env.ADMIN_EMAILS || "").split(","),
   };
 };
 

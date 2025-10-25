@@ -1,11 +1,21 @@
-import { PlanType, OrderStatus } from "@/generated/prisma/enums";
+import {
+  OrderStatus,
+  OrderType,
+  PaymentProvider,
+  PaymentStatus,
+  PlanType,
+  ShipmentStatus,
+} from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { Integrations } from "@/infra/integrations";
+import { AdminEmailType } from "@/infra/integrations/admin.email.template";
+import { EmailType } from "@/infra/integrations/email.integrations.templates";
+import { CompletedPreoderEventDto } from "@/infra/integrations/schema";
 import { logger } from "@/lib/logger";
 import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
-import { EmailType } from "@/infra/integrations/email.integrations.templates";
 import { UserService } from "../user/users.service";
+import { Address } from "@/generated/prisma/client";
 
 export class PreordersService {
   constructor(
@@ -125,6 +135,192 @@ export class PreordersService {
       currency: "GBP",
     };
   }
+
+  private async sendCheckOutCompleteComms({
+    name,
+    email,
+    choice,
+    amount,
+    edition,
+    address,
+  }: {
+    amount: string;
+    name: string;
+    email: string;
+    choice: PlanType;
+    edition: string;
+    address?: Address;
+  }) {
+    const sendConfirmEmail = this.integrations.email.sendEmail({
+      email: email,
+      type: EmailType.PREORDER_CONFIRMATION,
+      content: {
+        editionCode: "EDI00",
+        email: email,
+        name: name || "",
+        plan: choice,
+      },
+    });
+
+    const sendAdminEmail = this.integrations.adminEmail.send({
+      type: AdminEmailType.NEW_PREORDER,
+      attachPendingOrders: true,
+      content: {
+        amount,
+        editionCode: edition,
+        email: email,
+        name,
+        plan: choice,
+        address,
+      },
+    });
+
+    Promise.all([sendConfirmEmail, sendAdminEmail]);
+  }
+
+  public onCompletePreorder = async (
+    completedPreorderDto: CompletedPreoderEventDto,
+  ) => {
+    try {
+      const { plan, amount } = completedPreorderDto;
+
+      const result =
+        await this.completePreorderTransaction(completedPreorderDto);
+
+      const formattedAmount = new Intl.NumberFormat("en-GB", {
+        currency: "gbp",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+
+      const sendCommsDto = z
+        .object({
+          email: z.email().min(1),
+          name: z.string().min(1),
+          editionCode: z.string().min(1),
+        })
+        .parse(result);
+
+      this.sendCheckOutCompleteComms({
+        name: sendCommsDto.name,
+        email: sendCommsDto.email,
+        choice: plan,
+        amount: formattedAmount,
+        edition: sendCommsDto.editionCode,
+        address: result.address || undefined,
+      }).catch((err) => {
+        logger.error(err, "failed to send comms to user or admins");
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  private completePreorderTransaction = async (
+    dto: CompletedPreoderEventDto,
+  ) => {
+    logger.debug(
+      dto,
+      "[PreorderService:CompletePreorderTransaction] Completeing preorder transaction",
+    );
+    const {
+      eventId,
+      userId,
+      editionId,
+      paymentLinkId,
+      amount,
+      plan,
+      addressId,
+    } = dto;
+
+    return this.db.$transaction(async (tx) => {
+      let address: Address | null = null;
+      const order = await tx.order.create({
+        data: {
+          userId,
+          editionId,
+          stripePaymentIntentId: eventId,
+          currency: "GBP",
+          status: OrderStatus.PAID,
+          totalCents: 0,
+          type: OrderType.PREORDER,
+        },
+        include: {
+          edition: {
+            select: {
+              code: true,
+            },
+          },
+          user: {
+            include: {
+              addresses: true,
+            },
+          },
+        },
+      });
+      const createPaymentPromise = tx.payment.create({
+        data: {
+          orderId: order.id,
+          providerPaymentId: eventId,
+          userId,
+          provider: PaymentProvider.STRIPE,
+          status: PaymentStatus.SUCCEEDED,
+          amountCents: amount,
+        },
+      });
+
+      const updatePreorderPromise = tx.preorder.update({
+        where: {
+          stripePaymentLinkId: paymentLinkId,
+        },
+        data: {
+          status: OrderStatus.PAID,
+        },
+      });
+
+      const mightUnlockEditionPromise =
+        plan !== PlanType.PHYSICAL
+          ? await tx.editionAccess.create({
+              data: {
+                editionId,
+                userId,
+                unlockedAt: new Date(),
+              },
+            })
+          : Promise.resolve();
+
+      await Promise.all([
+        createPaymentPromise,
+        updatePreorderPromise,
+        mightUnlockEditionPromise,
+      ]);
+
+      if ([PlanType.FULL, PlanType.PHYSICAL].includes(plan as any)) {
+        if (!addressId) {
+          throw new Error("Address is not defined");
+        }
+        const shipment = await tx.shipment.create({
+          data: {
+            userId,
+            editionId,
+            addressId,
+            status: ShipmentStatus.PENDING,
+          },
+          include: {
+            address: true,
+          },
+        });
+        address = shipment.address;
+      }
+
+      return {
+        email: order.user.email,
+        name: order.user.name,
+        editionCode: order.edition?.code,
+        address,
+      };
+    });
+  };
 
   private getPrice(choice: PlanType) {
     switch (choice) {

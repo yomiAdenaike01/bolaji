@@ -5,6 +5,7 @@ import { Integrations } from "@/infra/integrations";
 import { logger } from "@/lib/logger";
 import { EmailType } from "@/infra/integrations/email.integrations.templates";
 import z from "zod";
+import { AdminEmailType } from "@/infra/integrations/admin.email.template";
 
 export class UserService {
   constructor(
@@ -81,18 +82,7 @@ export class UserService {
       })
       .parse(user);
 
-    this.integrations.email
-      .sendEmail({
-        email: userDto.email,
-        type: EmailType.REGISTER,
-        content: {
-          email: userDto.email,
-          name: userDto.name,
-        },
-      })
-      .catch((err) => {
-        logger.error(err, "Failed to send email");
-      });
+    this.sendUserRegistrationEmails(userDto);
 
     return {
       id: user.id,
@@ -102,6 +92,32 @@ export class UserService {
       deviceId: device.id,
       addressId: addressId,
     };
+  }
+
+  private async sendUserRegistrationEmails(userDto: {
+    email: string;
+    name: string;
+  }) {
+    try {
+      const sendUserEmailPromise = this.integrations.email.sendEmail({
+        email: userDto.email,
+        type: EmailType.REGISTER,
+        content: {
+          email: userDto.email,
+          name: userDto.name,
+        },
+      });
+      const sendAdminEmailPromise = this.integrations.adminEmail.send({
+        type: AdminEmailType.NEW_USER,
+        content: {
+          email: userDto.email,
+          name: userDto.name,
+        },
+      });
+      await Promise.all([sendUserEmailPromise, sendAdminEmailPromise]);
+    } catch (error) {
+      logger.error(error, "Failed to send email");
+    }
   }
   async findOrRegisterDevice({
     tx,
