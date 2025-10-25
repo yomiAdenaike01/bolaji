@@ -4,9 +4,12 @@ export const initConfig = () => {
     secret: String(process.env.SESSION_SECRET),
     maxAge: +(process.env.MAX_AGE || 0),
     databaseUrl: process.env.DATABASE_URL || "",
-    stripeApiKey: "",
+    stripeApiKey: process.env.STRIPE_API_KEY || "",
     resendApiKey: process.env.RESEND_API_KEY || "",
     sentFromEmailAddr: process.env.SOURCE_EMAIL_ADDR || "",
+    redisConnectionUrl: process.env.REDIS_URL || "",
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
+    stripePaymentRedirectUrl: process.env.STRIPE_PAYMENT_REDIRECT_URL || "",
   };
 };
 

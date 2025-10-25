@@ -1,3 +1,5 @@
+import { PlanType } from "@/generated/prisma/enums";
+
 export enum EmailType {
   REGISTER = "REGISTER",
   PREORDER_CONFIRMATION = "PREORDER_CONFIRMATION",
@@ -15,6 +17,7 @@ export interface EmailContentMap {
     name: string;
     email: string;
     editionCode: string;
+    plan: PlanType;
   };
   [EmailType.PAYMENT_FAILED]: {
     name: string;
@@ -42,10 +45,10 @@ export const templates: {
     <p>Start exploring exclusive Bolaji Editions now.</p>
   `,
 
-  [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode }) => `
+  [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode, plan }) => `
     <h2>Thank you, ${name}!</h2>
     <p>Your preorder for <strong>Bolaji Edition ${editionCode}</strong> is confirmed.</p>
-    <p>We’ll notify you when it ships.</p>
+    <p> The edition will be avaliable on the website soon. ${plan === PlanType.DIGITAL ? "" : "We’ll notify you when your physicall copy is shipped."}</p>
   `,
 
   [EmailType.PAYMENT_FAILED]: ({ name, reason }) => `

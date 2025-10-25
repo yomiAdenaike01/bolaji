@@ -28,45 +28,49 @@ export class UserService {
     }
 
     const passwordHash = bcrypt.hashSync(input.password, 10);
-    const { device, user } = await this.db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name: input.name,
-          email: input.email,
-          passwordHash,
-        },
-      });
-
-      if (input.shippingAddress) {
-        const { shippingAddress } = input;
-        await tx.address.create({
+    const { device, user, addressId } = await this.db.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
           data: {
-            line1: shippingAddress.addressLine1,
-            line2: shippingAddress.addressLine2,
-            postalCode: shippingAddress.postalCode,
-            city: shippingAddress.city,
-            country: shippingAddress.country,
-            phone: input.phoneNumber,
-            user: {
-              connect: {
-                id: user.id,
-              },
-            },
+            name: input.name,
+            email: input.email,
+            passwordHash,
           },
         });
-      }
+        let addId: string | null = null;
+        if (input.shippingAddress) {
+          const { shippingAddress } = input;
+          const address = await tx.address.create({
+            data: {
+              line1: shippingAddress.addressLine1,
+              line2: shippingAddress.addressLine2,
+              postalCode: shippingAddress.postalCode,
+              city: shippingAddress.city,
+              country: shippingAddress.country,
+              phone: input.phoneNumber,
+              user: {
+                connect: {
+                  id: user.id,
+                },
+              },
+            },
+          });
+          addId = address.id;
+        }
 
-      const device = await this.findOrRegisterDevice({
-        tx: tx,
-        deviceFingerprint: input.deviceFingerprint,
-        userId: user.id,
-        userAgent: input.userAgent,
-      });
-      return {
-        device,
-        user,
-      };
-    });
+        const device = await this.findOrRegisterDevice({
+          tx: tx,
+          deviceFingerprint: input.deviceFingerprint,
+          userId: user.id,
+          userAgent: input.userAgent,
+        });
+        return {
+          device,
+          user,
+          addressId: addId,
+        };
+      },
+    );
 
     if (!device.id) throw new Error("No device id found");
 
@@ -96,6 +100,7 @@ export class UserService {
       email: user.email,
       createdAt: user.createdAt,
       deviceId: device.id,
+      addressId: addressId,
     };
   }
   async findOrRegisterDevice({

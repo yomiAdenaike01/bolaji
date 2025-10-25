@@ -40,6 +40,7 @@ export class EmailIntegration {
           content: z.object(),
         })
         .parse(input);
+
       logger.debug(
         `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );

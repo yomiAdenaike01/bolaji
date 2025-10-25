@@ -25,11 +25,26 @@ export class PreordersService {
     return result + 1 < 300;
   }
 
+  private async hasExistingPreorder(userId: string, editionId: string) {
+    const existing = await this.db.preorder.findFirst({
+      where: {
+        userId,
+        editionId: editionId,
+        status: {
+          in: [OrderStatus.PENDING, OrderStatus.PAID],
+        },
+      },
+    });
+    return !!existing;
+  }
+
   async registerPreorder({
     userId,
     choice,
     email,
+    addressId,
   }: {
+    addressId: string | null;
     userId: string;
     choice: PlanType;
     email: string;
@@ -38,10 +53,18 @@ export class PreordersService {
       .omit({
         name: true,
       })
-      .parse({ userId, choice, email });
+      .safeExtend(z.object({ addressId: z.string().min(1).nullable() }).shape)
+      .parse({ userId, choice, email, addressId });
 
-    const edition00 = await this.db.edition.findFirst({ where: { number: 0 } });
-    if (!edition00) throw new Error("Edition 00 not configured.");
+    const edition00 = await this.db.edition.findUniqueOrThrow({
+      where: { number: 0 },
+    });
+
+    const hasExistingPreorder = await this.hasExistingPreorder(
+      userId,
+      edition00.id,
+    );
+    if (hasExistingPreorder) throw new Error("User preorder exists");
 
     const totalCents = this.getPrice(parsed.choice);
 
@@ -50,6 +73,7 @@ export class PreordersService {
       editionId: edition00.id,
       choice: parsed.choice,
       amount: totalCents,
+      addressId,
     };
 
     const paymentLink =
@@ -57,9 +81,8 @@ export class PreordersService {
         paymentLinkDto,
       );
 
-    const preorder = await this.db.preorder.upsert({
-      where: { stripePaymentLinkId: paymentLink.stripePaymentLinkId },
-      create: {
+    const preorder = await this.db.preorder.create({
+      data: {
         userId: parsed.userId,
         choice: parsed.choice,
         editionId: edition00.id,
@@ -67,12 +90,6 @@ export class PreordersService {
         currency: "GBP",
         status: OrderStatus.PENDING,
         stripePaymentLinkId: paymentLink.stripePaymentLinkId,
-      },
-      update: {
-        choice: parsed.choice,
-        totalCents,
-        status: OrderStatus.PENDING,
-        updatedAt: new Date(),
       },
     });
     const sendEmailInput = {
@@ -90,7 +107,7 @@ export class PreordersService {
           name: user?.name,
           email,
         },
-        type: EmailType.REGISTER,
+        type: EmailType.PREORDER_CONFIRMATION,
       })
       .then(() => {
         logger.debug(

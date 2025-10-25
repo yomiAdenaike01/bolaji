@@ -8,7 +8,7 @@ export const createErrorResponse = (
   logger.error(
     `endpoint=${err.endpoint} error=${err.error} details=${JSON.stringify(err.details)} status=${err.statusCode}`,
   );
-  return res
+  res
     .status(err.statusCode)
     .json({ error: err.error, details: err.details || null });
 };
