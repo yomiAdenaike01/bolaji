@@ -15,7 +15,7 @@ export class AuthService {
     userAgent: string;
   }) {
     return this.db.$transaction(async (tx) => {
-      const existingUser = await this.db.user.findUniqueOrThrow({
+      const existingUser = await tx.user.findUniqueOrThrow({
         where: {
           email: input.principal,
         },

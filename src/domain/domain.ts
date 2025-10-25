@@ -10,7 +10,7 @@ export const initDomain = (appConfig: Config, db: Db) => {
   const integrations = new Integrations(appConfig);
   const userService = new UserService(db, integrations);
   return {
-    preorders: new PreordersService(db, integrations),
+    preorders: new PreordersService(db, userService, integrations),
     session: new SessionService(),
     user: userService,
     auth: new AuthService(db, userService),

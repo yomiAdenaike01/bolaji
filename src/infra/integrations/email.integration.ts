@@ -31,23 +31,30 @@ export class EmailIntegration {
     type: EmailType;
     subject?: string;
   }) {
-    const { email, type, subject } = z
-      .object({
-        email: z.email().min(1),
-        subject: z.string().min(1).optional(),
-        type: z.enum(EmailType),
-        content: z.object(),
-      })
-      .parse(input);
-    logger.debug(
-      `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
-    );
-    const emailContent = this.getEmailTemplate(type, input.content);
-    await this.integration.emails.send({
-      from: this.sourceEmailAddr,
-      to: email,
-      html: emailContent.template,
-      subject: subject || emailContent.subject,
-    });
+    try {
+      const { email, type, subject } = z
+        .object({
+          email: z.email().min(1),
+          subject: z.string().min(1).optional(),
+          type: z.enum(EmailType),
+          content: z.object(),
+        })
+        .parse(input);
+      logger.debug(
+        `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
+      );
+      const emailContent = this.getEmailTemplate(type, input.content);
+
+      await this.integration.emails.send({
+        from: this.sourceEmailAddr,
+        to: email,
+        html: emailContent.template,
+        subject: subject || emailContent.subject,
+      });
+      return true;
+    } catch (error) {
+      logger.error(error, "Failed to send email");
+      return false;
+    }
   }
 }

@@ -3,7 +3,6 @@ import { CreateUserInput } from "../schemas/users";
 import bcrypt from "bcrypt";
 import { Integrations } from "@/infra/integrations";
 import { logger } from "@/lib/logger";
-import { Prisma } from "@/generated/prisma/client";
 import { EmailType } from "@/infra/integrations/email.integrations.templates";
 import z from "zod";
 
@@ -12,7 +11,13 @@ export class UserService {
     private readonly db: Db,
     private readonly integrations: Integrations,
   ) {}
-
+  async findUserById(uid: string) {
+    return this.db.user.findUniqueOrThrow({
+      where: {
+        id: uid,
+      },
+    });
+  }
   async registerUser(input: CreateUserInput) {
     const existingUser = await this.db.user.findUnique({
       where: { email: input.email },
@@ -23,8 +28,8 @@ export class UserService {
     }
 
     const passwordHash = bcrypt.hashSync(input.password, 10);
-    const { device, user } = await this.db.$transaction(async (trx) => {
-      const user = await trx.user.create({
+    const { device, user } = await this.db.$transaction(async (tx) => {
+      const user = await tx.user.create({
         data: {
           name: input.name,
           email: input.email,
@@ -34,7 +39,7 @@ export class UserService {
 
       if (input.shippingAddress) {
         const { shippingAddress } = input;
-        await trx.address.create({
+        await tx.address.create({
           data: {
             line1: shippingAddress.addressLine1,
             line2: shippingAddress.addressLine2,
@@ -52,7 +57,7 @@ export class UserService {
       }
 
       const device = await this.findOrRegisterDevice({
-        tx: trx,
+        tx: tx,
         deviceFingerprint: input.deviceFingerprint,
         userId: user.id,
         userAgent: input.userAgent,
@@ -93,7 +98,7 @@ export class UserService {
       deviceId: device.id,
     };
   }
-  async findOrRegisterDevice<T extends Prisma.TransactionClient>({
+  async findOrRegisterDevice({
     tx,
     deviceFingerprint,
     userAgent,
@@ -104,7 +109,7 @@ export class UserService {
     userAgent: string;
     userId: string;
   }) {
-    const db = tx ?? this.db;
+    const db = tx || this.db;
     const existing = await db.device.findUnique({
       where: {
         userId_fingerprint: {

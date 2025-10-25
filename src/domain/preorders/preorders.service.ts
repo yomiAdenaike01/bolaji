@@ -1,14 +1,16 @@
 import { PlanType, OrderStatus } from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { Integrations } from "@/infra/integrations";
-import { EmailType } from "@/infra/integrations/email.integration";
 import { logger } from "@/lib/logger";
 import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
+import { EmailType } from "@/infra/integrations/email.integrations.templates";
+import { UserService } from "../user/users.service";
 
 export class PreordersService {
   constructor(
     private readonly db: Db,
+    private readonly user: UserService,
     private readonly integrations: Integrations,
   ) {}
 
@@ -78,8 +80,18 @@ export class PreordersService {
       type: EmailType.REGISTER,
     };
 
+    const user = await this.user.findUserById(userId);
+    if (!user.name) throw new Error(`No name found on user uid=${user.id}`);
+
     this.integrations.email
-      .sendEmail(sendEmailInput)
+      .sendEmail({
+        email,
+        content: {
+          name: user?.name,
+          email,
+        },
+        type: EmailType.REGISTER,
+      })
       .then(() => {
         logger.debug(
           `Successfully sent email: ${sendEmailInput.email} type=${sendEmailInput.type}`,
