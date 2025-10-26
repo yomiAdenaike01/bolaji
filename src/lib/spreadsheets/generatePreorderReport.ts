@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { logger } from "../logger";
 
-export async function generatePreorderReport(
+export async function generatePreorderEmailStatusReport(
   successful: { name: string; email: string }[],
   failed: { name: string; email: string; error: string }[],
 ) {

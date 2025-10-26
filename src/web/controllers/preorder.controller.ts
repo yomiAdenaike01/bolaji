@@ -1,14 +1,16 @@
 import { Domain } from "@/domain/domain";
-import { createPreorderSchema } from "@/domain/schemas/preorder";
-import { Request, Response } from "express";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { createUserSchema } from "@/domain/schemas/users";
-import { StatusCodes } from "http-status-codes";
+import {
+  createPreorderSchema,
+  createUserPreorderInputSchema,
+} from "@/domain/schemas/preorder";
 import { SessionError } from "@/domain/session/session";
-import createHttpError from "http-errors";
-import { RESP_TYPES } from "redis";
 import { PlanType } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { Request, Response } from "express";
+import createHttpError from "http-errors";
+import { StatusCodes } from "http-status-codes";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 
 export class PreorderController {
   constructor(private readonly domain: Domain) {}
@@ -21,14 +23,7 @@ export class PreorderController {
   };
 
   handleCreateUserAndPreorder = async (req: Request, res: Response) => {
-    const combinedSchema = createUserSchema
-      .extend(
-        createPreorderSchema.pick({
-          choice: true,
-        }).shape,
-      )
-      .strict()
-      .safeParse(req.body);
+    const combinedSchema = createUserPreorderInputSchema.safeParse(req.body);
 
     if (combinedSchema.error) {
       const { issues } = combinedSchema.error;
@@ -37,12 +32,12 @@ export class PreorderController {
     const { data: input } = combinedSchema;
 
     const user = await this.domain.user.registerUser({
-      deviceFingerprint: input.deviceFingerprint,
+      deviceFingerprint: createDeviceFingerprint(req),
       email: input.email,
       name: input.name,
       shippingAddress: input.shippingAddress,
       password: input.password,
-      userAgent: input.userAgent,
+      userAgent: getRequestUserAgent(req),
     });
 
     const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder();
@@ -59,6 +54,7 @@ export class PreorderController {
       userId: user.id,
       email: user.email,
       addressId: user.addressId,
+      redirectUrl: input.redirectUrl,
     });
 
     this.domain.session.setLoginInfo(req.session, {
@@ -96,7 +92,7 @@ export class PreorderController {
           endpoint: req.url,
         });
 
-      const { userId, choice } = createPreoderInput.data;
+      const { userId, choice, redirectUrl } = createPreoderInput.data;
 
       const addressId = this.shouldAssertAddress(req.session, choice);
 
@@ -105,6 +101,7 @@ export class PreorderController {
         choice,
         email: sessionDomain.getEmailOrThrow(req.session),
         addressId,
+        redirectUrl,
       });
       res.status(StatusCodes.OK).json({ preorderId, url });
     } catch (error) {

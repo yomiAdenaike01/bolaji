@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PlanType } from "@/generated/prisma/enums";
+import { createUserSchema } from "./users";
 
 export const createPreorderSchema = z.object({
   userId: z.string().min(0),
@@ -12,6 +13,23 @@ export const createPreorderSchema = z.object({
   choice: z.enum(PlanType, {
     message: "Choice must be one of DIGITAL, PHYSICAL, or FULL",
   }),
+  redirectUrl: z.string().min(1),
 });
 
+export const createUserPreorderInputSchema = createUserSchema
+  .omit({
+    deviceFingerprint: true,
+    userAgent: true,
+  })
+  .extend(
+    createPreorderSchema.pick({
+      choice: true,
+      redirectUrl: true,
+    }).shape,
+  )
+  .strict();
+
 export type CreatePreorderInput = z.infer<typeof createPreorderSchema>;
+export type CreateUserPreorderInput = z.infer<
+  typeof createUserPreorderInputSchema
+>;

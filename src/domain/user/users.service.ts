@@ -1,5 +1,10 @@
 import { Db, TransactionClient } from "@/infra";
-import { CreateUserInput } from "../schemas/users";
+import {
+  CreateUserInput,
+  ShippingAddress,
+  ShippingAddressInput,
+  shippingAddressSchema,
+} from "../schemas/users";
 import bcrypt from "bcrypt";
 import { Integrations } from "@/infra/integrations";
 import { logger } from "@/lib/logger";
@@ -43,12 +48,13 @@ export class UserService {
           const { shippingAddress } = input;
           const address = await tx.address.create({
             data: {
-              line1: shippingAddress.addressLine1,
-              line2: shippingAddress.addressLine2,
+              line1: shippingAddress.line1,
+              line2: shippingAddress.line2,
+              fullName: input.name,
               postalCode: shippingAddress.postalCode,
               city: shippingAddress.city,
               country: shippingAddress.country,
-              phone: input.phoneNumber,
+              phone: shippingAddress.phone,
               user: {
                 connect: {
                   id: user.id,
@@ -75,14 +81,29 @@ export class UserService {
 
     if (!device.id) throw new Error("No device id found");
 
-    const userDto = z
+    const registerationEmailDto = z
       .object({
         email: z.string().min(1),
         name: z.string().min(1),
+        address: shippingAddressSchema.optional(),
       })
-      .parse(user);
+      .strict()
+      .parse({
+        name: user.name,
+        email: user.email,
+        address: {
+          postalCode: input.shippingAddress?.postalCode,
+          city: input.shippingAddress?.city,
+          state: input.shippingAddress?.state,
+          country: input.shippingAddress?.country,
+          fullName: input.name,
+          line1: input.shippingAddress?.line1,
+          line2: input.shippingAddress?.line2,
+          phone: input.shippingAddress?.phone,
+        },
+      });
 
-    this.sendUserRegistrationEmails(userDto);
+    this.sendUserRegistrationEmails(registerationEmailDto);
 
     return {
       id: user.id,
@@ -122,6 +143,7 @@ export class UserService {
   private async sendUserRegistrationEmails(userDto: {
     email: string;
     name: string;
+    address?: ShippingAddress;
   }) {
     try {
       const sendUserEmailPromise = this.integrations.email.sendEmail({
@@ -137,6 +159,7 @@ export class UserService {
         content: {
           email: userDto.email,
           name: userDto.name,
+          address: userDto.address,
         },
       });
       await Promise.all([sendUserEmailPromise, sendAdminEmailPromise]);

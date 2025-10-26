@@ -9,6 +9,13 @@ import { Store } from "@/infra";
 import { Config } from "@/config";
 import { HttpError } from "http-errors";
 
+const logRequest = (req: Request, res: Response, next: NextFunction) => {
+  logger.info(
+    `${req.method} url: ${req.url} ${req.body ? `body ${JSON.stringify(req.body)}` : ""} `,
+  );
+  next();
+};
+
 export const setupMiddlewares = (
   app: Application,
   store: Store,
@@ -16,6 +23,7 @@ export const setupMiddlewares = (
 ) => {
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
+  app.use(logRequest);
 
   app.use(
     cors({

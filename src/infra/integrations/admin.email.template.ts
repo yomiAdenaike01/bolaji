@@ -1,4 +1,4 @@
-import { Address } from "@/generated/prisma/client";
+import { ShippingAddress } from "@/domain/schemas/users";
 
 export enum AdminEmailType {
   NEW_USER = "NEW_USER",
@@ -17,7 +17,7 @@ export type AdminEmailContent = {
   [AdminEmailType.NEW_USER]: {
     name: string;
     email: string;
-    address?: Address;
+    address?: ShippingAddress;
   };
   [AdminEmailType.NEW_PREORDER]: {
     name: string;
@@ -25,7 +25,7 @@ export type AdminEmailContent = {
     plan: string;
     editionCode: string;
     amount: string;
-    address?: Address;
+    address?: ShippingAddress;
   };
   [AdminEmailType.SUBSCRIPTION_STARTED]: {
     name: string;
@@ -49,7 +49,7 @@ export type AdminEmailContent = {
   };
 };
 
-const renderAddress = (address?: Address) => {
+const renderAddress = (address?: ShippingAddress) => {
   if (!address) return "<p><i>No address on file.</i></p>";
 
   return `

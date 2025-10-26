@@ -1,3 +1,4 @@
+import { Address } from "@/generated/prisma/client";
 import {
   OrderStatus,
   OrderType,
@@ -17,9 +18,8 @@ import {
 import { logger } from "@/lib/logger";
 import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
+import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
-import { Address } from "@/generated/prisma/client";
-import { log } from "console";
 
 export class PreordersService {
   constructor(
@@ -57,18 +57,20 @@ export class PreordersService {
     choice,
     email,
     addressId,
+    redirectUrl,
   }: {
     addressId: string | null;
     userId: string;
     choice: PlanType;
     email: string;
+    redirectUrl: string;
   }) {
     const parsed = createPreorderSchema
       .omit({
         name: true,
       })
       .safeExtend(z.object({ addressId: z.string().min(1).nullable() }).shape)
-      .parse({ userId, choice, email, addressId });
+      .parse({ userId, choice, email, addressId, redirectUrl });
 
     const edition00 = await this.db.edition.findUniqueOrThrow({
       where: { number: 0 },
@@ -88,6 +90,7 @@ export class PreordersService {
       choice: parsed.choice,
       amount: totalCents,
       addressId,
+      redirectUrl,
     };
 
     const paymentLink =
@@ -120,6 +123,7 @@ export class PreordersService {
         content: {
           name: user?.name,
           email,
+          editionCode: edition00.code,
         },
         type: EmailType.PREORDER_CONFIRMATION,
       })
@@ -153,7 +157,7 @@ export class PreordersService {
     email: string;
     choice: PlanType;
     edition: string;
-    address?: Address;
+    address?: ShippingAddress;
   }) => {
     const sendConfirmEmail = this.integrations.email.sendEmail({
       email: email,
@@ -197,15 +201,31 @@ export class PreordersService {
       currency: "gbp",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(amount);
+      style: "currency",
+    }).format(amount / 100);
 
     const sendCommsDto = z
       .object({
         email: z.email().min(1),
         name: z.string().min(1),
         editionCode: z.string().min(1),
+        address: shippingAddressSchema.optional(),
       })
-      .parse(result);
+      .parse({
+        email: result.email,
+        name: result.name,
+        editionCode: result.editionCode,
+        address: {
+          postalCode: result.address?.postalCode,
+          city: result.address?.city,
+          state: result.address?.state,
+          country: result.address?.country,
+          fullName: result.name,
+          line1: result.address?.line1,
+          line2: result.address?.line2,
+          phone: result.address?.phone,
+        },
+      });
 
     this.sendCheckOutCompleteComms({
       name: sendCommsDto.name,
@@ -213,7 +233,7 @@ export class PreordersService {
       choice: plan,
       amount: formattedAmount,
       edition: sendCommsDto.editionCode,
-      address: result.address || undefined,
+      address: sendCommsDto.address,
     });
   };
 
@@ -243,7 +263,7 @@ export class PreordersService {
           stripePaymentIntentId: eventId,
           currency: "GBP",
           status: OrderStatus.PAID,
-          totalCents: 0,
+          totalCents: amount,
           type: OrderType.PREORDER,
           preorder: {
             connect: {

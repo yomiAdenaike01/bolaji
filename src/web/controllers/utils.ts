@@ -13,8 +13,10 @@ export const createErrorResponse = (
     .json({ error: err.error, details: err.details || null });
 };
 
-export const toIssuesList = <T extends { message: string }[]>(issues: T) => {
-  return issues.map((i) => i.message);
+export const toIssuesList = <T extends { message: string; path?: string }[]>(
+  issues: T,
+) => {
+  return issues.map((i) => ({ message: i.message, path: i.path }));
 };
 
 export const invalidInputErrorResponse = <T extends Array<{ message: string }>>(

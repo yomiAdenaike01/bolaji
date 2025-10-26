@@ -85,6 +85,7 @@ export class StripeIntegration {
     choice: PlanType;
     amount: number;
     addressId: string | null;
+    redirectUrl: string;
   }) => {
     const parsed = z
       .object({
@@ -93,6 +94,7 @@ export class StripeIntegration {
         choice: z.enum(["DIGITAL", "PHYSICAL", "FULL"]),
         amount: z.number().min(1),
         addressId: z.string().min(1).nullable(),
+        redirectUrl: z.string().min(1),
       })
       .parse(opts);
 
@@ -121,7 +123,7 @@ export class StripeIntegration {
       },
       after_completion: {
         type: "redirect",
-        redirect: { url: this.paymentRedirectUrl },
+        redirect: { url: parsed.redirectUrl || this.paymentRedirectUrl },
       },
     };
     // 🧱 Create a hosted payment link

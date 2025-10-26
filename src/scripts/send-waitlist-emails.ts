@@ -7,7 +7,7 @@ import { AdminEmailIntegration } from "../infra/integrations/admin.email.integra
 import { initConfig } from "../config";
 import { EmailType } from "../infra/integrations/email.integrations.templates";
 import { logger } from "../lib/logger";
-import { generatePreorderReport } from "../lib/spreadsheets/generatePreorderReport";
+import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
 import { AdminEmailType } from "../infra/integrations/admin.email.template";
 dotenv.config();
 
@@ -80,7 +80,10 @@ async function sendWaitlistEmails() {
     logger.info("🎉 All emails processed!");
   }
 
-  const { buffer, filename } = await generatePreorderReport(successful, failed);
+  const { buffer, filename } = await generatePreorderEmailStatusReport(
+    successful,
+    failed,
+  );
 
   logger.info("📨 Sending report email to admins...");
   await adminEmailIntegration.send({

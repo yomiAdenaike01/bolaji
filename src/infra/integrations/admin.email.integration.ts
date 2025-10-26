@@ -81,20 +81,15 @@ export class AdminEmailIntegration {
           content: Buffer.from(buffer).toString("base64"),
         },
       ];
-
-    return Promise.allSettled(
-      this.adminEmailAddresses.map((address) => {
-        logger.info(
-          `Sending admin email to email=${address} attachedReport=${attachReport} messageType=${type}`,
-        );
-        this.integration.emails.send({
-          from: this.sentFromEmaillAddress,
-          to: address,
-          subject,
-          html,
-          attachments,
-        });
-      }),
-    );
+    for (const address of this.adminEmailAddresses) {
+      await this.integration.emails.send({
+        from: this.sentFromEmaillAddress,
+        to: address,
+        subject,
+        html,
+        attachments,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   }
 }
