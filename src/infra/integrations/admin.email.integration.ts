@@ -7,6 +7,16 @@ import {
 } from "./admin.email.template";
 import { generatePendingOrdersSheet } from "@/lib/spreadsheets/generatePendingOrders";
 import { Db } from "@/infra";
+import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport";
+import ExcelJS from "exceljs";
+import { logger } from "@/lib/logger";
+
+const reportGenerators: Partial<
+  Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
+> = {
+  [AdminEmailType.NEW_USER]: generateUsersReportSheet,
+  [AdminEmailType.NEW_PREORDER]: generatePendingOrdersSheet,
+};
 
 export class AdminEmailIntegration {
   private readonly integration!: Resend;
@@ -41,24 +51,42 @@ export class AdminEmailIntegration {
   async send<K extends AdminEmailType>(opts: {
     type: K;
     content: AdminEmailContent[K];
-    attachPendingOrders?: boolean;
+    attachReport?: boolean;
+    attachmentOverride?: {
+      filename: string;
+      buffer: ExcelJS.Buffer;
+    };
   }) {
-    const html = adminEmailTemplates[opts.type](opts.content);
-    const subject = adminEmailSubjects[opts.type];
+    const { type, content, attachReport = true, attachmentOverride } = opts;
+
+    const html = adminEmailTemplates[type](content);
+    const subject = adminEmailSubjects[type];
 
     let attachments: Attachment[] = [];
-    if (opts.attachPendingOrders) {
-      const buffer = await generatePendingOrdersSheet(this.db);
+
+    let buffer = attachmentOverride?.buffer ?? null;
+    let filename = attachmentOverride?.filename ?? null;
+
+    if (attachReport) {
+      buffer = await (reportGenerators[type]?.(this.db) ??
+        Promise.resolve(null));
+
+      filename = this.getAdminAttachmentFilename(type);
+    }
+
+    if (buffer && filename)
       attachments = [
         {
-          filename: this.getAdminAttachmentFilename(opts.type),
+          filename,
           content: Buffer.from(buffer).toString("base64"),
         },
       ];
-    }
 
     return Promise.allSettled(
       this.adminEmailAddresses.map((address) => {
+        logger.info(
+          `Sending admin email to email=${address} attachedReport=${attachReport} messageType=${type}`,
+        );
         this.integration.emails.send({
           from: this.sentFromEmaillAddress,
           to: address,

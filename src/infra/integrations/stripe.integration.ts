@@ -2,11 +2,19 @@ import { OrderType, PlanType } from "@/generated/prisma/enums";
 import Stripe from "stripe";
 import z from "zod";
 import { CompletedPreoderEventDto, preorderSchema } from "./schema";
+import { logger } from "@/lib/logger";
 
 export class StripeIntegration {
   toPreoderCompleteDto = (
     event: Stripe.CheckoutSessionCompletedEvent,
-  ): CompletedPreoderEventDto & { orderType: OrderType } => {
+  ): CompletedPreoderEventDto & {
+    orderType: OrderType;
+    rawPayload: string;
+    stripeEventType: Stripe.CheckoutSessionCompletedEvent["type"];
+  } => {
+    logger.info(
+      "[StirpeIntegration:toPreoderCompleteDto]: Processing preorder...",
+    );
     if (!event?.data?.object?.metadata)
       throw new Error("Metadata is not defined");
 
@@ -28,10 +36,14 @@ export class StripeIntegration {
       eventId: event.id,
       paymentLinkId: event.data.object.payment_link,
     });
-
+    logger.debug(
+      "[StirpeIntegration:toPreoderCompleteDto]: Constructed preoder data....",
+    );
     return {
       userId,
+      rawPayload: JSON.stringify(event),
       plan,
+      stripeEventType: event.type,
       orderType: type,
       editionId,
       addressId,

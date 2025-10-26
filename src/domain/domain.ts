@@ -7,7 +7,7 @@ import { UserService } from "./user/users.service";
 import { AuthService } from "./auth/auth.service";
 
 export const initDomain = (appConfig: Config, store: Store, db: Db) => {
-  const integrations = new Integrations(db, appConfig);
+  const integrations = new Integrations(db, store, appConfig);
   const userService = new UserService(db, integrations);
   return {
     preorders: new PreordersService(db, userService, integrations),

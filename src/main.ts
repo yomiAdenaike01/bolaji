@@ -9,9 +9,11 @@ dotenv.config();
 const main = () => {
   const config = initConfig();
   const db = initDb();
+
   const store = initStore(config);
   const domain = initDomain(config, store, db);
   const web = initWeb(domain, store, config);
+
   web.listen(config.port, () => {
     logger.info(`Starting server on port:${config.port}`);
   });

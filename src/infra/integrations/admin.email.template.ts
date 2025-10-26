@@ -6,9 +6,14 @@ export enum AdminEmailType {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   SUBSCRIPTION_CANCELED = "SUBSCRIPTION_CANCELED",
   SUPPORT_TICKET_CREATED = "SUPPORT_TICKET_CREATED",
+  WAITLIST_PREORDER_RELEASE_SUMMARY = "WAITLIST_PREORDER_RELEASE_SUMMARY",
 }
 
 export type AdminEmailContent = {
+  [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]: {
+    totalSent: number;
+    totalFailed: number;
+  };
   [AdminEmailType.NEW_USER]: {
     name: string;
     email: string;
@@ -65,6 +70,15 @@ const renderAddress = (address?: Address) => {
 export const adminEmailTemplates: {
   [K in AdminEmailType]: (content: AdminEmailContent[K]) => string;
 } = {
+  [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]: ({
+    totalSent,
+    totalFailed,
+  }) => `
+  <h2>📬 Waitlist Preorder Release Summary</h2>
+  <p><b>Emails Sent:</b> ${totalSent}</p>
+  <p><b>Failed Sends:</b> ${totalFailed}</p>
+  <p>The attached report contains detailed results.</p>
+`,
   [AdminEmailType.NEW_USER]: ({ name, email, address }) => `
     <h2>👤 New User Registered</h2>
     <p><b>Name:</b> ${name}</p>
@@ -128,11 +142,12 @@ export const adminEmailTemplates: {
   `,
 };
 
-// ✅ Subjects
 export const adminEmailSubjects: Record<AdminEmailType, string> = {
   [AdminEmailType.NEW_USER]: "👤 New User Registered",
   [AdminEmailType.NEW_PREORDER]: "🧾 New Preorder Placed",
   [AdminEmailType.SUBSCRIPTION_STARTED]: "💳 New Subscription Started",
   [AdminEmailType.SUBSCRIPTION_CANCELED]: "⛔ Subscription Canceled",
   [AdminEmailType.SUPPORT_TICKET_CREATED]: "💬 New Support Ticket Created",
+  [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]:
+    "Bolaji Editions — Waitlist Preorder Release Summary",
 };

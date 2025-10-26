@@ -1,15 +1,18 @@
 import { Config } from "../../config";
 import { StripeIntegration } from "./stripe.integration";
 import { EmailIntegration } from "./email.integration";
-import { Db } from "@/infra";
+import { Db, Store } from "@/infra";
 import { AdminEmailIntegration } from "./admin.email.integration";
+import { logger } from "@/lib/logger";
 
 export class Integrations {
   public readonly payments: StripeIntegration;
   public readonly email: EmailIntegration;
   public readonly adminEmail: AdminEmailIntegration;
+
   constructor(
-    db: Db,
+    private readonly db: Db,
+    private readonly cache: Store,
     private readonly appConfig: Config,
   ) {
     const {
@@ -42,4 +45,57 @@ export class Integrations {
     this.email = emailIntegration;
     this.adminEmail = adminEmailIntegration;
   }
+
+  beginEvent = async (eventId: string, eventType: string, rawPayload?: any) => {
+    try {
+      return await this.db.stripeEvent.create({
+        data: {
+          id: eventId,
+          type: eventType,
+          status: "PROCESSING",
+          rawPayload: rawPayload ? JSON.stringify(rawPayload) : undefined,
+        },
+      });
+    } catch (error: any) {
+      if (error.code === "P2002") {
+        const existing = await this.db.stripeEvent.findUnique({
+          where: { id: eventId, type: eventType },
+        });
+        if (existing?.status === "HANDLED") {
+          logger.info(`Event ${eventId} already handled.`);
+          return null;
+        }
+        if (existing?.status === "PROCESSING") {
+          logger.warn(`Event ${eventId} is already processing.`);
+          return null;
+        }
+      }
+      throw error;
+    }
+  };
+
+  completeEvent = async (
+    eventId: string,
+    eventType: string,
+    status: "HANDLED" | "FAILED",
+    errorMessage?: string,
+  ) => {
+    try {
+      logger.debug(
+        `Integrations:completeEvent Completing event eventId=${eventId} type=${eventType} status=${status} errorMessage=${errorMessage || "No error message"}`,
+      );
+      await this.db.stripeEvent.update({
+        where: { id: eventId, type: eventType },
+        data: {
+          status,
+          handledAt: status === "HANDLED" ? new Date() : null,
+          rawPayload: errorMessage
+            ? JSON.stringify({ error: errorMessage })
+            : undefined,
+        },
+      });
+    } catch (error) {
+      logger.error(error, "Failed to update event");
+    }
+  };
 }

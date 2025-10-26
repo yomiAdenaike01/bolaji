@@ -1,4 +1,3 @@
-// src/lib/spreadsheets/generatePendingOrdersSheet.ts
 import ExcelJS from "exceljs";
 import { Db } from "@/infra";
 

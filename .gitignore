@@ -6,3 +6,5 @@ out
 *.log
 /src/generated/prisma
 .vscode
+*.csv
+*.DS_STORE

@@ -11,6 +11,7 @@ export const initConfig = () => {
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
     stripePaymentRedirectUrl: process.env.STRIPE_PAYMENT_REDIRECT_URL || "",
     adminEmailAddresses: (process.env.ADMIN_EMAILS || "").split(","),
+    frontEndUrl: process.env.FRONTEND_URL || "",
   };
 };
 

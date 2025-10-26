@@ -8,6 +8,17 @@ import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 export class UserController {
   constructor(private readonly domain: Domain) {}
 
+  handleGetEditionsAccess = async (req: Request, res: Response) => {
+    const userId = this.domain.session.getUserIdOrThrow(req.session);
+    const { withAccess, withoutAccess } =
+      await this.domain.user.getUserEditionsAccess(userId);
+
+    return res.status(200).json({
+      unlocked: withAccess,
+      locked: withoutAccess,
+    });
+  };
+
   handleCreateUser = async (req: Request, res: Response) => {
     const createUserInput = createUserSchema.safeParse({
       ...req.body,

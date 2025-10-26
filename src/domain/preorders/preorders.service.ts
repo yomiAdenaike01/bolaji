@@ -10,12 +10,16 @@ import { Db } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import { AdminEmailType } from "@/infra/integrations/admin.email.template";
 import { EmailType } from "@/infra/integrations/email.integrations.templates";
-import { CompletedPreoderEventDto } from "@/infra/integrations/schema";
+import {
+  CompletedPreoderEventDto,
+  preorderSchema,
+} from "@/infra/integrations/schema";
 import { logger } from "@/lib/logger";
 import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
 import { UserService } from "../user/users.service";
 import { Address } from "@/generated/prisma/client";
+import { log } from "console";
 
 export class PreordersService {
   constructor(
@@ -136,7 +140,7 @@ export class PreordersService {
     };
   }
 
-  private async sendCheckOutCompleteComms({
+  private sendCheckOutCompleteComms = ({
     name,
     email,
     choice,
@@ -150,7 +154,7 @@ export class PreordersService {
     choice: PlanType;
     edition: string;
     address?: Address;
-  }) {
+  }) => {
     const sendConfirmEmail = this.integrations.email.sendEmail({
       email: email,
       type: EmailType.PREORDER_CONFIRMATION,
@@ -164,7 +168,6 @@ export class PreordersService {
 
     const sendAdminEmail = this.integrations.adminEmail.send({
       type: AdminEmailType.NEW_PREORDER,
-      attachPendingOrders: true,
       content: {
         amount,
         editionCode: edition,
@@ -175,45 +178,43 @@ export class PreordersService {
       },
     });
 
-    Promise.all([sendConfirmEmail, sendAdminEmail]);
-  }
+    Promise.all([sendConfirmEmail, sendAdminEmail]).catch((err) => {
+      logger.error(err, "Failed to confirm or admin email");
+    });
+  };
 
   public onCompletePreorder = async (
     completedPreorderDto: CompletedPreoderEventDto,
   ) => {
-    try {
-      const { plan, amount } = completedPreorderDto;
+    preorderSchema.parse(completedPreorderDto);
+    const { plan, amount } = completedPreorderDto;
 
-      const result =
-        await this.completePreorderTransaction(completedPreorderDto);
+    logger.info("[PreorderService:onCompletePreorder] Processing preorder ...");
 
-      const formattedAmount = new Intl.NumberFormat("en-GB", {
-        currency: "gbp",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(amount);
+    const result = await this.completePreorderTransaction(completedPreorderDto);
 
-      const sendCommsDto = z
-        .object({
-          email: z.email().min(1),
-          name: z.string().min(1),
-          editionCode: z.string().min(1),
-        })
-        .parse(result);
+    const formattedAmount = new Intl.NumberFormat("en-GB", {
+      currency: "gbp",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
 
-      this.sendCheckOutCompleteComms({
-        name: sendCommsDto.name,
-        email: sendCommsDto.email,
-        choice: plan,
-        amount: formattedAmount,
-        edition: sendCommsDto.editionCode,
-        address: result.address || undefined,
-      }).catch((err) => {
-        logger.error(err, "failed to send comms to user or admins");
-      });
-    } catch (error) {
-      console.error(error);
-    }
+    const sendCommsDto = z
+      .object({
+        email: z.email().min(1),
+        name: z.string().min(1),
+        editionCode: z.string().min(1),
+      })
+      .parse(result);
+
+    this.sendCheckOutCompleteComms({
+      name: sendCommsDto.name,
+      email: sendCommsDto.email,
+      choice: plan,
+      amount: formattedAmount,
+      edition: sendCommsDto.editionCode,
+      address: result.address || undefined,
+    });
   };
 
   private completePreorderTransaction = async (
@@ -244,6 +245,11 @@ export class PreordersService {
           status: OrderStatus.PAID,
           totalCents: 0,
           type: OrderType.PREORDER,
+          preorder: {
+            connect: {
+              stripePaymentLinkId: paymentLinkId,
+            },
+          },
         },
         include: {
           edition: {

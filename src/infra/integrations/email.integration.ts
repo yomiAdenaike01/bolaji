@@ -41,7 +41,7 @@ export class EmailIntegration {
         })
         .parse(input);
 
-      logger.debug(
+      logger.info(
         `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );
       const emailContent = this.getEmailTemplate(type, input.content);

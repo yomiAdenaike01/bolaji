@@ -447,3 +447,15 @@ model EmailLog {
   providerId  String?
   deliveredAt DateTime?
 }
+
+model StripeEvent {
+  id         String    @id
+  type       String
+  status     String    @default("PENDING") // PENDING | PROCESSING | HANDLED | FAILED
+  rawPayload Json?
+  handledAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([id, type])
+}

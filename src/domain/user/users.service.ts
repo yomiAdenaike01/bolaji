@@ -93,7 +93,32 @@ export class UserService {
       addressId: addressId,
     };
   }
+  public getUserEditionsAccess = async (userId: string) => {
+    const [accesses, editions] = await Promise.all([
+      this.db.editionAccess.findMany({
+        where: { userId },
+        select: { editionId: true },
+      }),
+      this.db.edition.findMany({
+        orderBy: { number: "asc" },
+        select: {
+          id: true,
+          number: true,
+          code: true,
+          title: true,
+          releaseDate: true,
+        },
+      }),
+    ]);
+    const accessIds = new Set(accesses.map((a) => a.editionId));
 
+    const withAccess = editions.filter((e) => accessIds.has(e.id));
+    const withoutAccess = editions.filter((e) => !accessIds.has(e.id));
+    return {
+      withAccess,
+      withoutAccess,
+    };
+  };
   private async sendUserRegistrationEmails(userDto: {
     email: string;
     name: string;

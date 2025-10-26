@@ -6,6 +6,7 @@ export enum EmailType {
   PAYMENT_FAILED = "PAYMENT_FAILED",
   PASSWORD_RESET = "PASSWORD_RESET",
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
+  PREORDER_RELEASED = "PREORDER_RELEASED",
 }
 
 export interface EmailContentMap {
@@ -34,11 +35,51 @@ export interface EmailContentMap {
     email: string;
     nextEdition: string;
   };
+  [EmailType.PREORDER_RELEASED]: {
+    name: string;
+    preorderLink: string;
+  };
 }
 
 export const templates: {
   [K in EmailType]: (content: EmailContentMap[K]) => string;
 } = {
+  [EmailType.PREORDER_RELEASED]: ({ name, preorderLink }) => {
+    return `<table align="center" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.05);">
+      <tr>
+        <td style="padding: 40px 40px 30px;">
+          <h2 style="font-size: 24px; margin-bottom: 12px; color: #3b1e5e;">Edition 00 — Pre-Orders Now Open</h2>
+          <p style="font-size: 16px; line-height: 1.6; margin: 0;">
+            Hi ${name.split(" ")[0]},<br /><br />
+            We’re thrilled to invite you to be among the first to experience 
+            <strong>Bolaji Edition 00</strong>. As a valued member of our waitlist, 
+            you have exclusive early access to preorder before the public release.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding: 20px;">
+          <a href="${preorderLink}" 
+             style="background-color: #6b21a8; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; display: inline-block;">
+             Pre-Order Edition 00 Now
+          </a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 0 40px 40px;">
+          <p style="font-size: 15px; line-height: 1.6; color: #444;">
+            Each edition celebrates creativity, craft, and community — 
+            available in both digital and physical formats. 
+            Secure your copy today before this limited release sells out.
+          </p>
+          <p style="font-size: 14px; color: #777;">
+            Thank you for being part of our journey.<br />
+            <strong>The Bolaji Editions Team</strong>
+          </p>
+        </td>
+      </tr>
+    </table>`;
+  },
   [EmailType.REGISTER]: ({ name, email }) => `
     <h2>Welcome${name ? `, ${name}` : ""}!</h2>
     <p>Your account (${email}) has been successfully created.</p>
@@ -80,4 +121,6 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.PASSWORD_RESET]: "Reset your Bolaji Editions password",
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
+  [EmailType.PREORDER_RELEASED]:
+    "Edition 00 has arrived — your preorder is ready!",
 };
