@@ -21,16 +21,8 @@ export const setupMiddlewares = (
     cors({
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        const allowed = [
-          "https://framercanvas.com",
-          "https://project-tun4ajjhkg4twaiidcol.framercanvas.com",
-          "https://enlightened-step-670935.framer.app",
-          /\.framer\.app$/,
-          /\.framer\.website$/,
-          /\.ngrok\.io$/,
-          "http://localhost:3400",
-        ];
-        const isAllowed = allowed.some((pattern) =>
+
+        const isAllowed = config.allowedOrigins.some((pattern) =>
           typeof pattern === "string"
             ? origin === pattern
             : pattern.test(origin),

@@ -12,6 +12,10 @@ export const initConfig = () => {
     stripePaymentRedirectUrl: process.env.STRIPE_PAYMENT_REDIRECT_URL || "",
     adminEmailAddresses: (process.env.ADMIN_EMAILS || "").split(","),
     frontEndUrl: process.env.FRONTEND_URL || "",
+    allowedOrigins: (process.env.ALLOWED_ORIGINS || "").split(",") as (
+      | string
+      | RegExp
+    )[],
   };
 };
 
