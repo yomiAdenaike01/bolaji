@@ -14,21 +14,52 @@ export const setupMiddlewares = (
   store: Store,
   config: Config,
 ) => {
-  app.use(cors());
+  // 🟢 Allow Express to trust ngrok/reverse proxies
+  app.set("trust proxy", 1);
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowed = [
+          "https://framercanvas.com",
+          "https://project-tun4ajjhkg4twaiidcol.framercanvas.com",
+          "https://enlightened-step-670935.framer.app",
+          /\.framer\.app$/,
+          /\.framer\.website$/,
+          /\.ngrok\.io$/,
+          "http://localhost:3400",
+        ];
+        const isAllowed = allowed.some((pattern) =>
+          typeof pattern === "string"
+            ? origin === pattern
+            : pattern.test(origin),
+        );
+        if (isAllowed) return callback(null, true);
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
+
   app.use(
     express.json({
-      verify(req, res, buf, encoding) {
+      verify(req, res, buf) {
         if (req.url?.includes("webhook")) {
           (req as any).rawBody = buf;
         }
       },
     }),
   );
+
   app.use(bodyParser.urlencoded());
   app.use(cookieParser());
+
   app.use(
     session({
-      saveUninitialized: true,
+      saveUninitialized: false, // 🟢 don’t send empty sessions
       resave: false,
       store: new RedisStore({
         client: store,
@@ -36,11 +67,13 @@ export const setupMiddlewares = (
       secret: config.secret,
       cookie: {
         maxAge: config.maxAge,
-        sameSite: "lax",
+        sameSite: "none", // ✅ required for Framer cross-domain
+        secure: true, // ✅ works now because trust proxy is set
         httpOnly: true,
       },
     }),
   );
+
   app.use(
     (error: HttpError, request: Request, res: Response, next: NextFunction) => {
       logger.error(
