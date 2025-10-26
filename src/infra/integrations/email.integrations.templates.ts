@@ -1,117 +1,182 @@
 import { PlanType } from "@/generated/prisma/enums";
+import { EmailType, EmailContentMap } from "./email-types";
 
-export enum EmailType {
-  REGISTER = "REGISTER",
-  PREORDER_CONFIRMATION = "PREORDER_CONFIRMATION",
-  PAYMENT_FAILED = "PAYMENT_FAILED",
-  PASSWORD_RESET = "PASSWORD_RESET",
-  SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
-  PREORDER_RELEASED = "PREORDER_RELEASED",
-}
+const LOGO_URL =
+  "https://static.wixstatic.com/media/7ec957_cdb075d0cbbe459ebbb49f125106e1fb~mv2.png/v1/fill/w_99,h_66,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/Ade_Logo_Black.png";
 
-export interface EmailContentMap {
-  [EmailType.REGISTER]: {
-    name: string;
-    email: string;
-  };
-  [EmailType.PREORDER_CONFIRMATION]: {
-    name: string;
-    email: string;
-    editionCode: string;
-    plan: PlanType;
-  };
-  [EmailType.PAYMENT_FAILED]: {
-    name: string;
-    email: string;
-    reason?: string;
-  };
-  [EmailType.PASSWORD_RESET]: {
-    name: string;
-    email: string;
-    resetLink: string;
-  };
-  [EmailType.SUBSCRIPTION_RENEWED]: {
-    name: string;
-    email: string;
-    nextEdition: string;
-  };
-  [EmailType.PREORDER_RELEASED]: {
-    name: string;
-    preorderLink: string;
-  };
-}
+const wrap = (title: string, body: string) => `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f9f9f9;-webkit-font-smoothing:antialiased;">
+    <table align="center" cellpadding="0" cellspacing="0" width="100%" style="background:#f9f9f9;padding:40px 0;">
+      <tr>
+        <td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #eee;">
+            <!-- Header with logo -->
+            <tr>
+              <td align="center" style="padding:40px 0 20px 0;">
+                <img src="${LOGO_URL}" alt="Bolaji Editions" width="120" height="auto" style="display:block;margin:0 auto;" />
+              </td>
+            </tr>
+            <!-- Subheading -->
+            <tr>
+              <td style="padding:0 40px 20px;text-align:center;">
+                <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif;color:#777;font-size:14px;margin:0;">
+                  ${title}
+                </p>
+              </td>
+            </tr>
+            <!-- Main content -->
+            <tr>
+              <td style="padding:0 40px 40px;">
+                ${body}
+              </td>
+            </tr>
+          </table>
+          <p style="font-family:Inter,Arial,sans-serif;color:#999;font-size:12px;margin-top:24px;">
+            © ${new Date().getFullYear()} Bolaji Editions — all rights reserved.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
 export const templates: {
   [K in EmailType]: (content: EmailContentMap[K]) => string;
 } = {
-  [EmailType.PREORDER_RELEASED]: ({ name, preorderLink }) => {
-    return `<table align="center" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.05);">
-      <tr>
-        <td style="padding: 40px 40px 30px;">
-          <h2 style="font-size: 24px; margin-bottom: 12px; color: #3b1e5e;">Edition 00 — Pre-Orders Now Open</h2>
-          <p style="font-size: 16px; line-height: 1.6; margin: 0;">
-            Hi ${name.split(" ")[0]},<br /><br />
-            We’re thrilled to invite you to be among the first to experience 
-            <strong>Bolaji Edition 00</strong>. As a valued member of our waitlist, 
-            you have exclusive early access to preorder before the public release.
-          </p>
-        </td>
-      </tr>
-      <tr>
-        <td align="center" style="padding: 20px;">
-          <a href="${preorderLink}" 
-             style="background-color: #6b21a8; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; display: inline-block;">
-             Pre-Order Edition 00 Now
-          </a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding: 0 40px 40px;">
-          <p style="font-size: 15px; line-height: 1.6; color: #444;">
-            Each edition celebrates creativity, craft, and community — 
-            available in both digital and physical formats. 
-            Secure your copy today before this limited release sells out.
-          </p>
-          <p style="font-size: 14px; color: #777;">
-            Thank you for being part of our journey.<br />
-            <strong>The Bolaji Editions Team</strong>
-          </p>
-        </td>
-      </tr>
-    </table>`;
-  },
-  [EmailType.REGISTER]: ({ name, email }) => `
-    <h2>Welcome${name ? `, ${name}` : ""}!</h2>
-    <p>Your account (${email}) has been successfully created.</p>
-    <p>Start exploring exclusive Bolaji Editions now.</p>
-  `,
+  [EmailType.PREORDER_RELEASED]: ({ name, preorderLink }) =>
+    wrap(
+      "Edition 00 — Preorders Now Open",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#111;font-size:22px;margin:0 0 20px 0;">
+        Edition 00 — Preorders Now Open
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
+        Hi ${name.split(" ")[0]},<br><br>
+        We’re excited to invite you to reserve <strong>Bolaji Edition&nbsp;00</strong> — 
+        the inaugural release in our ongoing exploration of art, form, and design. 
+        As part of our waitlist community, you have <b>exclusive early access</b> before public release.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${preorderLink}" 
+           style="background:#111;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;font-size:15px;display:inline-block;font-weight:500;">
+           Preorder Edition&nbsp;00
+        </a>
+      </div>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;margin:0 0 14px;">
+        Each edition celebrates creative craftsmanship across digital and physical mediums. 
+        Secure your copy today — limited quantities available.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:12px 0 0;">
+        With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+      </p>
+    `,
+    ),
 
-  [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode, plan }) => `
-    <h2>Thank you, ${name}!</h2>
-    <p>Your preorder for <strong>Bolaji Edition ${editionCode}</strong> is confirmed.</p>
-    <p> The edition will be avaliable on the website soon. ${plan === PlanType.DIGITAL ? "" : "We’ll notify you when your physicall copy is shipped."}</p>
-  `,
+  [EmailType.REGISTER]: ({ name, email }) =>
+    wrap(
+      "Welcome to Bolaji Editions",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:18px;">Welcome${name ? `, ${name}` : ""}!</h2>
+      <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 10px;">
+        Your account <strong>${email}</strong> has been successfully created.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;">
+        Begin exploring exclusive editions, creative insights, and limited works by contemporary artists.
+      </p>
+    `,
+    ),
 
-  [EmailType.PAYMENT_FAILED]: ({ name, reason }) => `
-    <h2>Hello ${name},</h2>
-    <p>We couldn’t process your latest payment.</p>
-    ${reason ? `<p>Reason: ${reason}</p>` : ""}
-    <p>Please update your payment details to continue your subscription.</p>
-  `,
+  [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode, plan }) =>
+    wrap(
+      "Your Preorder is Confirmed",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
+        Thank you, ${name.split(" ")[0]}!
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 12px;">
+        Your preorder for <strong>Bolaji Edition&nbsp;${editionCode}</strong> is now confirmed.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;line-height:1.6;">
+        ${
+          plan === PlanType.DIGITAL
+            ? `You’ll receive a digital download link when the edition releases.`
+            : `We’ll notify you when your physical edition is prepared for shipment.`
+        }
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+        — The Bolaji&nbsp;Editions Team
+      </p>
+    `,
+    ),
 
-  [EmailType.PASSWORD_RESET]: ({ name, resetLink }) => `
-    <h2>Hello ${name},</h2>
-    <p>We received a request to reset your password.</p>
-    <p><a href="${resetLink}">Click here to reset your password</a></p>
-    <p>If you didn’t request this, you can safely ignore this email.</p>
-  `,
+  [EmailType.PAYMENT_FAILED]: ({ name, reason }) =>
+    wrap(
+      "Payment Issue",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Hello ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:14px;">
+        We couldn’t process your most recent payment.
+      </p>
+      ${
+        reason
+          ? `<p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;">Reason: ${reason}</p>`
+          : ""
+      }
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;">
+        Please update your payment details to ensure continued access to your subscription.
+      </p>
+    `,
+    ),
 
-  [EmailType.SUBSCRIPTION_RENEWED]: ({ name, nextEdition }) => `
-    <h2>Hi ${name},</h2>
-    <p>Your Bolaji Editions subscription has been renewed successfully.</p>
-    <p>Next up: <strong>Edition ${nextEdition}</strong>.</p>
-    <p>We’ll send you a reminder when it’s ready.</p>
-  `,
+  [EmailType.PASSWORD_RESET]: ({ name, resetLink }) =>
+    wrap(
+      "Reset Your Password",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+        We received a request to reset your password. If this was you, click the button below:
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${resetLink}" 
+           style="background:#111;color:#fff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:15px;font-family:Inter,Arial,sans-serif;font-weight:500;">
+           Reset Password
+        </a>
+      </div>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:10px;">
+        If you didn’t request this, you can safely ignore this email.
+      </p>
+    `,
+    ),
+
+  [EmailType.SUBSCRIPTION_RENEWED]: ({ name, nextEdition }) =>
+    wrap(
+      "Subscription Renewed",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:14px;">
+        Your Bolaji Editions subscription has been renewed successfully.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
+        Next up: <strong>Edition&nbsp;${nextEdition}</strong> — we’ll notify you when it’s released.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:18px;">
+        Thank you for being part of our creative community.
+      </p>
+    `,
+    ),
 };
 
 export const subjects: Record<EmailType, string> = {
@@ -121,6 +186,5 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.PASSWORD_RESET]: "Reset your Bolaji Editions password",
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
-  [EmailType.PREORDER_RELEASED]:
-    "Edition 00 has arrived — your preorder is ready!",
+  [EmailType.PREORDER_RELEASED]: "Edition 00 — Preorders Now Open",
 };

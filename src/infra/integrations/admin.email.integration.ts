@@ -1,15 +1,14 @@
 import { Attachment, Resend } from "resend";
 import {
-  AdminEmailType,
   adminEmailTemplates,
   adminEmailSubjects,
-  AdminEmailContent,
 } from "./admin.email.template";
 import { generatePendingOrdersSheet } from "@/lib/spreadsheets/generatePendingOrders";
 import { Db } from "@/infra";
 import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport";
 import ExcelJS from "exceljs";
 import { logger } from "@/lib/logger";
+import { AdminEmailContent, AdminEmailType } from "./email-types";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>

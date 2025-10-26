@@ -1,12 +1,8 @@
 import { logger } from "@/lib/logger";
 import { Resend } from "resend";
 import z from "zod";
-import {
-  EmailContentMap,
-  EmailType,
-  subjects,
-  templates,
-} from "./email.integrations.templates";
+import { subjects, templates } from "./email.integrations.templates";
+import { EmailType, EmailContentMap } from "./email-types";
 
 export class EmailIntegration {
   private readonly integration!: Resend;

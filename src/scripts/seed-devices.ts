@@ -16,7 +16,7 @@ async function seedDevices() {
           ["user-agent"]: userAgent,
         },
         ip: "127.0.0.1",
-      }),
+      } as any),
       userAgent,
     };
   });

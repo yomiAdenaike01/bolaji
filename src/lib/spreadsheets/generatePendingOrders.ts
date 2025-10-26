@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { Db } from "@/infra";
 
-export async function generatePendingOrdersSheet(db: Db) {
+const getOrders = async (db: Db) => {
   const orders = await db.order.findMany({
     include: {
       user: { select: { email: true, name: true } },
@@ -26,12 +26,14 @@ export async function generatePendingOrdersSheet(db: Db) {
   const shipmentMap = new Map(
     shipments.map((s) => [`${s.userId}-${s.editionId}`, s]),
   );
-
-  const enrichedOrders = orders.map((o) => ({
+  return orders.map((o) => ({
     ...o,
     shipment: shipmentMap.get(`${o.userId}-${o.editionId}`),
   }));
+};
 
+export async function generatePendingOrdersSheet(db: Db) {
+  const orders = await getOrders(db);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Pending Orders");
 
@@ -46,7 +48,7 @@ export async function generatePendingOrdersSheet(db: Db) {
     { header: "Shipment Status", key: "shipmentStatus", width: 18 },
   ];
 
-  for (const o of enrichedOrders) {
+  for (const o of orders) {
     const addr = o.shipment?.address;
     const address = addr
       ? [

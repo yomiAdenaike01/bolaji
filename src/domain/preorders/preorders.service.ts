@@ -9,8 +9,6 @@ import {
 } from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { Integrations } from "@/infra/integrations";
-import { AdminEmailType } from "@/infra/integrations/admin.email.template";
-import { EmailType } from "@/infra/integrations/email.integrations.templates";
 import {
   CompletedPreoderEventDto,
   preorderSchema,
@@ -20,6 +18,7 @@ import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
 import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 
 export class PreordersService {
   constructor(

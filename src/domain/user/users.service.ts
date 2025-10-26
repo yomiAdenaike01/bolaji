@@ -2,15 +2,13 @@ import { Db, TransactionClient } from "@/infra";
 import {
   CreateUserInput,
   ShippingAddress,
-  ShippingAddressInput,
   shippingAddressSchema,
 } from "../schemas/users";
 import bcrypt from "bcrypt";
 import { Integrations } from "@/infra/integrations";
 import { logger } from "@/lib/logger";
-import { EmailType } from "@/infra/integrations/email.integrations.templates";
 import z from "zod";
-import { AdminEmailType } from "@/infra/integrations/admin.email.template";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 
 export class UserService {
   constructor(

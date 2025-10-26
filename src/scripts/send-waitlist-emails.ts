@@ -5,10 +5,9 @@ import path from "path";
 import { EmailIntegration } from "../infra/integrations/email.integration";
 import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
 import { initConfig } from "../config";
-import { EmailType } from "../infra/integrations/email.integrations.templates";
 import { logger } from "../lib/logger";
 import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
-import { AdminEmailType } from "../infra/integrations/admin.email.template";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 dotenv.config();
 
 /**
