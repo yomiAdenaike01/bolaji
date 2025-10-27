@@ -27,6 +27,8 @@ enum SubscriptionStatus {
   PAST_DUE
   PAUSED
   CANCELED
+  PENDING
+  AWAITING_PAYMENT
 }
 
 enum OrderType {
@@ -231,23 +233,24 @@ model SubscriptionPlan {
 }
 
 model Subscription {
-  id                    String             @id @default(cuid())
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId                String
-  plan                  SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
-  planId                String
-  status                SubscriptionStatus @default(ACTIVE)
-  startedAt             DateTime           @default(now())
-  canceledAt            DateTime?
-  cancelReason          String?
-  currentPeriodStart    DateTime
-  currentPeriodEnd      DateTime
-  failedPaymentAttempts Int                @default(0)
-  stripeSubscriptionId  String?            @unique
-  editionAccess         EditionAccess[]
-  orders                Order[]
+  id                      String             @id @default(cuid())
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                  String
+  plan                    SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  planId                  String
+  status                  SubscriptionStatus @default(ACTIVE)
+  startedAt               DateTime           @default(now())
+  canceledAt              DateTime?
+  cancelReason            String?
+  currentPeriodStart      DateTime
+  currentPeriodEnd        DateTime
+  failedPaymentAttempts   Int                @default(0)
+  stripeSubscriptionId    String?            @unique
+  stripeCheckoutSessionId String?            @unique
+  editionAccess           EditionAccess[]
+  orders                  Order[]
 
   @@index([userId, status])
   @@index([currentPeriodEnd])

@@ -50,6 +50,42 @@ const wrap = (title: string, body: string) => `
 export const templates: {
   [K in EmailType]: (content: EmailContentMap[K]) => string;
 } = {
+  [EmailType.NEW_EDITION_RELEASED]: ({
+    name,
+    editionTitle,
+    editionCode,
+    editionLink,
+  }) =>
+    wrap(
+      ` ${editionTitle} — Now Available`,
+      `
+    <p style="font-size:16px;line-height:1.6;margin:0 0 16px 0;color:#333;">
+      Hi ${name.split(" ")[0]},<br /><br />
+      We’re excited to share that <strong>${editionTitle}</strong> (${editionCode})
+      has officially launched!<br /><br />
+      This new release continues Bolaji’s mission of celebrating artistry,
+      craftsmanship, and culture — available now in both digital and physical formats.
+    </p>
+
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${editionLink}" 
+        style="background-color:#6b21a8;color:#ffffff;text-decoration:none;
+               padding:14px 32px;border-radius:8px;font-weight:600;
+               display:inline-block;font-size:15px;">
+        View Edition ${editionCode}
+      </a>
+    </div>
+
+    <p style="font-size:15px;line-height:1.6;color:#444;">
+      Thank you for being part of the Bolaji Editions journey. We can’t wait
+      for you to experience this new chapter.
+    </p>
+
+    <p style="font-size:14px;color:#777;">
+      — The Bolaji Editions Team
+    </p>
+  `,
+    ),
   [EmailType.PREORDER_RELEASED]: ({ name, preorderLink }) =>
     wrap(
       "Edition 00 — Preorders Now Open",
@@ -187,4 +223,6 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
   [EmailType.PREORDER_RELEASED]: "Edition 00 — Preorders Now Open",
+  [EmailType.NEW_EDITION_RELEASED]:
+    "A new Bolaji Edition has arrived — explore now!",
 };

@@ -1,17 +1,17 @@
 import dotenv from "dotenv";
 import { initConfig } from "./config";
 import { initDomain } from "./domain/domain";
-import { initDb, initStore } from "./infra";
+import { initDb, initRedis, initStore } from "./infra";
 import { initWeb } from "./web/web";
 import { logger } from "./lib/logger";
 dotenv.config();
 
-const main = () => {
+const boostrap = () => {
   const config = initConfig();
   const db = initDb();
-
   const store = initStore(config);
-  const domain = initDomain(config, store, db);
+  const redis = initRedis(config);
+  const domain = initDomain(config, store, redis, db);
   const web = initWeb(domain, store, config);
 
   web.listen(config.port, () => {
@@ -19,4 +19,4 @@ const main = () => {
   });
 };
 
-void main();
+void boostrap();

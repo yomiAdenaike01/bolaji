@@ -3,8 +3,16 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { createClient } from "redis";
 import { Config } from "@/config";
 import { logger } from "@/lib/logger";
+import IORedis from "ioredis";
+import { seed } from "./seed";
 
-export const initDb = () => new PrismaClient().$extends(withAccelerate());
+export const initDb = () => {
+  const db = new PrismaClient().$extends(withAccelerate());
+  seed(db).catch((err) => {
+    logger.error(err, "Failed to seed db");
+  });
+  return db;
+};
 
 export type Db = ReturnType<typeof initDb>;
 
@@ -20,4 +28,9 @@ export const initStore = (appConfig: Config) => {
   return redisClient;
 };
 
+export const initRedis = (appConfig: Config) => {
+  return new IORedis(appConfig.redisConnectionUrl);
+};
+
 export type Store = ReturnType<typeof initStore>;
+export type RedisClient = ReturnType<typeof initRedis>;

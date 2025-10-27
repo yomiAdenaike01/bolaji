@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 config();
-import { PrismaClient } from "../generated/prisma/client";
-import { createDeviceFingerprint } from "../utils";
+import { PrismaClient } from "../../generated/prisma/client";
+import { createDeviceFingerprint } from "../../utils";
 const prisma = new PrismaClient();
 
 async function seedDevices() {

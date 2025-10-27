@@ -1,57 +1,96 @@
+import { subscriptionSchema } from "@/domain/subscriptions/dto";
 import { OrderType, PlanType } from "@/generated/prisma/enums";
+import { logger } from "@/lib/logger";
 import Stripe from "stripe";
 import z from "zod";
-import { CompletedPreoderEventDto, preorderSchema } from "./schema";
-import { logger } from "@/lib/logger";
+import { preorderSchema } from "./schema";
+import { PaymentEvent } from "./checkout.dto";
 
 export class StripeIntegration {
-  toPreoderCompleteDto = (
+  constructCheckoutEventData = async (
     event: Stripe.CheckoutSessionCompletedEvent,
-  ): CompletedPreoderEventDto & {
-    orderType: OrderType;
-    rawPayload: string;
-    stripeEventType: Stripe.CheckoutSessionCompletedEvent["type"];
-  } => {
+  ): Promise<PaymentEvent | null> => {
     logger.info(
-      "[StirpeIntegration:toPreoderCompleteDto]: Processing preorder...",
+      "[StripeIntegration:constructCheckoutEventData]: Processing event...",
     );
-    if (!event?.data?.object?.metadata)
-      throw new Error("Metadata is not defined");
 
-    const orderTotal =
-      event.data.object.amount_total || event.data.object.amount_subtotal;
+    const session = event.data.object;
+    const metadata = session.metadata;
+    const orderTotal = session.amount_total ?? session.amount_subtotal ?? 0;
+    const rawPayload = JSON.stringify(event);
+    const stripeEventType = event.type;
+    if (!metadata) throw new Error("Metadata is not defined");
 
-    const {
-      userId,
-      plan,
-      type,
-      editionId,
-      addressId = null,
-      amount,
-      eventId,
-      paymentLinkId,
-    } = preorderSchema.parse({
-      ...event.data.object.metadata,
-      amount: orderTotal,
-      eventId: event.id,
-      paymentLinkId: event.data.object.payment_link,
-    });
-    logger.debug(
-      "[StirpeIntegration:toPreoderCompleteDto]: Constructed preoder data....",
-    );
-    return {
-      userId,
-      rawPayload: JSON.stringify(event),
-      plan,
-      stripeEventType: event.type,
-      orderType: type,
-      editionId,
-      addressId,
-      eventId,
-      amount,
-      type,
-      paymentLinkId,
-    };
+    switch (metadata.type as OrderType) {
+      case OrderType.PREORDER: {
+        const {
+          userId,
+          plan,
+          type,
+          editionId,
+          addressId = null,
+          amount,
+          eventId,
+          paymentLinkId,
+        } = preorderSchema.parse({
+          ...metadata,
+          amount: orderTotal,
+          eventId: event.id,
+          paymentLinkId: session.payment_link,
+        });
+
+        logger.debug(
+          "[StripeIntegration:constructCheckoutEventData]: Parsed preorder data",
+        );
+
+        return {
+          userId,
+          success: true,
+          rawPayload,
+          plan,
+          stripeEventType,
+          orderType: type,
+          editionId,
+          addressId,
+          eventId,
+          amount,
+          type,
+          paymentLinkId,
+        };
+      }
+
+      case OrderType.SUBSCRIPTION_RENEWAL: {
+        const { userId, subscriptionId, planId, type, eventId } =
+          subscriptionSchema.parse({
+            ...metadata,
+            eventId: event.id,
+          });
+
+        logger.debug(
+          "[StripeIntegration:constructCheckoutEventData]: Parsed subscription renewal data",
+        );
+
+        return {
+          success: true,
+          userId,
+          rawPayload,
+          stripeEventType,
+          orderType: type,
+          subscriptionId,
+          planId,
+          eventId,
+          amount: orderTotal,
+          type,
+        };
+      }
+
+      default: {
+        logger.warn(
+          `[StripeIntegration:constructCheckoutEventData]: Unknown order type ${metadata.type}`,
+        );
+        return null;
+      }
+    }
   };
   handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
     throw new Error("Method not implemented.");
@@ -141,6 +180,107 @@ export class StripeIntegration {
   retrievePaymentIntent = async (id: string) => {
     return await this.stripe.paymentIntents.retrieve(id);
   };
+  createSubscriptionCheckout = async (
+    params: {
+      userId: string;
+      planId: string;
+      successUrl: string;
+      cancelUrl: string;
+      stripeCustomerId: string;
+      priceId: string;
+      trialDays?: number | null;
+      subscriptionId: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<{ checkoutUrl: string; stripeCheckoutSessionId: string }> => {
+    const session = await this.stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        customer: params.stripeCustomerId,
+        client_reference_id: `${params.userId}:${params.planId}`,
+        allow_promotion_codes: true,
+        line_items: [{ price: params.priceId, quantity: 1 }],
+        subscription_data: {
+          trial_period_days:
+            params.trialDays && params.trialDays > 0
+              ? params.trialDays
+              : undefined,
+          metadata: {
+            userId: params.userId,
+            planId: params.planId,
+            subscriptionId: params.subscriptionId,
+            type: OrderType.SUBSCRIPTION_RENEWAL,
+          },
+        },
+      },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
+
+    if (!session.url) throw new Error("Stripe did not return a checkout URL.");
+    return { checkoutUrl: session.url, stripeCheckoutSessionId: session.id };
+  };
+  ensureCustomer = async (
+    params: {
+      userId: string;
+      email?: string | null;
+      stripeCustomerId?: string | null;
+    },
+    setCustomerId: (id: string) => Promise<void>,
+  ): Promise<string> => {
+    if (params.stripeCustomerId) return params.stripeCustomerId;
+
+    const customer = await this.stripe.customers.create({
+      email: params.email ?? undefined,
+      metadata: { userId: params.userId },
+    });
+    await setCustomerId(customer.id);
+    return customer.id;
+  };
+
+  ensureStripePrice = async (
+    plan: {
+      id: string;
+      name: string;
+      priceCents: number;
+      currency: string;
+      interval: "DAY" | "WEEK" | "MONTH" | "YEAR";
+      stripePriceId?: string | null;
+    },
+    setStripePriceId: (priceId: string) => Promise<void>,
+  ): Promise<string> => {
+    if (plan.stripePriceId) return plan.stripePriceId;
+
+    // Create or reuse a single product
+    const { data: products } = await this.stripe.products.list({
+      limit: 1,
+      active: true,
+    });
+
+    const [product] = products;
+
+    const productId =
+      product?.id ||
+      (
+        await this.stripe.products.create({
+          name: "Bolaji Editions Subscription",
+          description: "Access to monthly editions",
+        })
+      ).id;
+
+    const price = await this.stripe.prices.create({
+      product: productId,
+      nickname: plan.name,
+      unit_amount: plan.priceCents,
+      currency: plan.currency.toLowerCase(),
+      recurring: { interval: plan.interval.toLowerCase() as any },
+      metadata: { planId: plan.id },
+    });
+
+    await setStripePriceId(price.id);
+    return price.id;
+  };
 
   handleWebhook = (requestBody: Buffer, signature: string) => {
     const event = this.stripe.webhooks.constructEvent(
@@ -150,7 +290,7 @@ export class StripeIntegration {
     );
     switch (event.type) {
       case "checkout.session.completed":
-        return this.toPreoderCompleteDto(event);
+        return this.constructCheckoutEventData(event);
       // case "payment_intent.payment_failed":
       //   return this.handlePaymentFailed(event);
       // case "invoice.payment_succeeded":

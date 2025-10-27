@@ -57,9 +57,16 @@ export enum EmailType {
   PASSWORD_RESET = "PASSWORD_RESET",
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
   PREORDER_RELEASED = "PREORDER_RELEASED",
+  NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED", // 👈 NEW
 }
 
 export interface EmailContentMap {
+  [EmailType.NEW_EDITION_RELEASED]: {
+    name: string;
+    editionTitle: string;
+    editionCode: string;
+    editionLink: string;
+  };
   [EmailType.REGISTER]: {
     name: string;
     email: string;
