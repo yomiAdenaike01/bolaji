@@ -95,5 +95,6 @@ export interface EmailContentMap {
   [EmailType.PREORDER_RELEASED]: {
     name: string;
     preorderLink: string;
+    password: string;
   };
 }

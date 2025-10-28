@@ -14,6 +14,38 @@ export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
 }
 export class StripeIntegration {
+  getPaymentLink = async (paymentLinkId: string) => {
+    try {
+      const link = await this.stripe.paymentLinks.retrieve(paymentLinkId);
+
+      if (!link || !link?.active) {
+        logger.warn(
+          `Payment link ${paymentLinkId} not found or deleted or inactive (status=${link.active}) .`,
+        );
+        return null;
+      }
+
+      return {
+        stripePaymentLinkId: link.id,
+        url: link.url,
+        amount: link.line_items?.data?.[0]?.price?.unit_amount || null,
+        currency: link.line_items?.data?.[0]?.price?.currency || "GBP",
+      };
+    } catch (err: any) {
+      // 404 or network error — treat as not found
+      if (err.code === "resource_missing" || err.statusCode === 404) {
+        logger.warn(`Payment link ${paymentLinkId} missing in Stripe`);
+        return null;
+      }
+
+      logger.error(
+        err,
+        `Unexpected error retrieving payment link ${paymentLinkId}`,
+      );
+      return null;
+    }
+  };
+
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {

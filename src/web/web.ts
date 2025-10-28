@@ -11,7 +11,7 @@ export const initWeb = (
   store: Store,
   config: Config,
 ): Application => {
-  const ctrls = initControllers(domain);
+  const ctrls = initControllers(store, config, domain);
   const app = express();
 
   makePaymentsRouter(app, ctrls.stripePaymentWebhook);

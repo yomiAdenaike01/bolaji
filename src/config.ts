@@ -2,6 +2,7 @@ export const initConfig = () => {
   return {
     port: +(process.env.PORT || 0),
     secret: String(process.env.SESSION_SECRET),
+    jwtSecret: process.env.JWT_SECRET || "",
     maxAge: +(process.env.MAX_AGE || 0),
     databaseUrl: process.env.DATABASE_URL || "",
     stripeApiKey: process.env.STRIPE_API_KEY || "",
@@ -13,12 +14,14 @@ export const initConfig = () => {
     adminEmailAddresses: (process.env.ADMIN_EMAILS || "").split(","),
     frontEndUrl: process.env.FRONTEND_URL || "",
     env: (process.env.NODE_ENV || "production") as "dev" | "production",
+    preorderPassword: process.env.PREORDER_PASSWORD || "",
     redisConfig: {
       host: process.env.REDIS_HOST || "",
       port: process.env.REDIS_PORT || "",
       username: process.env.REDIS_USERNAME || "",
       password: process.env.REDIS_PASSWORD || "",
     },
+    privateAccessPageUrl: process.env.PREORDER_ACCESS_PAGE_URL || "",
     allowedOrigins: (process.env.ALLOWED_ORIGINS || "").split(",") as (
       | string
       | RegExp

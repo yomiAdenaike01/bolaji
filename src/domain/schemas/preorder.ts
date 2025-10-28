@@ -27,7 +27,19 @@ export const createUserPreorderInputSchema = createUserSchema
       redirectUrl: true,
     }).shape,
   )
-  .strict();
+  .superRefine((data, ctx) => {
+    const needsShipping = (
+      [PlanType.PHYSICAL, PlanType.FULL] as Array<PlanType>
+    ).includes(data.choice);
+
+    if (needsShipping && !data.shippingAddress) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Shipping address is required for physical or full editions.",
+        path: ["shippingAddress"],
+      });
+    }
+  });
 
 export type CreatePreorderInput = z.infer<typeof createPreorderSchema>;
 export type CreateUserPreorderInput = z.infer<

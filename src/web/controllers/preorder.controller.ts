@@ -4,17 +4,78 @@ import {
   createUserPreorderInputSchema,
 } from "@/domain/schemas/preorder";
 import { SessionError } from "@/domain/session/session";
-import { PlanType } from "@/generated/prisma/enums";
+import { PlanType, UserStatus } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 import { Request, Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
 import { createErrorResponse, invalidInputErrorResponse } from "./utils";
+import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
+import { Config } from "@/config";
+import jwt from "jsonwebtoken";
+import { getErrorPage } from "../templates/getErrorPage";
+import { Store } from "@/infra";
 
 export class PreorderController {
-  constructor(private readonly domain: Domain) {}
+  constructor(
+    private readonly store: Store,
+    private readonly config: Config,
+    private readonly domain: Domain,
+  ) {}
 
+  handlePrivateAccessPassword = async (req: Request, res: Response) => {
+    try {
+      const { token } = req.body;
+      jwt.verify(token, this.config.jwtSecret);
+      const redisKey = `access_attempts:${token}`;
+      const attempts = +((await this.store.get(redisKey)) || 0);
+
+      if (attempts >= 3) {
+        return res
+          .status(StatusCodes.FORBIDDEN)
+          .send(
+            getErrorPage(
+              "Too many failed attempts. Please request a new link.",
+            ),
+          );
+      }
+      const isCorrectPassword =
+        req.body.password === this.config.preorderPassword;
+
+      if (!isCorrectPassword) {
+        await this.store.set(redisKey, +attempts + 1, {
+          expiration: { type: "KEEPTTL" },
+        }); // expire in 5 min
+        return res
+          .status(StatusCodes.UNAUTHORIZED)
+          .send(
+            getPreorderPasswordPage(
+              token,
+              "Incorrect password. Please try again.",
+            ),
+          );
+      }
+      await this.store.multi().incr(redisKey).expire(redisKey, 300).exec();
+
+      return res.redirect(`${this.config.frontEndUrl}/preorder`);
+    } catch (error) {
+      res.status(StatusCodes.UNAUTHORIZED).send();
+    }
+  };
+
+  handleGetPrivateAccessPage = (req: Request, res: Response) => {
+    try {
+      const token = String(req.query.token);
+      if (!token) throw new Error("No token found on request");
+      jwt.verify(token, this.config.jwtSecret);
+
+      const passwordPage = getPreorderPasswordPage(token);
+      return res.send(passwordPage);
+    } catch (error) {
+      res.status(StatusCodes.UNAUTHORIZED);
+    }
+  };
   shouldAssertAddress = (session: any, choice: PlanType) => {
     const addressId = this.domain.session.getCurrentAddress(session);
     if (choice !== "DIGITAL" && !addressId)
@@ -38,6 +99,7 @@ export class PreorderController {
       shippingAddress: input.shippingAddress,
       password: input.password,
       userAgent: getRequestUserAgent(req),
+      status: UserStatus.PENDING_PREORDER,
     });
 
     const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder();

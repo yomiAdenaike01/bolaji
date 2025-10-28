@@ -86,33 +86,51 @@ export const templates: {
     </p>
   `,
     ),
-  [EmailType.PREORDER_RELEASED]: ({ name, preorderLink }) =>
+  [EmailType.PREORDER_RELEASED]: ({ name, preorderLink, password }) =>
     wrap(
-      "Edition 00 — Preorders Now Open",
+      "Edition 00 — Private Access Now Open",
       `
-      <h2 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#111;font-size:22px;margin:0 0 20px 0;">
-        Edition 00 — Preorders Now Open
-      </h2>
-      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
-        Hi ${name.split(" ")[0]},<br><br>
-        We’re excited to invite you to reserve <strong>Bolaji Edition&nbsp;00</strong> — 
-        the inaugural release in our ongoing exploration of art, form, and design. 
-        As part of our waitlist community, you have <b>exclusive early access</b> before public release.
+    <h2 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#111;font-size:22px;margin:0 0 20px 0;">
+      Edition 00 — Private Access Now Open
+    </h2>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
+      Hi ${name.split(" ")[0]},<br><br>
+      We’re excited to invite you to reserve <strong>Bolaji Edition&nbsp;00</strong> — 
+      the inaugural release in our ongoing exploration of art, form, and design.<br><br>
+      As part of our waitlist community, you have <b>exclusive early access</b> before the public release.
+      This private access is protected by a password.
+    </p>
+
+    <div style="text-align:center;margin:28px 0;">
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:8px;">
+        Use the password below to enter the private preorder portal:
       </p>
-      <div style="text-align:center;margin:32px 0;">
-        <a href="${preorderLink}" 
-           style="background:#111;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;font-size:15px;display:inline-block;font-weight:500;">
-           Preorder Edition&nbsp;00
-        </a>
+      <div style="display:inline-block;background:#111;color:#fff;padding:12px 24px;
+                  border-radius:8px;font-weight:600;letter-spacing:1.2px;font-size:16px;
+                  font-family:Inter,Arial,sans-serif;">
+        ${password}
       </div>
-      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;margin:0 0 14px;">
-        Each edition celebrates creative craftsmanship across digital and physical mediums. 
-        Secure your copy today — limited quantities available.
-      </p>
-      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:12px 0 0;">
-        With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>
-      </p>
-    `,
+    </div>
+
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${preorderLink}" 
+         style="background:#6C63FF;color:#fff;text-decoration:none;
+                padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;
+                font-size:15px;display:inline-block;font-weight:500;">
+         Enter Private Access Page →
+      </a>
+    </div>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;margin:0 0 14px;">
+      Each edition celebrates creative craftsmanship across digital and physical mediums. 
+      Secure your copy today — limited quantities available.
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:12px 0 0;">
+      With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+    </p>
+  `,
     ),
 
   [EmailType.REGISTER]: ({ name, email }) =>

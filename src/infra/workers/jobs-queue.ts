@@ -1,11 +1,19 @@
 import { Queue } from "bullmq";
-
+import IORedis from "ioredis";
 export class JobsQueues {
   private emailQueue: Queue<any, any, string, any, any, string>;
   private renewalQueue: Queue<any, any, string, any, any, string>;
-  constructor() {
-    this.emailQueue = new Queue("emails");
-    this.renewalQueue = new Queue("renewable");
+  constructor(connectionUrl: string) {
+    this.emailQueue = new Queue("emails", {
+      connection: {
+        url: connectionUrl,
+      },
+    });
+    this.renewalQueue = new Queue("renewable", {
+      connection: {
+        url: connectionUrl,
+      },
+    });
   }
 
   add = async (jobName: string, data: any, options?: any) => {

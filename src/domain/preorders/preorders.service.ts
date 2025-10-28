@@ -6,8 +6,9 @@ import {
   PaymentStatus,
   PlanType,
   ShipmentStatus,
+  UserStatus,
 } from "@/generated/prisma/enums";
-import { Db } from "@/infra";
+import { Db, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import {
   CompletedPreoderEventDto,
@@ -26,20 +27,117 @@ export class PreordersService {
     private readonly user: UserService,
     private readonly integrations: Integrations,
   ) {}
+  findOrCreatePreorderPaymentLink = async ({
+    stripePaymentLinkId,
+    amount,
+    choice,
+    editionId,
+    userId,
+    addressId,
+    redirectUrl,
+    preorderId,
+  }: {
+    stripePaymentLinkId?: string | null;
+    amount: number;
+    choice: PlanType;
+    editionId: string;
+    userId: string;
+    addressId: string | null;
+    redirectUrl: string;
+    preorderId: string;
+  }) => {
+    try {
+      // ✅ 1️⃣ If a Stripe link exists, check if it’s still valid
+      if (stripePaymentLinkId) {
+        const existing =
+          await this.integrations.payments.getPaymentLink(stripePaymentLinkId);
 
-  async canAcceptPreorder() {
-    const result = await this.db.preorder.count({
-      where: {
-        status: {
-          in: [OrderStatus.PENDING, OrderStatus.PAID],
+        if (existing) {
+          logger.info(
+            `♻️ Reusing existing Stripe link for preorder=${preorderId}, link=${existing.url}`,
+          );
+          return existing;
+        }
+
+        logger.warn(
+          `⚠️ Stripe link ${stripePaymentLinkId} invalid or deleted — recreating.`,
+        );
+      }
+
+      // ✅ 2️⃣ Create a new link (using idempotency key)
+      const paymentLink =
+        await this.integrations.payments.createPreorderPaymentLink({
+          userId,
+          editionId,
+          choice,
+          amount,
+          addressId,
+          redirectUrl,
+        });
+
+      // ✅ 3️⃣ Save in DB atomically
+      await this.db.preorder.update({
+        where: { id: preorderId },
+        data: { stripePaymentLinkId: paymentLink.stripePaymentLinkId },
+      });
+
+      logger.info(
+        `✅ Created new Stripe link for preorder=${preorderId}, link=${paymentLink.url}`,
+      );
+
+      return paymentLink;
+    } catch (err: any) {
+      logger.error(err, "❌ Stripe payment link creation failed");
+
+      // mark user for retry — safe recovery state
+      await this.db.user.update({
+        where: { id: userId },
+        data: { status: UserStatus.PENDING_RETRY },
+      });
+
+      throw new Error(`Stripe payment link creation failed: ${err.message}`);
+    }
+  };
+
+  async canAcceptPreorder(tx?: TransactionClient) {
+    const queries = (db: TransactionClient | Db) => {
+      const preorderCountPromise = db.preorder.count({
+        where: {
+          status: {
+            in: [OrderStatus.PENDING, OrderStatus.PAID],
+          },
         },
-      },
-    });
-    return result + 1 < 300;
+      });
+      const preorderEditionPromise = db.edition.findUniqueOrThrow({
+        where: { number: 0 },
+      });
+      return Promise.all([preorderCountPromise, preorderEditionPromise]);
+    };
+
+    let preorderCount = 0;
+    let preorderMaxCopies = 300;
+
+    if (!tx) {
+      let [result, preorderEdition] = await this.db.$transaction(async (tx) => {
+        return queries(tx);
+      });
+      preorderCount = result;
+      preorderMaxCopies = preorderEdition.maxCopies || 300;
+    } else {
+      let [count, preorderEdition] = await queries(this.db);
+      preorderCount = count;
+      preorderMaxCopies = preorderEdition.maxCopies || 300;
+    }
+
+    return preorderCount + 1 < (preorderMaxCopies || 300);
   }
 
-  private async hasExistingPreorder(userId: string, editionId: string) {
-    const existing = await this.db.preorder.findFirst({
+  private getExistingPreorder = async (
+    userId: string,
+    editionId: string,
+    tx?: TransactionClient,
+  ) => {
+    return (tx || this.db).preorder.findFirst({
       where: {
         userId,
         editionId: editionId,
@@ -48,100 +146,121 @@ export class PreordersService {
         },
       },
     });
-    return !!existing;
-  }
+  };
 
-  async registerPreorder({
-    userId,
-    choice,
-    email,
-    addressId,
-    redirectUrl,
-  }: {
-    addressId: string | null;
-    userId: string;
-    choice: PlanType;
-    email: string;
-    redirectUrl: string;
-  }) {
+  registerPreorder = async (
+    {
+      userId,
+      choice,
+      email,
+      addressId,
+      redirectUrl,
+    }: {
+      addressId: string | null;
+      userId: string;
+      choice: PlanType;
+      email: string;
+      redirectUrl: string;
+    },
+    tx?: TransactionClient,
+  ) => {
     const parsed = createPreorderSchema
-      .omit({
-        name: true,
-      })
+      .omit({ name: true })
       .safeExtend(z.object({ addressId: z.string().min(1).nullable() }).shape)
       .parse({ userId, choice, email, addressId, redirectUrl });
 
-    const edition00 = await this.db.edition.findUniqueOrThrow({
-      where: { number: 0 },
-    });
-
-    const hasExistingPreorder = await this.hasExistingPreorder(
-      userId,
-      edition00.id,
-    );
-    if (hasExistingPreorder) throw new Error("User preorder exists");
-
     const totalCents = this.getPrice(parsed.choice);
 
-    const paymentLinkDto = {
-      userId: parsed.userId,
-      editionId: edition00.id,
-      choice: parsed.choice,
-      amount: totalCents,
-      addressId,
-      redirectUrl,
-    };
+    // 1️⃣ Atomic DB step — ensure edition and preorder consistency
+    const { preorder, edition00 } = await this.db.$transaction(async (tx) => {
+      const edition00 = await tx.edition.findUniqueOrThrow({
+        where: { number: 0 },
+      });
 
-    const paymentLink =
-      await this.integrations.payments.createPreorderPaymentLink(
-        paymentLinkDto,
+      const existing = await this.getExistingPreorder(userId, edition00.id, tx);
+
+      if (existing?.status === OrderStatus.PAID) {
+        logger.info(
+          `✅ User ${userId} already completed preorder for edition ${edition00.id}`,
+        );
+        return { preorder: existing, edition00 };
+      }
+
+      if (existing) {
+        logger.info(
+          `♻️ Reusing existing preorder ${existing.id} for user ${userId}`,
+        );
+        return { preorder: existing, edition00 };
+      }
+
+      const preorder = await tx.preorder.create({
+        data: {
+          userId: parsed.userId,
+          choice: parsed.choice,
+          editionId: edition00.id,
+          totalCents,
+          currency: "GBP",
+          status: OrderStatus.PENDING,
+        },
+      });
+
+      logger.info(
+        `🆕 Created new preorder ${preorder.id} for user ${userId} (${choice})`,
       );
 
-    const preorder = await this.db.preorder.create({
-      data: {
-        userId: parsed.userId,
-        choice: parsed.choice,
-        editionId: edition00.id,
-        totalCents,
-        currency: "GBP",
-        status: OrderStatus.PENDING,
-        stripePaymentLinkId: paymentLink.stripePaymentLinkId,
-      },
+      return { preorder, edition00 };
     });
-    const sendEmailInput = {
-      email: parsed.email,
-      type: EmailType.REGISTER,
-    };
 
+    // 2️⃣ Stripe link handling (idempotent)
+    const paymentLink = await this.findOrCreatePreorderPaymentLink({
+      stripePaymentLinkId: preorder.stripePaymentLinkId,
+      addressId,
+      amount: totalCents,
+      choice: parsed.choice,
+      editionId: edition00.id,
+      preorderId: preorder.id,
+      userId: parsed.userId,
+      redirectUrl,
+    });
+
+    // 3️⃣ Mark user as active once Stripe is ready
+    await this.db.user.update({
+      where: { id: userId },
+      data: { status: UserStatus.ACTIVE },
+    });
+
+    // 4️⃣ Non-blocking email
     const user = await this.user.findUserById(userId);
-    if (!user.name) throw new Error(`No name found on user uid=${user.id}`);
+    if (!user?.name)
+      throw new Error(`Missing name for user id=${userId} during preorder.`);
 
     this.integrations.email
       .sendEmail({
         email,
         content: {
-          name: user?.name,
+          name: user.name,
           email,
           editionCode: edition00.code,
         },
         type: EmailType.PREORDER_CONFIRMATION,
       })
-      .then(() => {
+      .then(() =>
         logger.info(
-          `Successfully sent email: ${sendEmailInput.email} type=${sendEmailInput.type}`,
-        );
-      })
-      .catch((err) => {
-        logger.error(err, "Failed to send user email");
-      });
+          `📨 Sent preorder confirmation to ${email} (${preorder.id})`,
+        ),
+      )
+      .catch((err) =>
+        logger.error(err, `⚠️ Failed to send preorder email to ${email}`),
+      );
 
+    // 5️⃣ Return consistent shape
     return {
       preorderId: preorder.id,
       url: paymentLink.url,
-      amount: totalCents,
+      amount: preorder.totalCents,
       currency: "GBP",
     };
-  }
+  };
 
   private sendCheckOutCompleteComms = ({
     name,
@@ -192,8 +311,6 @@ export class PreordersService {
     preorderSchema.parse(completedPreorderDto);
     const { plan, amount } = completedPreorderDto;
 
-    logger.info("[PreorderService:onCompletePreorder] Processing preorder ...");
-
     const result = await this.completePreorderTransaction(completedPreorderDto);
 
     const formattedAmount = new Intl.NumberFormat("en-GB", {
@@ -214,16 +331,20 @@ export class PreordersService {
         email: result.email,
         name: result.name,
         editionCode: result.editionCode,
-        address: {
-          postalCode: result.address?.postalCode,
-          city: result.address?.city,
-          state: result.address?.state,
-          country: result.address?.country,
-          fullName: result.name,
-          line1: result.address?.line1,
-          line2: result.address?.line2,
-          phone: result.address?.phone,
-        },
+        ...(result.address
+          ? {
+              address: {
+                postalCode: result.address?.postalCode,
+                city: result.address?.city,
+                state: result.address?.state,
+                country: result.address?.country,
+                fullName: result.name,
+                line1: result.address?.line1,
+                line2: result.address?.line2,
+                phone: result.address?.phone,
+              },
+            }
+          : {}),
       });
 
     this.sendCheckOutCompleteComms({
@@ -239,10 +360,6 @@ export class PreordersService {
   private completePreorderTransaction = async (
     dto: CompletedPreoderEventDto,
   ) => {
-    logger.info(
-      dto,
-      "[PreorderService:CompletePreorderTransaction] Completeing preorder transaction",
-    );
     const {
       eventId,
       userId,
@@ -253,8 +370,14 @@ export class PreordersService {
       addressId,
     } = dto;
 
+    logger.info(
+      `[Preorder Service] Completeing preorder transaction for userId=${userId} editionId=${editionId} paymentLinkId=${paymentLinkId} plan=${plan} addressId=${addressId}`,
+    );
     return this.db.$transaction(async (tx) => {
       let address: Address | null = null;
+      logger.info(
+        `[Preorder Service] Creating order for eventId=${eventId} paymentLinkId=${paymentLinkId}`,
+      );
       const order = await tx.order.create({
         data: {
           userId,
@@ -283,7 +406,10 @@ export class PreordersService {
           },
         },
       });
-      const createPaymentPromise = tx.payment.create({
+      logger.info(
+        `[Preorder Service] Creating successful payment for order=${order.id} paymentEventId=${eventId} userId=${userId} amount=${amount}`,
+      );
+      await tx.payment.create({
         data: {
           orderId: order.id,
           providerPaymentId: eventId,
@@ -294,7 +420,10 @@ export class PreordersService {
         },
       });
 
-      const updatePreorderPromise = tx.preorder.update({
+      logger.info(
+        `[Preorder Service] Updating preorder to status=${OrderStatus.PAID} by paymentLinkId=${paymentLinkId}`,
+      );
+      await tx.preorder.update({
         where: {
           stripePaymentLinkId: paymentLinkId,
         },
@@ -303,27 +432,26 @@ export class PreordersService {
         },
       });
 
-      const mightUnlockEditionPromise =
-        plan !== PlanType.PHYSICAL
-          ? await tx.editionAccess.create({
-              data: {
-                editionId,
-                userId,
-                unlockedAt: new Date(),
-              },
-            })
-          : Promise.resolve();
-
-      await Promise.all([
-        createPaymentPromise,
-        updatePreorderPromise,
-        mightUnlockEditionPromise,
-      ]);
+      if (plan !== PlanType.PHYSICAL) {
+        logger.info(
+          `[Preorder Service] Updating edition access for userId=${userId} editionId=${editionId}`,
+        );
+        await tx.editionAccess.create({
+          data: {
+            editionId,
+            userId,
+            unlockedAt: new Date(),
+          },
+        });
+      }
 
       if ([PlanType.FULL, PlanType.PHYSICAL].includes(plan as any)) {
         if (!addressId) {
           throw new Error("Address is not defined");
         }
+        logger.info(
+          `[Preorder Service] Creating shipment for addressId=${addressId} userId=${userId}`,
+        );
         const shipment = await tx.shipment.create({
           data: {
             userId,
@@ -337,7 +465,9 @@ export class PreordersService {
         });
         address = shipment.address;
       }
-
+      logger.info(
+        `[Preorder Service] ✅ Completed preorder transactions orderId=${order.id} for userId=${order.userId}`,
+      );
       return {
         email: order.user.email,
         name: order.user.name,

@@ -82,7 +82,7 @@ export class Integrations {
   ) => {
     try {
       logger.info(
-        `Integrations:completeEvent Completing event eventId=${eventId} type=${eventType} status=${status} errorMessage=${errorMessage || "No error message"}`,
+        `[Integrations] Completing event eventId=${eventId} type=${eventType} status=${status} errorMessage=${errorMessage || "No error message"}`,
       );
       await this.db.stripeEvent.update({
         where: { id: eventId, type: eventType },

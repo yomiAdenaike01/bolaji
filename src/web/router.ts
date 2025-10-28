@@ -30,6 +30,8 @@ const makeSubscriptionsRouter = (
 
 const makePreorderRouter = (preorderController: PreorderController) => {
   const r = express.Router();
+  r.get("/private-access", preorderController.handleGetPrivateAccessPage);
+  r.post("/private-access", preorderController.handlePrivateAccessPassword);
   r.post("/create", preorderController.handleCreatePreorder);
   r.post(
     "/create-user-preorder",

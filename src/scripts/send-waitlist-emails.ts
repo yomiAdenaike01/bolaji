@@ -8,6 +8,7 @@ import { initConfig } from "../config";
 import { logger } from "../lib/logger";
 import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+import jwt from "jsonwebtoken";
 dotenv.config();
 
 /**
@@ -57,19 +58,33 @@ async function sendWaitlistEmails() {
 
   for (const user of users) {
     try {
+      const token = jwt.sign(
+        {
+          email: user.Email,
+          name: user.Name,
+        },
+        config.jwtSecret,
+        {
+          expiresIn: "7d",
+        },
+      );
+
+      const preorderUrl = new URL(config.privateAccessPageUrl);
+      preorderUrl.searchParams.append("token", token);
+
       await emailIntegration.sendEmail({
         email: user.Email,
         type: EmailType.PREORDER_RELEASED,
         content: {
           name: user.Name,
-          preorderLink: config.frontEndUrl,
+          preorderLink: preorderUrl.toString(),
+          password: config.preorderPassword,
         },
       });
 
       successful.push({ name: user.Name, email: user.Email });
       logger.info(`✅ Email sent to ${user.Name} (${user.Email})`);
 
-      // optional delay to avoid Resend rate limits
       await new Promise((r) => setTimeout(r, 500));
     } catch (err: any) {
       failed.push({ name: user.Name, email: user.Email, error: err.message });

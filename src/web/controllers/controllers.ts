@@ -5,13 +5,19 @@ import { PreorderController } from "./preorder.controller";
 import { UserController } from "./user.controller";
 import { createStripePaymentWebhook } from "./createStripeWebhook";
 import { SubscriptionsController } from "./subscriptions.controller";
+import { Config } from "@/config";
+import { Store } from "@/infra";
 
-export const initControllers = (domain: Domain) => {
+export const initControllers = (
+  store: Store,
+  config: Config,
+  domain: Domain,
+) => {
   const integrations = new IntegrationsController(domain);
   return {
     auth: new AuthController(domain),
     user: new UserController(domain),
-    preorders: new PreorderController(domain),
+    preorders: new PreorderController(store, config, domain),
     subscriptions: new SubscriptionsController(domain),
     integrations,
     stripePaymentWebhook: createStripePaymentWebhook(integrations, domain),

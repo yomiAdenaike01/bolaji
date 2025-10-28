@@ -8,6 +8,16 @@ import { logger } from "@/lib/logger";
 import { Store } from "@/infra";
 import { Config } from "@/config";
 import { HttpError } from "http-errors";
+import helmet from "helmet";
+import compression from "compression";
+
+function shouldCompress(req: any, res: any) {
+  if (req.headers["x-no-compression"]) {
+    // don't compress responses with this request header
+    return false;
+  }
+  return compression.filter(req, res);
+}
 
 const logRequest = (req: Request, res: Response, next: NextFunction) => {
   logger.info(
@@ -23,6 +33,9 @@ export const setupMiddlewares = (
 ) => {
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
+  app.use(compression({ filter: shouldCompress }));
+
+  app.use(helmet());
   app.use(logRequest);
   app.use(
     cors({
@@ -67,7 +80,7 @@ export const setupMiddlewares = (
       cookie: {
         maxAge: config.maxAge,
         sameSite: "none", // ✅ required for Framer cross-domain
-        secure: config.env === "production", // ✅ works now because trust proxy is set
+        secure: true, // ✅ works now because trust proxy is set
         httpOnly: true,
       },
     }),

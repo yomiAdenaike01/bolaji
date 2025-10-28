@@ -3,13 +3,11 @@ import { Integrations } from "@/infra/integrations";
 import IORedis from "ioredis";
 import { Config } from "../config";
 import { AuthService } from "./auth/auth.service";
-import { initSchedulers } from "./jobs/schedule";
 import { PreordersService } from "./preorders/preorders.service";
 import { SessionService } from "./session/session";
 import { UserService } from "./user/users.service";
 import { SubscriptionsService } from "./subscriptions/subscriptions.service";
 import { JobsQueues } from "../infra/workers/jobs-queue";
-import { EmailWorker } from "../infra/workers/email.worker";
 
 export const initDomain = (
   appConfig: Config,
@@ -20,9 +18,8 @@ export const initDomain = (
   const integrations = new Integrations(db, store, appConfig);
   const userService = new UserService(db, integrations);
 
-  const jobQueues = new JobsQueues();
+  const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
   //#region schedulers
-  initSchedulers(redis, db, integrations.email);
   //#endregion
   return {
     preorders: new PreordersService(db, userService, integrations),

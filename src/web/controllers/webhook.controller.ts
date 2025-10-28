@@ -1,5 +1,5 @@
 import { Domain } from "@/domain/domain";
-import { OrderType } from "@/generated/prisma/enums";
+import { OrderType, UserStatus } from "@/generated/prisma/enums";
 import { PaymentEvent } from "@/infra/integrations/checkout.dto";
 import { preorderSchema } from "@/infra/integrations/schema";
 import { logger } from "@/lib/logger";
@@ -26,6 +26,7 @@ export class WebhookController {
     schema.parse(input);
   }
   handleSuccess = async (paymentEvent: PaymentEvent) => {
+    logger.info("[Webhook Controller] Successfully constructed payment event");
     if (paymentEvent.type == OrderType.PREORDER) {
       const {
         orderType,
@@ -36,7 +37,17 @@ export class WebhookController {
 
       this.isValidOrThrow(onCompletePreorderDto, preorderSchema);
 
-      await this.domain.preorders.onCompletePreorder(onCompletePreorderDto);
+      try {
+        await this.domain.preorders.onCompletePreorder(onCompletePreorderDto);
+      } catch (error) {
+        await this.domain.user.changeUserStatus(
+          onCompletePreorderDto.userId,
+          UserStatus.PENDING_RETRY,
+        );
+        logger.error(error, "[Webhook Controller] Failed to complete preorder");
+        throw error;
+      }
+
       return;
     }
 
@@ -67,7 +78,7 @@ export class WebhookController {
   handle = () => async (req: Request, res: Response) => {
     let paymentEvent = null;
     try {
-      paymentEvent = await this.integrationsCtrl.handlePaymentEvents(req, res);
+      paymentEvent = this.integrationsCtrl.handlePaymentEvents(req, res);
       if (!paymentEvent) {
         createErrorResponse(res, {
           statusCode: StatusCodes.BAD_REQUEST,

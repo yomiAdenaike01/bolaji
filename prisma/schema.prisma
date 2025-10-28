@@ -12,6 +12,13 @@ datasource db {
 // ENUMS
 //////////////////////////////////////////////////////////
 
+enum UserStatus {
+  ACTIVE // fully registered and functional
+  PENDING_PREORDER // created, waiting for preorder completion (Stripe pending)
+  PENDING_RETRY // failed preorder, but eligible for retry
+  DISABLED // manually or automatically locked
+}
+
 enum PlanType {
   DIGITAL
   PHYSICAL
@@ -97,10 +104,11 @@ model User {
   updatedAt DateTime @updatedAt
 
   name             String?
-  email            String    @unique
+  email            String     @unique
   emailVerifiedAt  DateTime?
   passwordHash     String?
-  stripeCustomerId String?   @unique
+  stripeCustomerId String?    @unique
+  status           UserStatus @default(ACTIVE)
 
   devices                 Device[]
   sessions                Session[]
@@ -118,6 +126,7 @@ model User {
   emails                  EmailLog[]
 
   @@index([email])
+  @@index([status])
 }
 
 model Session {
