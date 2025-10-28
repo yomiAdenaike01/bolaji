@@ -127,7 +127,7 @@ export class PreordersService {
         type: EmailType.PREORDER_CONFIRMATION,
       })
       .then(() => {
-        logger.debug(
+        logger.info(
           `Successfully sent email: ${sendEmailInput.email} type=${sendEmailInput.type}`,
         );
       })
@@ -239,7 +239,7 @@ export class PreordersService {
   private completePreorderTransaction = async (
     dto: CompletedPreoderEventDto,
   ) => {
-    logger.debug(
+    logger.info(
       dto,
       "[PreorderService:CompletePreorderTransaction] Completeing preorder transaction",
     );

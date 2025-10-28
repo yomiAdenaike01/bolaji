@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { Request } from "express";
+import { Db, TransactionClient } from "./infra";
 
 export const getRequestUserAgent = (req: Request): string => {
   return req.headers["user-agent"] ?? "unknown";

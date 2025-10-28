@@ -1,16 +1,14 @@
 import dotenv from "dotenv";
 import { initConfig } from "./config";
 import { initDomain } from "./domain/domain";
-import { initDb, initRedis, initStore } from "./infra";
-import { initWeb } from "./web/web";
+import { initInfra } from "./infra";
 import { logger } from "./lib/logger";
+import { initWeb } from "./web/web";
 dotenv.config();
 
 const boostrap = () => {
   const config = initConfig();
-  const db = initDb();
-  const store = initStore(config);
-  const redis = initRedis(config);
+  const { db, store, redis } = initInfra(config);
   const domain = initDomain(config, store, redis, db);
   const web = initWeb(domain, store, config);
 

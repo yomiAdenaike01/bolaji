@@ -8,6 +8,8 @@ import { PreordersService } from "./preorders/preorders.service";
 import { SessionService } from "./session/session";
 import { UserService } from "./user/users.service";
 import { SubscriptionsService } from "./subscriptions/subscriptions.service";
+import { JobsQueues } from "../infra/workers/jobs-queue";
+import { EmailWorker } from "../infra/workers/email.worker";
 
 export const initDomain = (
   appConfig: Config,
@@ -17,6 +19,8 @@ export const initDomain = (
 ) => {
   const integrations = new Integrations(db, store, appConfig);
   const userService = new UserService(db, integrations);
+
+  const jobQueues = new JobsQueues();
   //#region schedulers
   initSchedulers(redis, db, integrations.email);
   //#endregion
@@ -26,7 +30,7 @@ export const initDomain = (
     user: userService,
     auth: new AuthService(db, userService),
     integrations,
-    subscriptions: new SubscriptionsService(db, integrations),
+    subscriptions: new SubscriptionsService(db, integrations, jobQueues),
   };
 };
 

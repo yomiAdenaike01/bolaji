@@ -1,12 +1,18 @@
 import { OrderType } from "@/generated/prisma/enums";
 import { z } from "zod";
+import { shippingAddressSchema } from "../schemas/users";
 
-export const CreateSubscriptionInput = z.object({
+export const createSubscriptionInputSchema = z.object({
   userId: z.string().min(1),
   planId: z.string().min(1),
   redirectUrl: z.url(),
+  addressId: z.string().optional(),
+  address: shippingAddressSchema.optional(),
 });
-export type CreateSubscriptionInput = z.infer<typeof CreateSubscriptionInput>;
+
+export type CreateSubscriptionInput = z.infer<
+  typeof createSubscriptionInputSchema
+>;
 
 export type CreateSubscriptionResult = {
   checkoutUrl: string;
@@ -28,21 +34,34 @@ export interface SubscriptionPlaceholder {
 }
 
 export const subscriptionSchema = z.object({
-  userId: z.string().uuid(),
-  planId: z.string().uuid(),
-  subscriptionId: z.string().uuid(), // ✅ now required
+  userId: z.string().min(1, "UserId is required"),
+  planId: z.string().min(1, "PlanId is required"),
+  subscriptionId: z.string().min(1, "SubscriptionId is required"), // ✅ now required
   type: z.literal(OrderType.SUBSCRIPTION_RENEWAL),
-  eventId: z.string(),
+  eventId: z.string().min(1, "EventId is required"),
 });
-
-export type SubscriptionEventData = z.infer<typeof subscriptionSchema>;
 
 export const updateSubscriptionInputSchema = z.object({
-  subscriptionId: z.uuid(),
-  stripeSubscriptionId: z.uuid(),
+  subscriptionId: z.string().min(1),
+  stripeSubscriptionId: z.string().min(1),
   currentPeriodStart: z.number().nonnegative().optional(),
   currentPeriodEnd: z.number().nonnegative().optional(),
+  subscriptionPlanId: z.string().min(1),
+  stripeInvoiceId: z.string().optional(),
+  addressId: z.string().optional(),
 });
+
+export const onCreateSubscriptionInputSchema = z.object({
+  planId: z.string().min(1),
+  subscriptionId: z.string().min(1),
+  userId: z.string().min(1),
+});
+
+export type OnCreateSubscriptionInput = z.infer<
+  typeof onCreateSubscriptionInputSchema
+>;
+export type SubscriptionEventData = z.infer<typeof subscriptionSchema>;
+
 export type UpdateSubscriptionInput = z.infer<
   typeof updateSubscriptionInputSchema
 >;

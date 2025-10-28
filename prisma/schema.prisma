@@ -217,17 +217,18 @@ model EditionAccess {
 //////////////////////////////////////////////////////////
 
 model SubscriptionPlan {
-  id            String         @id @default(cuid())
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  name          String
-  type          PlanType
-  interval      Interval       @default(MONTH)
-  priceCents    Int
-  currency      String         @default("GBP")
-  active        Boolean        @default(true)
-  stripePriceId String?        @unique
-  subscriptions Subscription[]
+  id              String         @id @default(cuid())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  name            String
+  type            PlanType
+  interval        Interval       @default(MONTH)
+  priceCents      Int
+  currency        String         @default("GBP")
+  active          Boolean        @default(true)
+  stripePriceId   String?        @unique
+  stripeProductId String?        @unique
+  subscriptions   Subscription[]
 
   @@index([type, active])
 }
@@ -252,6 +253,7 @@ model Subscription {
   editionAccess           EditionAccess[]
   orders                  Order[]
 
+  @@unique([userId, planId, status])
   @@index([userId, status])
   @@index([currentPeriodEnd])
 }

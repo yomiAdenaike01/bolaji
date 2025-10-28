@@ -46,6 +46,7 @@ export class UserService {
           const { shippingAddress } = input;
           const address = await tx.address.create({
             data: {
+              isDefault: true,
               line1: shippingAddress.line1,
               line2: shippingAddress.line2,
               fullName: input.name,

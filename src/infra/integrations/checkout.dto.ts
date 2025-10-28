@@ -1,15 +1,17 @@
 import { OrderType, PlanType } from "@/generated/prisma/enums";
 import Stripe from "stripe";
+import { PaymentEventActions } from "./stripe.integration";
 
 export type PaymentEvent = {
   userId: string;
   rawPayload: string;
-  stripeEventType: Stripe.CheckoutSessionCompletedEvent["type"];
+  stripeEventType: Stripe.Event["type"];
   orderType: OrderType;
   type: OrderType;
-  amount: number;
+  amount?: number;
   eventId: string;
   success: boolean;
+  action?: PaymentEventActions;
 } & (
   | {
       orderType: OrderType;
@@ -21,6 +23,14 @@ export type PaymentEvent = {
   | {
       orderType: OrderType;
       subscriptionId?: string;
+      subscriptionPlanId: string;
+      stripeInvoiceId?: string;
+      stripeSubscriptionId?: string | null;
+    }
+  | {
+      startDate: number;
       planId: string;
+      subscriptionId: string;
+      userId: string;
     }
 );

@@ -81,7 +81,7 @@ export class Integrations {
     errorMessage?: string,
   ) => {
     try {
-      logger.debug(
+      logger.info(
         `Integrations:completeEvent Completing event eventId=${eventId} type=${eventType} status=${status} errorMessage=${errorMessage || "No error message"}`,
       );
       await this.db.stripeEvent.update({

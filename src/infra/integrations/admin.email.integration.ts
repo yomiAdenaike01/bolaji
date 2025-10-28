@@ -56,39 +56,46 @@ export class AdminEmailIntegration {
       buffer: ExcelJS.Buffer;
     };
   }) {
-    const { type, content, attachReport = true, attachmentOverride } = opts;
+    try {
+      const { type, content, attachReport = true, attachmentOverride } = opts;
 
-    const html = adminEmailTemplates[type](content);
-    const subject = adminEmailSubjects[type];
+      const html = adminEmailTemplates[type](content);
+      const subject = adminEmailSubjects[type];
 
-    let attachments: Attachment[] = [];
+      let attachments: Attachment[] = [];
 
-    let buffer = attachmentOverride?.buffer ?? null;
-    let filename = attachmentOverride?.filename ?? null;
+      let buffer = attachmentOverride?.buffer ?? null;
+      let filename = attachmentOverride?.filename ?? null;
 
-    if (attachReport) {
-      buffer = await (reportGenerators[type]?.(this.db) ??
-        Promise.resolve(null));
+      if (attachReport) {
+        buffer = await (reportGenerators[type]?.(this.db) ??
+          Promise.resolve(null));
 
-      filename = this.getAdminAttachmentFilename(type);
-    }
+        filename = this.getAdminAttachmentFilename(type);
+      }
 
-    if (buffer && filename)
-      attachments = [
-        {
-          filename,
-          content: Buffer.from(buffer).toString("base64"),
-        },
-      ];
-    for (const address of this.adminEmailAddresses) {
-      await this.integration.emails.send({
-        from: this.sentFromEmaillAddress,
-        to: address,
-        subject,
-        html,
-        attachments,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (buffer && filename)
+        attachments = [
+          {
+            filename,
+            content: Buffer.from(buffer).toString("base64"),
+          },
+        ];
+      for (const address of this.adminEmailAddresses) {
+        logger.info(
+          `[AdminEmailIntegration] Sending email to=${address} type=${type} subject=${subject}`,
+        );
+        await this.integration.emails.send({
+          from: this.sentFromEmaillAddress,
+          to: address,
+          subject,
+          html,
+          attachments,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      logger.error(error, `Failed to send admin email of type ${opts.type}`);
     }
   }
 }

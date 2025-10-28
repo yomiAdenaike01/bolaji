@@ -1,25 +1,54 @@
-import { subscriptionSchema } from "@/domain/subscriptions/dto";
+import {
+  onCreateSubscriptionInputSchema,
+  subscriptionSchema,
+} from "@/domain/subscriptions/dto";
 import { OrderType, PlanType } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import Stripe from "stripe";
 import z from "zod";
 import { preorderSchema } from "./schema";
 import { PaymentEvent } from "./checkout.dto";
+import crypto from "crypto";
 
+export enum PaymentEventActions {
+  SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
+}
 export class StripeIntegration {
-  constructCheckoutEventData = async (
+  private constructSubscriptionCreatedData = (
+    event: Stripe.CustomerSubscriptionCreatedEvent,
+  ): PaymentEvent | null => {
+    logger.info("[StripeIntegration] Subscription created");
+    const metadata = event.data.object?.metadata;
+    if (!metadata) return null;
+    const parsed = onCreateSubscriptionInputSchema.parse(metadata);
+    return {
+      ...parsed,
+      eventId: event.id,
+      amount: 0,
+      orderType: OrderType.SUBSCRIPTION_RENEWAL,
+      type: OrderType.SUBSCRIPTION_RENEWAL,
+      action: PaymentEventActions.SUBSCRIPTION_STARTED,
+      success: true,
+      rawPayload: JSON.stringify(event),
+      stripeEventType: event.type,
+      startDate: event.data.object.start_date,
+    };
+  };
+  constructCheckoutEventData = (
     event: Stripe.CheckoutSessionCompletedEvent,
-  ): Promise<PaymentEvent | null> => {
-    logger.info(
-      "[StripeIntegration:constructCheckoutEventData]: Processing event...",
-    );
+  ): PaymentEvent | null => {
+    logger.info("[StripeIntegration]: Processing event...");
 
     const session = event.data.object;
     const metadata = session.metadata;
     const orderTotal = session.amount_total ?? session.amount_subtotal ?? 0;
     const rawPayload = JSON.stringify(event);
     const stripeEventType = event.type;
+
     if (!metadata) throw new Error("Metadata is not defined");
+
+    if (!Object.keys(metadata).every(Boolean))
+      throw new Error("Metadata is not defined");
 
     switch (metadata.type as OrderType) {
       case OrderType.PREORDER: {
@@ -39,7 +68,7 @@ export class StripeIntegration {
           paymentLinkId: session.payment_link,
         });
 
-        logger.debug(
+        logger.info(
           "[StripeIntegration:constructCheckoutEventData]: Parsed preorder data",
         );
 
@@ -66,9 +95,7 @@ export class StripeIntegration {
             eventId: event.id,
           });
 
-        logger.debug(
-          "[StripeIntegration:constructCheckoutEventData]: Parsed subscription renewal data",
-        );
+        logger.info("[StripeIntegration] Parsed subscription renewal data");
 
         return {
           success: true,
@@ -77,10 +104,15 @@ export class StripeIntegration {
           stripeEventType,
           orderType: type,
           subscriptionId,
-          planId,
+          subscriptionPlanId: planId,
           eventId,
           amount: orderTotal,
           type,
+          stripeSubscriptionId: session.subscription?.toString(),
+          stripeInvoiceId:
+            typeof session.invoice === "string"
+              ? session.invoice
+              : session.invoice?.id,
         };
       }
 
@@ -188,11 +220,19 @@ export class StripeIntegration {
       cancelUrl: string;
       stripeCustomerId: string;
       priceId: string;
-      trialDays?: number | null;
       subscriptionId: string;
+      addressId?: string;
     },
     idempotencyKey?: string,
   ): Promise<{ checkoutUrl: string; stripeCheckoutSessionId: string }> => {
+    const metadata = {
+      ...(params.addressId ? { addressId: params.addressId } : {}),
+      userId: params.userId,
+      planId: params.planId,
+      subscriptionId: params.subscriptionId,
+      type: OrderType.SUBSCRIPTION_RENEWAL,
+    };
+
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: "subscription",
@@ -202,17 +242,10 @@ export class StripeIntegration {
         client_reference_id: `${params.userId}:${params.planId}`,
         allow_promotion_codes: true,
         line_items: [{ price: params.priceId, quantity: 1 }],
+        metadata,
         subscription_data: {
-          trial_period_days:
-            params.trialDays && params.trialDays > 0
-              ? params.trialDays
-              : undefined,
-          metadata: {
-            userId: params.userId,
-            planId: params.planId,
-            subscriptionId: params.subscriptionId,
-            type: OrderType.SUBSCRIPTION_RENEWAL,
-          },
+          trial_period_days: undefined,
+          metadata,
         },
       },
       idempotencyKey ? { idempotencyKey } : undefined,
@@ -238,6 +271,57 @@ export class StripeIntegration {
     await setCustomerId(customer.id);
     return customer.id;
   };
+  private findOrCreateStripeProduct = async (
+    planName: string,
+  ): Promise<string> => {
+    const targetName =
+      `Bolaji Editions Subscription - ${planName}`.toLowerCase();
+
+    let foundProductId: string | null = null;
+    let startingAfter: string | undefined;
+
+    do {
+      const params = {
+        limit: 100,
+        active: true,
+        starting_after: startingAfter,
+      };
+
+      const idempotencyKey = crypto
+        .createHash("sha256")
+        .update(JSON.stringify(params))
+        .digest("hex");
+
+      const { data: products, has_more } =
+        await this.stripe.products.list(params);
+
+      for (const product of products) {
+        const name = product.name.trim().toLowerCase();
+        if (name === targetName) {
+          foundProductId = product.id;
+          break;
+        }
+      }
+
+      if (!has_more) break;
+      startingAfter = products[products.length - 1]?.id;
+    } while (!foundProductId);
+
+    if (foundProductId) {
+      return foundProductId;
+    }
+
+    const product = await this.stripe.products.create({
+      name: `Bolaji Editions Subscription - ${planName}`,
+      description: "Access to monthly Bolaji Editions content.",
+      metadata: {
+        planName,
+        source: "backend_auto_create",
+      },
+    });
+
+    return product.id;
+  };
 
   ensureStripePrice = async (
     plan: {
@@ -247,27 +331,18 @@ export class StripeIntegration {
       currency: string;
       interval: "DAY" | "WEEK" | "MONTH" | "YEAR";
       stripePriceId?: string | null;
+      stripeProductId?: string | null;
     },
-    setStripePriceId: (priceId: string) => Promise<void>,
+    setStripeProduct: (productId: string, priceId: string) => Promise<void>,
   ): Promise<string> => {
     if (plan.stripePriceId) return plan.stripePriceId;
 
+    let productId = plan.stripeProductId;
+
+    if (!productId) {
+      productId = await this.findOrCreateStripeProduct(plan.name);
+    }
     // Create or reuse a single product
-    const { data: products } = await this.stripe.products.list({
-      limit: 1,
-      active: true,
-    });
-
-    const [product] = products;
-
-    const productId =
-      product?.id ||
-      (
-        await this.stripe.products.create({
-          name: "Bolaji Editions Subscription",
-          description: "Access to monthly editions",
-        })
-      ).id;
 
     const price = await this.stripe.prices.create({
       product: productId,
@@ -278,19 +353,32 @@ export class StripeIntegration {
       metadata: { planId: plan.id },
     });
 
-    await setStripePriceId(price.id);
+    await setStripeProduct(productId, price.id);
     return price.id;
   };
 
   handleWebhook = (requestBody: Buffer, signature: string) => {
-    const event = this.stripe.webhooks.constructEvent(
-      requestBody,
-      signature,
-      this.webhookSecret,
-    );
+    let reqBody = null;
+    let event: Stripe.Event | null = null;
+    try {
+      reqBody = JSON.parse(requestBody.toString("utf-8"));
+      event = this.stripe.webhooks.constructEvent(
+        requestBody,
+        signature,
+        this.webhookSecret,
+      );
+    } catch (error) {
+      logger.error(
+        `Failed to handle stripe event type=${reqBody?.type || "no type found"}`,
+      );
+      return null;
+    }
+    if (!event) throw new Error("Event is not defined");
     switch (event.type) {
       case "checkout.session.completed":
         return this.constructCheckoutEventData(event);
+      case "customer.subscription.created":
+        return this.constructSubscriptionCreatedData(event);
       // case "payment_intent.payment_failed":
       //   return this.handlePaymentFailed(event);
       // case "invoice.payment_succeeded":

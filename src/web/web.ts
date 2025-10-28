@@ -4,7 +4,7 @@ import express, { type Application } from "express";
 import { Config } from "../config";
 import { initControllers } from "./controllers/controllers";
 import { setupMiddlewares } from "./middleware";
-import { createPaymentsRouter, setupRouters } from "./router";
+import { makePaymentsRouter, setupRouters } from "./router";
 
 export const initWeb = (
   domain: Domain,
@@ -14,7 +14,7 @@ export const initWeb = (
   const ctrls = initControllers(domain);
   const app = express();
 
-  createPaymentsRouter(app, ctrls.stripePaymentWebhook);
+  makePaymentsRouter(app, ctrls.stripePaymentWebhook);
   setupMiddlewares(app, store, config);
   setupRouters(ctrls, app);
   return app;

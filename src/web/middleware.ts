@@ -24,7 +24,6 @@ export const setupMiddlewares = (
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
   app.use(logRequest);
-
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -68,7 +67,7 @@ export const setupMiddlewares = (
       cookie: {
         maxAge: config.maxAge,
         sameSite: "none", // ✅ required for Framer cross-domain
-        secure: true, // ✅ works now because trust proxy is set
+        secure: config.env === "production", // ✅ works now because trust proxy is set
         httpOnly: true,
       },
     }),

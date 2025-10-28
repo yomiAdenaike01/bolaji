@@ -8,7 +8,11 @@ import { StatusCodes } from "http-status-codes";
 import { ZodType } from "zod";
 import { IntegrationsController } from "./integrations.controller";
 import { createErrorResponse } from "./utils";
-import { updateSubscriptionInputSchema } from "@/domain/subscriptions/dto";
+import {
+  onCreateSubscriptionInputSchema,
+  updateSubscriptionInputSchema,
+} from "@/domain/subscriptions/dto";
+import { PaymentEventActions } from "@/infra/integrations/stripe.integration";
 
 export class WebhookController {
   constructor(
@@ -38,10 +42,20 @@ export class WebhookController {
 
     if (paymentEvent.type === OrderType.SUBSCRIPTION_RENEWAL) {
       this.isValidOrThrow(paymentEvent, updateSubscriptionInputSchema);
-
       await this.domain.subscriptions.onSubscriptionUpdate({
         subscriptionId: paymentEvent.subscriptionId,
         stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
+        subscriptionPlanId: paymentEvent.subscriptionPlanId,
+        stripeInvoiceId: paymentEvent.stripeInvoiceId,
+      });
+      return;
+    }
+    if (paymentEvent.action === PaymentEventActions.SUBSCRIPTION_STARTED) {
+      this.isValidOrThrow(paymentEvent, onCreateSubscriptionInputSchema);
+      await this.domain.subscriptions.onSubscriptionCreate({
+        planId: paymentEvent.planId,
+        subscriptionId: paymentEvent.subscriptionId,
+        userId: paymentEvent.userId,
       });
       return;
     }
@@ -83,7 +97,7 @@ export class WebhookController {
         "HANDLED",
       );
     } catch (error) {
-      logger.error(error, "Failed to handle stripe webhook event");
+      logger.error("Failed to handle stripe webhook event");
       if (!paymentEvent) return;
       await this.domain.integrations.completeEvent(
         paymentEvent.eventId,

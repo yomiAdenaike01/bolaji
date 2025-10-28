@@ -25,6 +25,7 @@ export class EditionsReleaseSchedule {
         opts: {
           removeOnFail: true,
           attempts: 3,
+          backoff: { type: "exponential", delay: 1000 },
         },
       },
     );
