@@ -21,6 +21,6 @@ export class SubscriptionsController {
 
     const { checkoutUrl } =
       await this.domain.subscriptions.createSubscription(subscriptionsInput);
-    res.status(StatusCodes.OK).json(checkoutUrl);
+    res.status(StatusCodes.OK).json({ url: checkoutUrl });
   };
 }

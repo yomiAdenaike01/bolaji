@@ -33,9 +33,10 @@ export const setupMiddlewares = (
 ) => {
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
-  app.use(compression({ filter: shouldCompress }));
+  // app.use(compression({ filter: shouldCompress }));
 
-  app.use(helmet());
+  // fallback to standard filter function
+
   app.use(logRequest);
   app.use(
     cors({
@@ -52,7 +53,7 @@ export const setupMiddlewares = (
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "x-hub-id"],
     }),
   );
 

@@ -17,6 +17,7 @@ import {
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
 import { AdminEmailType } from "@/infra/integrations/email-types";
+import z from "zod";
 
 export class SubscriptionsService {
   constructor(
@@ -137,6 +138,10 @@ export class SubscriptionsService {
             currentPeriodStart: periodStart,
             currentPeriodEnd: periodEnd,
           },
+          include: {
+            user: true,
+            plan: true,
+          },
         }),
         tx.order.create({
           data: {
@@ -200,7 +205,7 @@ export class SubscriptionsService {
             subscriptionId: updatedSubscription.id,
           },
         });
-        return;
+        return { updatedSubscription, nextEdition };
       }
       if (!addressId) return { updatedSubscription, nextEdition };
       logger.info(
@@ -217,11 +222,7 @@ export class SubscriptionsService {
 
       return { updatedSubscription, nextEdition };
     });
-    if (!result) return;
-    await this.queues.add("email.subscription_renewed", {
-      userId: result.updatedSubscription.userId,
-      nextEdition: result.nextEdition,
-    });
+    return result;
   };
 
   private findExistingSubscription = async ({
@@ -229,12 +230,19 @@ export class SubscriptionsService {
     planId,
   }: {
     userId: string;
-    planId: string;
+    planId?: string;
   }) => {
+    logger.info(
+      `[Subscription Service] Checking for existing subscription userId=${userId} planId=${planId}`,
+    );
     return this.db.$transaction(async (tx) => {
       const [user, plan] = await Promise.all([
         tx.user.findUnique({ where: { id: userId } }),
-        tx.subscriptionPlan.findUnique({ where: { id: planId } }),
+        tx.subscriptionPlan.findUnique({
+          where: {
+            id: planId,
+          },
+        }),
       ]);
 
       if (!user) throw new Error("User not found");
@@ -253,6 +261,9 @@ export class SubscriptionsService {
           },
         },
       });
+      logger.info(
+        `[Subscription Service] Found subscription for userId=${user.id} subscriptionId=${subscription?.id} planId=${plan.id} planType=${plan.type}`,
+      );
       return { subscription, user, subscriptionPlan: plan };
     });
   };
@@ -260,155 +271,253 @@ export class SubscriptionsService {
   createSubscription = async (
     input: CreateSubscriptionInput,
   ): Promise<CreateSubscriptionResult> => {
+    const startTime = Date.now();
     let addressId = input.addressId;
+    logger.info(
+      `[Subscription Service] 🟦 Starting subscription creation for userId=${input.userId}, planType=${input.plan || "unknown"}`,
+    );
 
-    if (input.addressId) {
-      await this.db.address.findUniqueOrThrow({
-        where: {
-          id: addressId,
-          userId: input.userId,
-        },
-        select: {
-          userId: true,
-        },
+    try {
+      // 1️⃣ Resolve plan
+      if (input.plan && !input.planId) {
+        logger.info(
+          `[Subscription Service] PlanId missing. Fetching plan by type=${input.plan}`,
+        );
+        const plan = await this.db.subscriptionPlan.findFirstOrThrow({
+          where: { type: input.plan },
+        });
+        input.planId = plan.id;
+      }
+      if (!input.planId) throw new Error("Plan id is not defined");
+
+      // 2️⃣ Validate address if provided
+      if (input.addressId) {
+        logger.info(
+          `[Subscription Service] Validating address id=${input.addressId} for userId=${input.userId}`,
+        );
+        await this.db.address.findUniqueOrThrow({
+          where: { id: input.addressId, userId: input.userId },
+          select: { userId: true },
+        });
+      }
+
+      // 3️⃣ Find existing subscription (if any)
+      const {
+        subscription: existingSub,
+        user,
+        subscriptionPlan: plan,
+      } = await this.findExistingSubscription({
+        userId: input.userId,
+        planId: input.planId,
       });
-    }
 
-    const {
-      subscription: existingSub,
-      user,
-      subscriptionPlan: plan,
-    } = await this.findExistingSubscription({
-      userId: input.userId,
-      planId: input.planId,
-    });
+      if (existingSub?.status === SubscriptionStatus.ACTIVE) {
+        throw new Error(
+          `Subscription already active (userId=${user.id}, planId=${plan.id})`,
+        );
+      }
 
-    if (input.address) {
-      // create address for user
-      let { id } = await this.db.address.create({
-        data: {
-          isDefault: true,
-          line1: input.address.line1,
-          line2: input.address.line2,
-          fullName: user.name,
-          postalCode: input.address.postalCode,
-          city: input.address.city,
-          country: input.address.country,
-          phone: input.address.phone,
-          user: {
-            connect: {
-              id: user.id,
+      // 4️⃣ Create address if supplied in payload
+      if (input.address) {
+        logger.info(
+          `[Subscription Service] Creating new address for userId=${user.id}`,
+        );
+        const { id } = await this.db.address.create({
+          data: {
+            isDefault: true,
+            line1: input.address.line1,
+            line2: input.address.line2,
+            fullName: user.name,
+            postalCode: input.address.postalCode,
+            city: input.address.city,
+            country: input.address.country,
+            phone: input.address.phone,
+            user: { connect: { id: user.id } },
+          },
+          select: { id: true },
+        });
+        addressId = id;
+        logger.info(
+          `[Subscription Service] ✅ Address created with id=${addressId}`,
+        );
+      }
+
+      // 5️⃣ Handle existing subscription
+      if (existingSub?.stripeCheckoutSessionId) {
+        logger.info(
+          `[Subscription Service] Attempting to reuse existing Stripe checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
+        );
+
+        const checkoutUrl =
+          await this.integrations.payments.getSubscriptionCheckout(
+            existingSub.stripeCheckoutSessionId,
+          );
+
+        if (checkoutUrl) {
+          logger.info(
+            `[Subscription Service] ✅ Reusing existing checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
+          );
+
+          return { checkoutUrl };
+        }
+
+        // If Stripe session retrieval fails, mark it invalid and proceed to recreate
+        logger.warn(
+          `[Subscription Service] ⚠️ Stored Stripe sessionId=${existingSub.stripeCheckoutSessionId} is invalid or expired. Cleaning up and creating new one.`,
+        );
+
+        try {
+          await this.db.subscription.update({
+            where: { id: existingSub.id },
+            data: {
+              stripeCheckoutSessionId: null,
+              status: SubscriptionStatus.PENDING,
+            },
+          });
+          logger.info(
+            `[Subscription Service] ✅ Cleared invalid checkout session for subscriptionId=${existingSub.id}`,
+          );
+        } catch (err) {
+          logger.error(
+            err,
+            `[Subscription Service] ❌ Failed to clear invalid session for subscriptionId=${existingSub.id}`,
+          );
+        }
+      }
+
+      const planId = input.planId;
+      if (!planId) throw new Error("Plan Id is not defined");
+
+      // 6️⃣ Create placeholder subscription
+      logger.info(
+        `[Subscription Service] Creating subscription placeholder for userId=${user.id}, planId=${plan.id}`,
+      );
+      const placeholder = await this.db.$transaction((tx) =>
+        tx.subscription.upsert({
+          where: {
+            userId_planId_status: {
+              userId: input.userId,
+              planId,
+              status: SubscriptionStatus.PENDING,
             },
           },
-        },
-        select: {
-          id: true,
-        },
-      });
-      addressId = id;
-    }
-
-    if (existingSub) {
-      if (existingSub.stripeCheckoutSessionId) {
-        // replace with something else
-        return {
-          checkoutUrl: `https://checkout.stripe.com/pay/${existingSub.stripeCheckoutSessionId}`,
-        };
-      }
-      throw new Error("Subscription already exists for this plan.");
-    }
-
-    // 3️⃣ Pre-create a placeholder subscription in DB
-    const placeholder = await this.db.$transaction((tx) => {
-      return tx.subscription.upsert({
-        where: {
-          userId_planId_status: {
+          create: {
             userId: input.userId,
-            planId: input.planId,
+            planId,
             status: SubscriptionStatus.PENDING,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           },
-        },
-        create: {
-          userId: input.userId,
-          planId: input.planId,
-          status: SubscriptionStatus.PENDING,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-        update: {},
-      });
-    });
-
-    // 4️⃣ Ensure Stripe Price (lazy-create if missing)
-    const priceId = await this.integrations.payments.ensureStripePrice(
-      {
-        id: plan.id,
-        name: plan.name,
-        priceCents: plan.priceCents,
-        currency: plan.currency,
-        interval: plan.interval as any,
-        stripePriceId: plan.stripePriceId,
-        stripeProductId: plan.stripeProductId,
-      },
-      async (productId, priceId) => {
-        await this.db.subscriptionPlan.update({
-          where: { id: plan.id },
-          data: { stripePriceId: priceId, stripeProductId: productId },
-        });
-      },
-    );
-
-    // 5️⃣ Ensure Stripe Customer
-    const customerId = await this.integrations.payments.ensureCustomer(
-      {
-        userId: user.id,
-        email: user.email,
-        stripeCustomerId: user.stripeCustomerId,
-      },
-      async (cid) => {
-        await this.db.user.update({
-          where: { id: user.id },
-          data: { stripeCustomerId: cid },
-        });
-      },
-    );
-
-    // 6️⃣ Create a deterministic idempotency key
-    const idempotencyKey = crypto
-      .createHash("sha256")
-      .update(`sub:${user.id}:${plan.id}:${Math.floor(Date.now() / 10000)}`)
-      .digest("hex");
-
-    // 7️⃣ Create Stripe Checkout Session (metadata links back to our DB record)
-    const { checkoutUrl, stripeCheckoutSessionId } =
-      await this.integrations.payments.createSubscriptionCheckout(
-        {
-          userId: user.id,
-          planId: plan.id,
-          successUrl: input.redirectUrl,
-          cancelUrl: input.redirectUrl,
-          stripeCustomerId: customerId,
-          priceId,
-          subscriptionId: placeholder.id,
-          addressId,
-        },
-        idempotencyKey,
+          update: {},
+        }),
+      );
+      logger.info(
+        `[Subscription Service] ✅ Placeholder subscription created id=${placeholder.id}`,
       );
 
-    // 8️⃣ Update placeholder record with Stripe session details
-    await this.db.$transaction((tx) => {
-      return tx.subscription.update({
+      // 7️⃣ Ensure Stripe Price
+      const priceId = await this.integrations.payments.ensureStripePrice(
+        {
+          id: plan.id,
+          name: plan.name,
+          priceCents: plan.priceCents,
+          currency: plan.currency,
+          interval: plan.interval as any,
+          stripePriceId: plan.stripePriceId,
+          stripeProductId: plan.stripeProductId,
+        },
+        async (productId, priceId) => {
+          logger.info(
+            `[Subscription Service] Updating subscription plan with Stripe product=${productId}, price=${priceId}`,
+          );
+          await this.db.subscriptionPlan.update({
+            where: { id: plan.id },
+            data: { stripePriceId: priceId, stripeProductId: productId },
+          });
+          logger.info(
+            `[Subscription Service] ✅ Subscription plan updated id=${plan.id}`,
+          );
+        },
+      );
+
+      // 8️⃣ Ensure Stripe Customer
+      const customerId = await this.integrations.payments.ensureCustomer(
+        {
+          userId: user.id,
+          email: user.email,
+          stripeCustomerId: user.stripeCustomerId,
+        },
+        async (cid) => {
+          await this.db.user.update({
+            where: { id: user.id },
+            data: { stripeCustomerId: cid },
+          });
+          logger.info(
+            `[Subscription Service] Linked Stripe customerId=${cid} to userId=${user.id}`,
+          );
+        },
+      );
+
+      // 9️⃣ Generate idempotency key
+      const idempotencyKey = crypto
+        .createHash("sha256")
+        .update(`sub:${user.id}:${plan.id}:${Math.floor(Date.now() / 10000)}`)
+        .digest("hex");
+
+      logger.info(
+        `[Subscription Service] Generated idempotencyKey=${idempotencyKey.slice(0, 12)}…`,
+      );
+
+      // 🔟 Create Stripe Checkout Session
+      logger.info(
+        `[Subscription Service] Creating Stripe checkout session for userId=${user.id}, planId=${plan.id}, customerId=${customerId}`,
+      );
+      const { checkoutUrl, stripeCheckoutSessionId } =
+        await this.integrations.payments.createSubscriptionCheckout(
+          {
+            userId: user.id,
+            planId: plan.id,
+            successUrl: input.redirectUrl,
+            cancelUrl: input.redirectUrl,
+            stripeCustomerId: customerId,
+            priceId,
+            subscriptionId: placeholder.id,
+            addressId,
+            isNewSubscription: true,
+          },
+          idempotencyKey,
+        );
+      logger.info(
+        `[Subscription Service] ✅ Stripe checkout session created sessionId=${stripeCheckoutSessionId}`,
+      );
+
+      // 11️⃣ Update placeholder subscription
+      await this.db.subscription.update({
         where: { id: placeholder.id },
         data: {
           stripeCheckoutSessionId,
           status: SubscriptionStatus.AWAITING_PAYMENT,
         },
       });
-    });
+      logger.info(
+        `[Subscription Service] ✅ Placeholder updated with Stripe sessionId=${stripeCheckoutSessionId}`,
+      );
 
-    if (!user.name) throw new Error("User name is undefined");
+      const duration = (Date.now() - startTime) / 1000;
+      logger.info(
+        `[Subscription Service] 🎉 Subscription creation completed successfully for userId=${user.id}, planId=${plan.id}, elapsed=${duration.toFixed(
+          2,
+        )}s`,
+      );
 
-    // 9️⃣ Return checkout URL to client
-    return { checkoutUrl };
+      // 12️⃣ Return checkout URL
+      return { checkoutUrl };
+    } catch (err: any) {
+      logger.error(
+        err,
+        `[Subscription Service] ❌ Failed to create subscription for userId=${input.userId} planType=${input.plan}`,
+      );
+      throw err;
+    }
   };
 }

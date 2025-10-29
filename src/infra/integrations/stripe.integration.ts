@@ -14,16 +14,43 @@ export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
 }
 export class StripeIntegration {
+  private stripe!: Stripe;
+
+  constructor(
+    apiKey: string,
+    private readonly webhookSecret: string,
+    private readonly paymentRedirectUrl: string,
+  ) {
+    try {
+      this.stripe = new Stripe(apiKey, { apiVersion: "2025-09-30.clover" });
+    } catch (error) {
+      logger.error(error, "Failed to initlaise stripe");
+    }
+  }
+  getSubscriptionCheckout = async (checkoutSessionId: string) => {
+    logger.info(
+      `[StripeIntegration] Fetching subscription checkout session id=${checkoutSessionId}`,
+    );
+    const session =
+      await this.stripe.checkout.sessions.retrieve(checkoutSessionId);
+    return session.url;
+  };
   getPaymentLink = async (paymentLinkId: string) => {
     try {
+      logger.info(
+        `[StripeIntegration] Fetching payment link id=${paymentLinkId}`,
+      );
       const link = await this.stripe.paymentLinks.retrieve(paymentLinkId);
 
       if (!link || !link?.active) {
         logger.warn(
-          `Payment link ${paymentLinkId} not found or deleted or inactive (status=${link.active}) .`,
+          `[StripeIntegration] Payment link ${paymentLinkId} not found or deleted or inactive (status=${link.active}) .`,
         );
         return null;
       }
+      logger.info(
+        `[StripeIntegration] ✅ Retrieved payment link id=${paymentLinkId}`,
+      );
 
       return {
         stripePaymentLinkId: link.id,
@@ -49,10 +76,21 @@ export class StripeIntegration {
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {
-    logger.info("[StripeIntegration] Subscription created");
+    logger.info(
+      `[StripeIntegration] Event received: ${event.type}, id=${event.id}`,
+    );
     const metadata = event.data.object?.metadata;
-    if (!metadata) return null;
+    if (!metadata) {
+      logger.warn(
+        `[StripeIntegration] ⚠️ No metadata found in subscription.created event id=${event.id}`,
+      );
+      return null;
+    }
     const parsed = onCreateSubscriptionInputSchema.parse(metadata);
+    logger.info(
+      `[StripeIntegration] ✅ Parsed subscription.created metadata for userId=${parsed.userId}`,
+    );
+
     return {
       ...parsed,
       eventId: event.id,
@@ -66,10 +104,13 @@ export class StripeIntegration {
       startDate: event.data.object.start_date,
     };
   };
+
   constructCheckoutEventData = (
     event: Stripe.CheckoutSessionCompletedEvent,
   ): PaymentEvent | null => {
-    logger.info("[StripeIntegration]: Processing event...");
+    logger.info(
+      `[StripeIntegration] Event received: ${event.type}, id=${event.id}`,
+    );
 
     const session = event.data.object;
     const metadata = session.metadata;
@@ -79,8 +120,12 @@ export class StripeIntegration {
 
     if (!metadata) throw new Error("Metadata is not defined");
 
-    if (!Object.keys(metadata).every(Boolean))
+    if (!Object.keys(metadata).every(Boolean)) {
+      logger.error(
+        `[StripeIntegration] ❌ Missing metadata on event id=${event.id}`,
+      );
       throw new Error("Metadata is not defined");
+    }
 
     switch (metadata.type as OrderType) {
       case OrderType.PREORDER: {
@@ -101,7 +146,7 @@ export class StripeIntegration {
         });
 
         logger.info(
-          "[StripeIntegration:constructCheckoutEventData]: Parsed preorder data",
+          `[StripeIntegration] ✅ Parsed preorder metadata for userId=${userId}, editionId=${editionId}`,
         );
 
         return {
@@ -121,15 +166,24 @@ export class StripeIntegration {
       }
 
       case OrderType.SUBSCRIPTION_RENEWAL: {
-        const { userId, subscriptionId, planId, type, eventId } =
-          subscriptionSchema.parse({
-            ...metadata,
-            eventId: event.id,
-          });
+        const {
+          userId,
+          subscriptionId,
+          planId,
+          type,
+          eventId,
+          isNewSubscription,
+        } = subscriptionSchema.parse({
+          ...metadata,
+          eventId: event.id,
+          isNewSubscription: Boolean(metadata?.isNewSubscription || false),
+        });
 
-        logger.info("[StripeIntegration] Parsed subscription renewal data");
-
+        logger.info(
+          `[StripeIntegration] ✅ Parsed subscription renewal for userId=${userId}, subscriptionId=${subscriptionId}`,
+        );
         return {
+          isNewSubscription,
           success: true,
           userId,
           rawPayload,
@@ -168,19 +222,6 @@ export class StripeIntegration {
   handleSubscriptionCanceled(event: Stripe.CustomerSubscriptionDeletedEvent) {
     throw new Error("Method not implemented.");
   }
-  private stripe!: Stripe;
-
-  constructor(
-    apiKey: string,
-    private readonly webhookSecret: string,
-    private readonly paymentRedirectUrl: string,
-  ) {
-    try {
-      this.stripe = new Stripe(apiKey, { apiVersion: "2025-09-30.clover" });
-    } catch (error) {
-      console.error(error);
-    }
-  }
 
   createPreorderPaymentLink = async (opts: {
     userId: string;
@@ -190,6 +231,9 @@ export class StripeIntegration {
     addressId: string | null;
     redirectUrl: string;
   }) => {
+    logger.info(
+      `[StripeIntegration] Creating preorder payment link for userId=${opts.userId}, editionId=${opts.editionId}, plan=${opts.choice}`,
+    );
     const parsed = z
       .object({
         userId: z.string().min(1),
@@ -231,6 +275,9 @@ export class StripeIntegration {
     };
     // 🧱 Create a hosted payment link
     const paymentLink = await this.stripe.paymentLinks.create(params);
+    logger.info(
+      `[StripeIntegration] ✅ Created Stripe preorder link id=${paymentLink.id}`,
+    );
 
     // 🧾 Return data that your backend can store in Prisma
     return {
@@ -254,15 +301,20 @@ export class StripeIntegration {
       priceId: string;
       subscriptionId: string;
       addressId?: string;
+      isNewSubscription: boolean | null;
     },
     idempotencyKey?: string,
   ): Promise<{ checkoutUrl: string; stripeCheckoutSessionId: string }> => {
+    logger.info(
+      `[StripeIntegration] Creating subscription checkout for userId=${params.userId}, planId=${params.planId}`,
+    );
     const metadata = {
       ...(params.addressId ? { addressId: params.addressId } : {}),
       userId: params.userId,
       planId: params.planId,
       subscriptionId: params.subscriptionId,
       type: OrderType.SUBSCRIPTION_RENEWAL,
+      isNewSubscription: String(params.isNewSubscription),
     };
 
     const session = await this.stripe.checkout.sessions.create(
@@ -282,7 +334,9 @@ export class StripeIntegration {
       },
       idempotencyKey ? { idempotencyKey } : undefined,
     );
-
+    logger.info(
+      `[StripeIntegration] ✅ Created Stripe checkout session id=${session.id}s`,
+    );
     if (!session.url) throw new Error("Stripe did not return a checkout URL.");
     return { checkoutUrl: session.url, stripeCheckoutSessionId: session.id };
   };
@@ -318,11 +372,6 @@ export class StripeIntegration {
         active: true,
         starting_after: startingAfter,
       };
-
-      const idempotencyKey = crypto
-        .createHash("sha256")
-        .update(JSON.stringify(params))
-        .digest("hex");
 
       const { data: products, has_more } =
         await this.stripe.products.list(params);

@@ -1,14 +1,25 @@
-import { OrderType } from "@/generated/prisma/enums";
+import { OrderType, PlanType } from "@/generated/prisma/enums";
 import { z } from "zod";
 import { shippingAddressSchema } from "../schemas/users";
 
-export const createSubscriptionInputSchema = z.object({
-  userId: z.string().min(1),
-  planId: z.string().min(1),
-  redirectUrl: z.url(),
-  addressId: z.string().optional(),
-  address: shippingAddressSchema.optional(),
-});
+export const createSubscriptionInputSchema = z
+  .object({
+    userId: z.string().min(1),
+    planId: z.string().min(1).optional(),
+    redirectUrl: z.url(),
+    addressId: z.string().optional(),
+    plan: z.enum(PlanType).optional(),
+    address: shippingAddressSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!(data.planId || data.plan)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PlanId or PlanType is required",
+        path: ["planId"],
+      });
+    }
+  });
 
 export type CreateSubscriptionInput = z.infer<
   typeof createSubscriptionInputSchema
@@ -39,6 +50,7 @@ export const subscriptionSchema = z.object({
   subscriptionId: z.string().min(1, "SubscriptionId is required"), // ✅ now required
   type: z.literal(OrderType.SUBSCRIPTION_RENEWAL),
   eventId: z.string().min(1, "EventId is required"),
+  isNewSubscription: z.boolean().nullable(),
 });
 
 export const updateSubscriptionInputSchema = z.object({

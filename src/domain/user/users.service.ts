@@ -1,4 +1,4 @@
-import { UserStatus } from "@/generated/prisma/enums";
+import { Hub, UserStatus } from "@/generated/prisma/enums";
 import { Db, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
@@ -196,7 +196,7 @@ export class UserService {
       addressId: addressId,
     };
   };
-  public getUserEditionsAccess = async (userId: string) => {
+  public getUserEditionsAccess = async (userId: string, hub: Hub) => {
     const [accesses, editions] = await this.db.$transaction(async (tx) => {
       return Promise.all([
         tx.editionAccess.findMany({
@@ -204,6 +204,9 @@ export class UserService {
           select: { editionId: true },
         }),
         tx.edition.findMany({
+          where: {
+            hub,
+          },
           orderBy: { number: "asc" },
           select: {
             id: true,

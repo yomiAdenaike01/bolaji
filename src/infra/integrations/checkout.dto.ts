@@ -12,6 +12,7 @@ export type PaymentEvent = {
   eventId: string;
   success: boolean;
   action?: PaymentEventActions;
+  isNewSubscription?: boolean | null;
 } & (
   | {
       orderType: OrderType;

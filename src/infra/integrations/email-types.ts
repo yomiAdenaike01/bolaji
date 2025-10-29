@@ -5,9 +5,11 @@ export enum AdminEmailType {
   NEW_USER = "NEW_USER",
   NEW_PREORDER = "NEW_PREORDER",
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
+  SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED", // 👈 NEW
   SUBSCRIPTION_CANCELED = "SUBSCRIPTION_CANCELED",
   SUPPORT_TICKET_CREATED = "SUPPORT_TICKET_CREATED",
   WAITLIST_PREORDER_RELEASE_SUMMARY = "WAITLIST_PREORDER_RELEASE_SUMMARY",
+  EDITION_PUBLISH_REQUEST = "EDITION_PUBLISH_REQUEST", // 👈 NEW
 }
 
 export type AdminEmailContent = {
@@ -15,11 +17,13 @@ export type AdminEmailContent = {
     totalSent: number;
     totalFailed: number;
   };
+
   [AdminEmailType.NEW_USER]: {
     name: string;
     email: string;
     address?: ShippingAddress;
   };
+
   [AdminEmailType.NEW_PREORDER]: {
     name: string;
     email: string;
@@ -28,25 +32,43 @@ export type AdminEmailContent = {
     amount: string;
     address?: ShippingAddress;
   };
+
   [AdminEmailType.SUBSCRIPTION_STARTED]: {
     name: string;
     email: string;
     plan: string;
-    periodStart: string;
-    periodEnd: string;
+    periodStart: string | Date;
+    periodEnd: string | Date;
   };
+
+  [AdminEmailType.SUBSCRIPTION_RENEWED]: {
+    name: string;
+    email: string;
+    plan: string;
+    renewedAt: string;
+    nextPeriodEnd: string;
+  };
+
   [AdminEmailType.SUBSCRIPTION_CANCELED]: {
     name: string;
     email: string;
     plan: string;
     canceledAt: string;
   };
+
   [AdminEmailType.SUPPORT_TICKET_CREATED]: {
     name: string;
     email: string;
     subject: string;
     category: string;
     ticketId: string;
+  };
+
+  [AdminEmailType.EDITION_PUBLISH_REQUEST]: {
+    editionId: string;
+    editionCode: string;
+    editionTitle: string;
+    totalPreorders: number;
   };
 };
 
@@ -56,11 +78,17 @@ export enum EmailType {
   PAYMENT_FAILED = "PAYMENT_FAILED",
   PASSWORD_RESET = "PASSWORD_RESET",
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
+  SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   PREORDER_RELEASED = "PREORDER_RELEASED",
   NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED", // 👈 NEW
 }
 
 export interface EmailContentMap {
+  [EmailType.SUBSCRIPTION_STARTED]: {
+    name: string;
+    planType: PlanType;
+    nextEdition: number;
+  };
   [EmailType.NEW_EDITION_RELEASED]: {
     name: string;
     editionTitle: string;

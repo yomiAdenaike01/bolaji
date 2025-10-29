@@ -212,6 +212,48 @@ export const templates: {
       </p>
     `,
     ),
+  [EmailType.SUBSCRIPTION_STARTED]: ({ name, planType, nextEdition }) =>
+    wrap(
+      "Your Subscription Has Begun",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
+        Welcome back, ${name.split(" ")[0]}!
+      </h2>
+
+      <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 14px;">
+        Your Bolaji Editions <strong>${planType}</strong> subscription is now active.
+      </p>
+
+      <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
+        You’ll automatically receive each new Edition as it’s released — 
+        starting with <strong>Edition&nbsp;${nextEdition}</strong>.
+        ${
+          planType === PlanType.DIGITAL
+            ? "Your digital editions will appear in your account as soon as they’re published."
+            : "Your physical editions will be prepared and shipped upon each release."
+        }
+      </p>
+
+      <div style="text-align:center;margin:32px 0;">
+        <a href="https://bolajieditions.com/account" 
+           style="background:#6C63FF;color:#fff;text-decoration:none;
+                  padding:14px 32px;border-radius:6px;
+                  font-family:Inter,Arial,sans-serif;
+                  font-size:15px;display:inline-block;font-weight:500;">
+           View Your Editions →
+        </a>
+      </div>
+
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;">
+        We’re thrilled to have you on this journey. Each month, your subscription supports
+        independent artists and creative craftsmanship.
+      </p>
+
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+        With appreciation,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+      </p>
+    `,
+    ),
 
   [EmailType.SUBSCRIPTION_RENEWED]: ({ name, nextEdition }) =>
     wrap(
@@ -243,4 +285,6 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.PREORDER_RELEASED]: "Edition 00 — Preorders Now Open",
   [EmailType.NEW_EDITION_RELEASED]:
     "A new Bolaji Edition has arrived — explore now!",
+  [EmailType.SUBSCRIPTION_STARTED]:
+    "Your Bolaji Editions subscription is now active!",
 };

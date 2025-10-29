@@ -13,6 +13,8 @@ import {
   updateSubscriptionInputSchema,
 } from "@/domain/subscriptions/dto";
 import { PaymentEventActions } from "@/infra/integrations/stripe.integration";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+import { formatDate } from "@/utils";
 
 export class WebhookController {
   constructor(
@@ -53,12 +55,78 @@ export class WebhookController {
 
     if (paymentEvent.type === OrderType.SUBSCRIPTION_RENEWAL) {
       this.isValidOrThrow(paymentEvent, updateSubscriptionInputSchema);
-      await this.domain.subscriptions.onSubscriptionUpdate({
-        subscriptionId: paymentEvent.subscriptionId,
-        stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
-        subscriptionPlanId: paymentEvent.subscriptionPlanId,
-        stripeInvoiceId: paymentEvent.stripeInvoiceId,
-      });
+      const { updatedSubscription, nextEdition } =
+        await this.domain.subscriptions.onSubscriptionUpdate({
+          subscriptionId: paymentEvent.subscriptionId,
+          stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
+          subscriptionPlanId: paymentEvent.subscriptionPlanId,
+          stripeInvoiceId: paymentEvent.stripeInvoiceId,
+        });
+
+      const { user, plan } = updatedSubscription;
+      if (!user.name || !user.email)
+        throw new Error(
+          `User is not defined on subscription id=${updatedSubscription.id} planId=${updatedSubscription.planId}`,
+        );
+      if (paymentEvent.isNewSubscription) {
+        Promise.all([
+          this.domain.integrations.email.sendEmail({
+            type: EmailType.SUBSCRIPTION_STARTED,
+            email: user.email,
+            content: {
+              name: user.name,
+              email: user.email,
+              nextEdition: nextEdition?.number,
+            },
+          }),
+          this.domain.integrations.adminEmail.send({
+            type: AdminEmailType.SUBSCRIPTION_STARTED,
+            attachReport: true,
+            content: {
+              name: user.name,
+              email: user.email,
+              plan: plan.type,
+              periodStart: updatedSubscription.currentPeriodStart,
+              periodEnd: updatedSubscription.currentPeriodEnd,
+            },
+          }),
+        ]).catch((err) => {
+          logger.error(
+            err,
+            "[Subscription Service] Failed to send subscription started emails ",
+          );
+        });
+      } else {
+        Promise.all([
+          this.domain.integrations.email.sendEmail({
+            type: EmailType.SUBSCRIPTION_RENEWED,
+            email: user.email,
+            content: {
+              name: user.name,
+              email: user.email,
+              nextEdition: nextEdition?.number,
+            },
+          }),
+          this.domain.integrations.adminEmail.send({
+            type: AdminEmailType.SUBSCRIPTION_RENEWED,
+            content: {
+              name: user.name,
+              email: user.email,
+              plan: plan.type,
+              renewedAt: new Date().toISOString(),
+              nextPeriodEnd: new Date(
+                Date.now() + 30 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            },
+          }),
+        ]).catch((err) => {
+          logger.error(
+            err,
+            "[Subscription Service] Failed to send subscription renewed emails",
+          );
+        });
+      }
+
       return;
     }
     if (paymentEvent.action === PaymentEventActions.SUBSCRIPTION_STARTED) {
