@@ -390,17 +390,17 @@ export class SubscriptionsService {
           `[Subscription Service] Attempting to reuse existing Stripe checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
         );
 
-        const checkoutUrl =
-          await this.integrations.payments.getSubscriptionCheckout(
+        const checkoutSession =
+          await this.integrations.payments.getCheckoutById(
             existingSub.stripeCheckoutSessionId,
           );
 
-        if (checkoutUrl) {
+        if (checkoutSession && checkoutSession.url) {
           logger.info(
             `[Subscription Service] ✅ Reusing existing checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
           );
 
-          return { checkoutUrl };
+          return { checkoutUrl: checkoutSession.url };
         }
 
         // If Stripe session retrieval fails, mark it invalid and proceed to recreate

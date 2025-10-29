@@ -92,6 +92,14 @@ export class PreorderController {
     }
     const { data: input } = combinedSchema;
 
+    const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder();
+    if (!canAcceptPreorder)
+      return createErrorResponse(res, {
+        statusCode: StatusCodes.FORBIDDEN,
+        error: "Cannot accept preorders",
+        endpoint: req.url,
+      });
+
     const user = await this.domain.user.registerUser({
       deviceFingerprint: createDeviceFingerprint(req),
       email: input.email,
@@ -101,15 +109,6 @@ export class PreorderController {
       userAgent: getRequestUserAgent(req),
       status: UserStatus.PENDING_PREORDER,
     });
-
-    const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder();
-
-    if (!canAcceptPreorder)
-      return createErrorResponse(res, {
-        statusCode: StatusCodes.FORBIDDEN,
-        error: "Cannot accept preorders",
-        endpoint: req.url,
-      });
 
     const preoder = await this.domain.preorders.registerPreorder({
       choice: input.choice,

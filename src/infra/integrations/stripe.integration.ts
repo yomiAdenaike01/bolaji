@@ -12,6 +12,7 @@ import crypto from "crypto";
 
 export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
+  PREORDER_FAILED = "PREORDER_FAILED",
 }
 export class StripeIntegration {
   private stripe!: Stripe;
@@ -27,13 +28,71 @@ export class StripeIntegration {
       logger.error(error, "Failed to initlaise stripe");
     }
   }
-  getSubscriptionCheckout = async (checkoutSessionId: string) => {
-    logger.info(
-      `[StripeIntegration] Fetching subscription checkout session id=${checkoutSessionId}`,
-    );
-    const session =
-      await this.stripe.checkout.sessions.retrieve(checkoutSessionId);
-    return session.url;
+
+  handlePreorderFailure = async (
+    failedObject: Stripe.PaymentIntent | Stripe.Charge,
+  ): Promise<PaymentEvent | null> => {
+    // Ensure we have a PaymentIntent
+    const paymentIntentId =
+      (failedObject as Stripe.PaymentIntent).id ||
+      (failedObject as Stripe.Charge).payment_intent;
+
+    if (!paymentIntentId) {
+      logger.error(
+        "[StripeIntegration] No payment_intent found on failure event",
+      );
+      return null;
+    }
+
+    let meta: Record<string, string> | null = failedObject.metadata || null;
+    // Fetch the full PaymentIntent from Stripe to get metadata
+    if (!meta) {
+      try {
+        const intent = await this.stripe.paymentIntents.retrieve(
+          paymentIntentId as string,
+          {
+            expand: ["latest_charge"],
+          },
+        );
+        meta = intent.metadata;
+      } catch (error) {
+        const checkout = await this.getCheckoutById(paymentIntentId as string);
+        meta = checkout?.metadata || null;
+      }
+    }
+
+    if (!meta) return null;
+
+    return {
+      userId: meta.userId,
+      redirectUrl: meta.redirectUrl || null,
+      rawPayload: JSON.stringify(failedObject),
+      stripeEventType: "payment_intent.payment_failed",
+      orderType: OrderType.PREORDER,
+      type: OrderType.PREORDER,
+      plan: (meta.plan as PlanType) ?? PlanType.DIGITAL,
+      editionId: meta.editionId ?? "",
+      addressId: meta.addressId ?? null,
+      orderId: meta.preorderId,
+      paymentLinkId: meta.paymentLinkId || "",
+      eventId: paymentIntentId as string,
+      amount: (failedObject as any)?.amount ?? 0,
+      success: false,
+      action: PaymentEventActions.PREORDER_FAILED,
+    };
+  };
+
+  getCheckoutById = async (checkoutSessionId: string) => {
+    try {
+      logger.info(
+        `[StripeIntegration] Fetching subscription checkout session id=${checkoutSessionId}`,
+      );
+      const session =
+        await this.stripe.checkout.sessions.retrieve(checkoutSessionId);
+      return session;
+    } catch (error) {
+      return null;
+    }
   };
   getPaymentLink = async (paymentLinkId: string) => {
     try {
@@ -76,7 +135,9 @@ export class StripeIntegration {
   getSubscription = async (subscriptionId: string) => {
     return this.stripe.subscriptions.retrieve(subscriptionId);
   };
-
+  private handleAsyncPaymentComplete(
+    event: Stripe.CheckoutSessionAsyncPaymentSucceededEvent,
+  ) {}
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {
@@ -234,6 +295,7 @@ export class StripeIntegration {
     amount: number;
     addressId: string | null;
     redirectUrl: string;
+    preorderId: string;
   }) => {
     logger.info(
       `[StripeIntegration] Creating preorder payment link for userId=${opts.userId}, editionId=${opts.editionId}, plan=${opts.choice}`,
@@ -246,11 +308,21 @@ export class StripeIntegration {
         amount: z.number().min(1),
         addressId: z.string().min(1).nullable(),
         redirectUrl: z.string().min(1),
+        preorderId: z.string().min(1),
       })
       .parse(opts);
 
     // 🧮 Ensure correct pricing from your own logic if you don’t trust `amount`
     const priceInCents = Math.round(parsed.amount);
+    const metadata = {
+      userId: parsed.userId,
+      editionId: parsed.editionId,
+      plan: parsed.choice,
+      type: "PREORDER",
+      addressId: parsed.addressId,
+      preorderId: parsed.preorderId,
+      redirectUrl: parsed.redirectUrl,
+    };
 
     const params: Stripe.PaymentLinkCreateParams = {
       line_items: [
@@ -265,12 +337,9 @@ export class StripeIntegration {
           quantity: 1,
         },
       ],
-      metadata: {
-        userId: parsed.userId,
-        editionId: parsed.editionId,
-        plan: parsed.choice,
-        type: "PREORDER",
-        addressId: parsed.addressId,
+      metadata,
+      payment_intent_data: {
+        metadata,
       },
       after_completion: {
         type: "redirect",
@@ -467,19 +536,67 @@ export class StripeIntegration {
     }
     if (!event) throw new Error("Event is not defined");
     switch (event.type) {
-      case "checkout.session.completed":
-        return this.constructCheckoutEventData(event);
-      case "customer.subscription.created":
+      // 🟢 --- CHECKOUT EVENTS ---
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        if (session.payment_status === "paid") {
+          // ✅ Instant success (card, Apple Pay, etc.)
+          return this.constructCheckoutEventData(event);
+        } else {
+          // ⚠️ Async methods (SEPA, Bacs, etc.) – wait for confirmation
+          logger.info(
+            `[StripeIntegration] Checkout completed but payment still pending for session=${session.id}`,
+          );
+        }
+        break;
+      }
+
+      // 🟢 Async payment confirmation (SEPA, Bacs, etc.)
+      case "checkout.session.async_payment_succeeded": {
+        return this.handleAsyncPaymentComplete(event);
+      }
+
+      // 🔴 Async payment failed (SEPA, Bacs, etc.)
+      case "checkout.session.async_payment_failed": {
+        return this.handlePreorderFailure(event.data.object as any);
+      }
+
+      // 🔴 Direct payment failures (card declined, etc.)
+      case "payment_intent.payment_failed":
+      case "charge.failed": {
+        return this.handlePreorderFailure(event.data.object);
+      }
+
+      // 🟢 Subscription lifecycle
+      case "customer.subscription.created": {
+        // First subscription creation (user just subscribed)
         return this.constructSubscriptionCreatedData(event);
-      // case "payment_intent.payment_failed":
-      //   return this.handlePaymentFailed(event);
-      // case "invoice.payment_succeeded":
-      //   return this.handleInvoiceSuccess(event);
-      // case "invoice.payment_failed":
-      //   return this.handleInvoiceFailed(event);
-      // case "customer.subscription.deleted":
-      //   return this.handleSubscriptionCanceled(event);
+      }
+
+      // 🟢 Renewal success
+      case "invoice.payment_succeeded": {
+        // Renewal payment succeeded → unlock next edition
+        return this.handleInvoiceSuccess(event);
+      }
+
+      // 🔴 Renewal failure (retry attempts start)
+      case "invoice.payment_failed": {
+        // Renewal failed → trigger retry email or mark PAST_DUE
+        return this.handleInvoiceFailed(event);
+      }
+
+      // 🔴 Subscription cancelled (user or failed retries)
+      case "customer.subscription.deleted": {
+        // Cancelled → remove from renewal & access cycles
+        return this.handleSubscriptionCanceled(event);
+      }
+
+      default: {
+        logger.info(`[StripeIntegration] No handler for event=${event.type}`);
+        return null;
+      }
     }
+
     return null;
   };
 }

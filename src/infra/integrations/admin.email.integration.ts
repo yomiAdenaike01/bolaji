@@ -9,7 +9,6 @@ import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport
 import ExcelJS from "exceljs";
 import { logger } from "@/lib/logger";
 import { AdminEmailContent, AdminEmailType } from "./email-types";
-import { log } from "console";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
@@ -99,7 +98,7 @@ export class AdminEmailIntegration {
             `[AdminEmailIntegration] Failed to send admin email to=${address} reason=${response.error.message}`,
           );
         }
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     } catch (error) {
       logger.error(error, `Failed to send admin email of type ${opts.type}`);

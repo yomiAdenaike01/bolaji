@@ -27,6 +27,82 @@ export class PreordersService {
     private readonly user: UserService,
     private readonly integrations: Integrations,
   ) {}
+
+  markAsFailed = async ({
+    userId,
+    editionId,
+    preorderId,
+    redirectUrl,
+    addressId,
+  }: {
+    preorderId: string;
+    userId: string;
+    editionId: string;
+    redirectUrl: string;
+    addressId: string | null;
+  }) => {
+    const preorder = await this.db.preorder.update({
+      where: {
+        id: preorderId,
+        userId,
+        editionId,
+        status: {
+          notIn: [OrderStatus.PAID, OrderStatus.CANCELED],
+        },
+      },
+      data: {
+        status: OrderStatus.FAILED,
+        failedAt: new Date(),
+      },
+      include: {
+        edition: true,
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+    if (preorder.id && preorder.userId) {
+      logger.info(
+        `[Preorder Service] Marked preorder as FAILED — id=${preorder.id}, edition=${editionId}, user=${userId}`,
+      );
+      let paymentUrl: string | null = null;
+
+      if (preorder.stripePaymentLinkId) {
+        logger.info(
+          `[Preorder Service] Fetching preorder payment link url — id=${preorder.id}, edition=${editionId}, user=${userId}`,
+        );
+        const paymentLink = await this.findOrCreatePreorderPaymentLink({
+          stripePaymentLinkId: preorder.stripePaymentLinkId,
+          amount: preorder.totalCents,
+          editionId,
+          preorderId,
+          redirectUrl,
+          addressId,
+          choice: preorder.choice,
+          userId: preorder.userId,
+        });
+
+        if (paymentLink?.url) {
+          logger.info(
+            `[Preorder Service] Fetched preorder payment link url — id=${preorder.id} url=${paymentLink.url}, edition=${editionId}, user=${userId}`,
+          );
+          paymentUrl = paymentLink.url;
+        }
+        logger.warn(
+          `[Preorder Service] Failed to find or create payment link - id=${preorder.id}, edition=${editionId}, user=${userId}`,
+        );
+      }
+      return { ...preorder, retryUrl: paymentUrl };
+    }
+    logger.warn(
+      `[Preorder Service] No eligible preorder found to mark as failed (userId=${userId}, editionId=${editionId})`,
+    );
+    return null;
+  };
+
   findOrCreatePreorderPaymentLink = async ({
     stripePaymentLinkId,
     amount,
@@ -73,6 +149,7 @@ export class PreordersService {
           amount,
           addressId,
           redirectUrl,
+          preorderId,
         });
 
       // ✅ 3️⃣ Save in DB atomically
@@ -82,7 +159,7 @@ export class PreordersService {
       });
 
       logger.info(
-        `✅ Created new Stripe link for preorder=${preorderId}, link=${paymentLink.url}`,
+        `✅ Created new Stripe link - preoderId=${preorderId}, link=${paymentLink.url}`,
       );
 
       return paymentLink;
@@ -226,7 +303,7 @@ export class PreordersService {
     // 3️⃣ Mark user as active once Stripe is ready
     await this.db.user.update({
       where: { id: userId },
-      data: { status: UserStatus.ACTIVE },
+      data: { status: UserStatus.PENDING_PREORDER },
     });
 
     // 4️⃣ Non-blocking email
@@ -312,6 +389,15 @@ export class PreordersService {
     const { plan, amount } = completedPreorderDto;
 
     const result = await this.completePreorderTransaction(completedPreorderDto);
+
+    await this.db.user.update({
+      where: {
+        id: completedPreorderDto.userId,
+      },
+      data: {
+        status: UserStatus.ACTIVE,
+      },
+    });
 
     const formattedAmount = new Intl.NumberFormat("en-GB", {
       currency: "gbp",

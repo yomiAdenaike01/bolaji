@@ -304,8 +304,9 @@ model Preorder {
   completedAt             DateTime?
 
   // 1-to-1 link to Order if you create it after payment
-  order   Order?  @relation(fields: [orderId], references: [id])
-  orderId String? @unique
+  order    Order?    @relation(fields: [orderId], references: [id])
+  orderId  String?   @unique
+  failedAt DateTime?
 
   @@index([editionId, status])
   @@index([userId])

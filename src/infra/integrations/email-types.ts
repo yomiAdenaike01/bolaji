@@ -80,7 +80,8 @@ export enum EmailType {
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   PREORDER_RELEASED = "PREORDER_RELEASED",
-  NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED", // 👈 NEW
+  NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED",
+  PREORDER_PAYMENT_FAILED = "PREORDER_PAYMENT_FAILED", // 👈 NEW
 }
 
 export interface EmailContentMap {
@@ -89,41 +90,58 @@ export interface EmailContentMap {
     planType: PlanType;
     nextEdition: number;
   };
+
   [EmailType.NEW_EDITION_RELEASED]: {
     name: string;
     editionTitle: string;
     editionCode: string;
     editionLink: string;
   };
+
   [EmailType.REGISTER]: {
     name: string;
     email: string;
     password?: string;
   };
+
   [EmailType.PREORDER_CONFIRMATION]: {
     name: string;
     email: string;
     editionCode: string;
     plan: PlanType;
   };
+
   [EmailType.PAYMENT_FAILED]: {
     name: string;
     email: string;
     reason?: string;
   };
+
   [EmailType.PASSWORD_RESET]: {
     name: string;
     email: string;
     resetLink: string;
   };
+
   [EmailType.SUBSCRIPTION_RENEWED]: {
     name: string;
     email: string;
     nextEdition: string;
   };
+
   [EmailType.PREORDER_RELEASED]: {
     name: string;
     preorderLink: string;
     password: string;
+  };
+
+  // 🆕 Preorder Payment Failed
+  [EmailType.PREORDER_PAYMENT_FAILED]: {
+    name: string;
+    email: string;
+    editionCode: string;
+    plan: PlanType;
+    reason?: string;
+    retryLink?: string; // optional link to retry checkout
   };
 }

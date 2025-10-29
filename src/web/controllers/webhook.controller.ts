@@ -1,20 +1,9 @@
 import { Domain } from "@/domain/domain";
-import { OrderType, UserStatus } from "@/generated/prisma/enums";
-import { PaymentEvent } from "@/infra/integrations/checkout.dto";
-import { preorderSchema } from "@/infra/integrations/schema";
 import { logger } from "@/lib/logger";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { ZodType } from "zod";
 import { IntegrationsController } from "./integrations.controller";
 import { createErrorResponse } from "./utils";
-import {
-  onCreateSubscriptionInputSchema,
-  updateSubscriptionInputSchema,
-} from "@/domain/subscriptions/dto";
-import { PaymentEventActions } from "@/infra/integrations/stripe.integration";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
-import { formatDate } from "@/utils";
 
 export class WebhookController {
   constructor(
@@ -147,7 +136,7 @@ export class WebhookController {
   handle = () => async (req: Request, res: Response) => {
     let paymentEvent = null;
     try {
-      paymentEvent = this.integrationsCtrl.handlePaymentEvents(req, res);
+      paymentEvent = await this.integrationsCtrl.handlePaymentEvents(req, res);
       if (!paymentEvent) {
         createErrorResponse(res, {
           statusCode: StatusCodes.BAD_REQUEST,
@@ -156,7 +145,7 @@ export class WebhookController {
         });
         return;
       }
-      if (!paymentEvent.success) {
+      if (!(paymentEvent as any)?.success) {
         await this.domain.jobQueues.add("payment.failed", paymentEvent);
       } else {
         await this.domain.jobQueues.add("payment.success", paymentEvent);

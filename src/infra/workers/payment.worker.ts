@@ -6,14 +6,28 @@ import {
   updateSubscriptionInputSchema,
   onCreateSubscriptionInputSchema,
 } from "@/domain/subscriptions/dto";
-import { OrderType, UserStatus } from "@/generated/prisma/enums";
+import { OrderType, PlanType, UserStatus } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
-import { ZodType } from "zod";
+import z, { ZodType } from "zod";
 import { PaymentEvent } from "../integrations/checkout.dto";
 import { EmailType, AdminEmailType } from "../integrations/email-types";
 import { preorderSchema } from "../integrations/schema";
 import { PaymentEventActions } from "../integrations/stripe.integration";
 
+const failedPreorderDto = z.object({
+  action: z.string(),
+  addressId: z.string().optional().nullable(),
+  amount: z.number().nonnegative(),
+  editionId: z.string(),
+  plan: z.enum(PlanType),
+  eventId: z.string(),
+  type: z.enum(OrderType),
+  userId: z.string(),
+  orderId: z.string(),
+  redirectUrl: z.string(),
+});
+
+type FailedPreorderInput = z.infer<typeof failedPreorderDto>;
 export class PaymentWorker {
   worker: Worker<any, any, string>;
   constructor(
@@ -26,13 +40,56 @@ export class PaymentWorker {
       },
     });
   }
+
+  protected process = async (job: Job<any, any, string>) => {
+    const paymentEvent = job.data;
+    try {
+      logger.info(
+        `[Payment Worker] Processing job id=${job.id} name=${job.name}`,
+      );
+
+      const existingEvent = await this.domain.integrations.beginEvent(
+        paymentEvent.eventId,
+        paymentEvent.stripeEventType,
+        paymentEvent.rawPayload,
+      );
+      if (!existingEvent) return;
+      switch (job.name) {
+        case "payment.success":
+          await this.handleSuccess(paymentEvent);
+          break;
+
+        case "payment.failed":
+          await this.handleFailures(paymentEvent);
+          break;
+      }
+
+      await this.domain.integrations.completeEvent(
+        paymentEvent.eventId,
+        paymentEvent.stripeEventType,
+        "HANDLED",
+      );
+      return;
+    } catch (error: any) {
+      logger.error(
+        `[Payment Worker] Failed to handle payment job reason=${error.message} `,
+      );
+      if (!paymentEvent) return;
+      await this.domain.integrations.completeEvent(
+        paymentEvent.eventId,
+        paymentEvent.stripeEventType,
+        "FAILED",
+      );
+    }
+  };
+
   private isValidOrThrow<T>(
     input: unknown,
     schema: ZodType<T>,
   ): asserts input is T {
     schema.parse(input);
   }
-  handleSuccess = async (paymentEvent: PaymentEvent) => {
+  private handleSuccess = async (paymentEvent: PaymentEvent) => {
     logger.info("[Payment Worker] Successfully constructed payment event");
     if (paymentEvent.type == OrderType.PREORDER) {
       const {
@@ -139,46 +196,46 @@ export class PaymentWorker {
       return;
     }
   };
-  handleFailures = async (paymentEvent: PaymentEvent) => {
-    throw new Error("Method not implemented.");
-  };
-  process = async (job: Job<any, any, string>) => {
-    const paymentEvent = job.data;
-    try {
-      logger.info(
-        `[Payment Worker] Processing job id=${job.id} name=${job.name}`,
-      );
 
-      const existingEvent = await this.domain.integrations.beginEvent(
-        paymentEvent.eventId,
-        paymentEvent.stripeEventType,
-        paymentEvent.rawPayload,
-      );
-      if (!existingEvent) return;
-      switch (job.name) {
-        case "payment.success":
-          await this.handleSuccess(paymentEvent);
-          break;
-
-        case "payment.failed":
-          await this.handleFailures(paymentEvent);
-          break;
-      }
-
-      await this.domain.integrations.completeEvent(
-        paymentEvent.eventId,
-        paymentEvent.stripeEventType,
-        "HANDLED",
-      );
+  private handleFailures = async (paymentEvent: PaymentEvent) => {
+    if (paymentEvent.orderType === OrderType.PREORDER) {
+      this.isValidOrThrow(paymentEvent, failedPreorderDto);
+      await this.failPreorder(paymentEvent);
       return;
-    } catch (error) {
-      logger.error("Failed to handle stripe webhook event");
-      if (!paymentEvent) return;
-      await this.domain.integrations.completeEvent(
-        paymentEvent.eventId,
-        paymentEvent.stripeEventType,
-        "FAILED",
-      );
     }
+  };
+
+  private failPreorder = async (paymentEvent: FailedPreorderInput) => {
+    const failedPreorder = await this.domain.preorders.markAsFailed({
+      userId: paymentEvent.userId,
+      editionId: paymentEvent.editionId,
+      preorderId: paymentEvent.orderId,
+      addressId: paymentEvent.addressId || null,
+      redirectUrl: paymentEvent.redirectUrl,
+    });
+
+    if (!failedPreorder?.id)
+      throw new Error(`No preorder found by id=${paymentEvent.orderId}`);
+
+    if (!failedPreorder?.user?.email || !failedPreorder?.user?.name)
+      throw new Error(
+        `Failed to send comms for failed preoroder=${paymentEvent.orderId} user email is undefined`,
+      );
+
+    const email = failedPreorder.user.email;
+
+    this.domain.integrations.email.sendEmail({
+      email,
+      type: EmailType.PREORDER_PAYMENT_FAILED,
+      content: {
+        name: failedPreorder.user.name || "Reader",
+        email,
+        editionCode: failedPreorder.edition.code,
+        plan: failedPreorder.choice,
+        ...(failedPreorder.retryUrl
+          ? { retryLink: failedPreorder.retryUrl }
+          : {}),
+      },
+    });
   };
 }

@@ -63,6 +63,51 @@ const wrap = (title: string, body: string) => `
 export const templates: {
   [K in EmailType]: (content: EmailContentMap[K]) => string;
 } = {
+  [EmailType.PREORDER_PAYMENT_FAILED]: ({
+    name,
+    editionCode,
+    plan,
+    reason,
+    retryLink,
+  }) =>
+    wrap(
+      "Your Preorder Payment Didn’t Go Through",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:18px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:16px;">
+        We weren’t able to process your preorder payment for
+        <strong>Bolaji Edition&nbsp;${editionCode}</strong>
+        (${plan === PlanType.FULL ? "Full" : plan} Plan).
+      </p>
+      ${
+        reason
+          ? `<p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;margin-bottom:16px;">Reason: ${reason}</p>`
+          : ""
+      }
+      ${
+        retryLink
+          ? `<div style="text-align:center;margin:32px 0;">
+              <a href="${retryLink}"
+                 style="background:#6C63FF;color:#fff;text-decoration:none;
+                        padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;
+                        font-size:15px;display:inline-block;font-weight:500;">
+                Retry Payment →
+              </a>
+             </div>`
+          : ""
+      }
+      <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;">
+        Don’t worry — your preorder spot remains reserved temporarily.
+        Please complete the payment within 24&nbsp;hours to secure your copy of Edition&nbsp;${editionCode}.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+        With appreciation,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+      </p>
+    `,
+    ),
+
   [EmailType.NEW_EDITION_RELEASED]: ({
     name,
     editionTitle,
@@ -305,6 +350,8 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
   [EmailType.PREORDER_RELEASED]: "Edition 00 — Preorders Now Open",
+  [EmailType.PREORDER_PAYMENT_FAILED]:
+    "Your preorder payment didn’t go through — retry now",
   [EmailType.NEW_EDITION_RELEASED]:
     "A new Bolaji Edition has arrived — explore now!",
   [EmailType.SUBSCRIPTION_STARTED]:
