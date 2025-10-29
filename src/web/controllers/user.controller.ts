@@ -1,35 +1,42 @@
 import { Domain } from "@/domain/domain";
 import { createUserSchema } from "@/domain/schemas/users";
 import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 import { Hub } from "@/generated/prisma/enums";
+import createHttpError from "http-errors";
 
 export class UserController {
   constructor(private readonly domain: Domain) {}
+  handleGetUserAddreses = async (req: Request, res: Response) => {
+    const userId = this.domain.session.getUserIdOrThrow(req.session);
+    const address = await this.domain.user.findUserAddreses(userId);
+    res.status(200).json(address);
+    return;
+  };
+  public getUserIdOrUnauthorised(req: Request) {
+    try {
+      const userId = this.domain.session.getUserId(req.session);
+      if (!userId) throw new Error("User id not found on session");
+    } catch (error) {
+      throw createHttpError.Unauthorized(
+        "Failed to fetch user ID from session",
+      );
+    }
+  }
 
   handleGetEditionsAccess = async (req: Request, res: Response) => {
     const userId = this.domain.session.getUserIdOrThrow(req.session);
     const currentHubHeader = String(req.headers["x-hub-id"]);
     if (!currentHubHeader) {
-      return createErrorResponse(res, {
-        details: "Hub not found",
-        endpoint: "/user/editions/access",
-        error: "Hub not found",
-        statusCode: StatusCodes.FORBIDDEN,
-      });
+      throw createHttpError.Forbidden("Hub not found");
     }
     const currentHub = Object.fromEntries(Object.entries(Hub))[
       currentHubHeader
     ];
     if (!currentHub) {
-      return createErrorResponse(res, {
-        details: "Hub not found",
-        endpoint: "/user/editions/access",
-        error: "Hub not found",
-        statusCode: StatusCodes.FORBIDDEN,
-      });
+      throw createHttpError.Forbidden("Hub not found");
     }
     const { withAccess, withoutAccess } =
       await this.domain.user.getUserEditionsAccess(userId, currentHub);

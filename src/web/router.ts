@@ -1,11 +1,29 @@
 import bodyParser from "body-parser";
-import express, { Application, Router } from "express";
+import express, {
+  Request,
+  Response,
+  Application,
+  NextFunction,
+  Router,
+} from "express";
 import { StatusCodes } from "http-status-codes";
 import { Controllers, PaymentsWebhookHandler } from "./controllers/controllers";
 import { SubscriptionsController } from "./controllers/subscriptions.controller";
 import { PreorderController } from "./controllers/preorder.controller";
 import { UserController } from "./controllers/user.controller";
 import { AuthController } from "./controllers/auth.controller";
+import createHttpError from "http-errors";
+
+const authGuard =
+  (userController: UserController) =>
+  (req: Request, _: Response, next: NextFunction) => {
+    try {
+      userController.getUserIdOrUnauthorised(req);
+      next();
+    } catch (error) {
+      next(createHttpError.Unauthorized("User is not authenticated"));
+    }
+  };
 
 const makeAuthRouter = (authController: AuthController) => {
   const r = express.Router();
@@ -16,7 +34,17 @@ const makeAuthRouter = (authController: AuthController) => {
 const makeUserRouter = (userController: UserController) => {
   const r = express.Router();
   r.post("/create", userController.handleCreateUser);
-  r.get("/editions/access", userController.handleGetEditionsAccess);
+  r.get(
+    "/editions/access",
+    authGuard(userController),
+    userController.handleGetEditionsAccess,
+  );
+  r.get(
+    "/addresses",
+    authGuard(userController),
+    userController.handleGetUserAddreses,
+  );
+
   return r;
 };
 

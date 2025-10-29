@@ -38,17 +38,22 @@ export class EmailIntegration {
         .parse(input);
 
       logger.info(
-        `Sending email=${input.email} type=${input.type} metaData=${input.content}`,
+        `[EmailIntegration] Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );
       const emailContent = this.getEmailTemplate(type, input.content);
 
-      await this.integration.emails.send({
+      const response = await this.integration.emails.send({
         from: this.sourceEmailAddr,
         to: email,
         html: emailContent.template,
         subject: subject || emailContent.subject,
       });
-      return true;
+      if (response.error)
+        logger.error(
+          response.error,
+          `[EmailIntegration] Failed to send email to=${email} reason=${response.error.message}`,
+        );
+      return response;
     } catch (error) {
       logger.error(error, "Failed to send email");
       return false;

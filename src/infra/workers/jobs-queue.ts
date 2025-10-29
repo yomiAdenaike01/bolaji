@@ -1,15 +1,15 @@
+import { logger } from "@/lib/logger";
 import { Queue } from "bullmq";
-import IORedis from "ioredis";
 export class JobsQueues {
   private emailQueue: Queue<any, any, string, any, any, string>;
-  private renewalQueue: Queue<any, any, string, any, any, string>;
+  private stripePaymentsQueue: Queue<any, any, string, any, any, string>;
   constructor(connectionUrl: string) {
     this.emailQueue = new Queue("emails", {
       connection: {
         url: connectionUrl,
       },
     });
-    this.renewalQueue = new Queue("renewable", {
+    this.stripePaymentsQueue = new Queue("payments", {
       connection: {
         url: connectionUrl,
       },
@@ -18,8 +18,17 @@ export class JobsQueues {
 
   add = async (jobName: string, data: any, options?: any) => {
     const [queueName] = jobName.split(".");
-    const targetQueue =
-      queueName === "renewal" ? this.renewalQueue : this.emailQueue;
+    const targetQueue = {
+      payment: this.stripePaymentsQueue,
+      email: this.emailQueue,
+    }[queueName];
+
+    if (!targetQueue) {
+      logger.error(
+        `[Jobs Queue] Failed to add job queue not found queue=${queueName}`,
+      );
+      return;
+    }
 
     return targetQueue.add(jobName, data, {
       removeOnComplete: true,

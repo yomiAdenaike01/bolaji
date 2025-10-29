@@ -1,8 +1,21 @@
 import { PlanType } from "@/generated/prisma/enums";
 import { EmailType, EmailContentMap } from "./email-types";
-
 const LOGO_URL =
   "https://static.wixstatic.com/media/7ec957_cdb075d0cbbe459ebbb49f125106e1fb~mv2.png/v1/fill/w_99,h_66,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/Ade_Logo_Black.png";
+
+const renderPassword = (password: string) => {
+  return `<div style="margin-top:24px;background:#f5f5f5;padding:16px;border-radius:8px;text-align:center;">
+        <p style="font-family:Inter,Arial,sans-serif;color:#333;font-size:14px;margin-bottom:8px;">
+          Your temporary password:
+        </p>
+        <div style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:6px;font-weight:600;font-size:16px;letter-spacing:1px;">
+          ${password}
+        </div>
+         <p style="font-family:Inter,Arial,sans-serif;color:#666;font-size:13px;margin-top:20px;line-height:1.5;">
+        You can change this password anytime from your account settings after signing in.
+      </p>
+      </div>`;
+};
 
 const wrap = (title: string, body: string) => `
 <!DOCTYPE html>
@@ -133,19 +146,28 @@ export const templates: {
   `,
     ),
 
-  [EmailType.REGISTER]: ({ name, email }) =>
-    wrap(
+  [EmailType.REGISTER]: ({ name, email, password }) => {
+    // 🧩 If password isn’t provided, generate one
+
+    return wrap(
       "Welcome to Bolaji Editions",
       `
-      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:18px;">Welcome${name ? `, ${name}` : ""}!</h2>
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:18px;">
+        Welcome${name ? `, ${name}` : ""}!
+      </h2>
+
       <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 10px;">
         Your account <strong>${email}</strong> has been successfully created.
       </p>
+
       <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;">
         Begin exploring exclusive editions, creative insights, and limited works by contemporary artists.
       </p>
+
+      ${password ? renderPassword(password) : ""}
     `,
-    ),
+    );
+  },
 
   [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode, plan }) =>
     wrap(

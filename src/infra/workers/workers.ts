@@ -1,17 +1,14 @@
 import { Config } from "@/config";
 import { Db } from "..";
-import { EmailIntegration } from "../integrations/email.integration";
 import { EmailWorker } from "./email.worker";
-import IORedis from "ioredis";
 import { logger } from "@/lib/logger";
+import { PaymentWorker } from "./payment.worker";
+import { Domain } from "@/domain/domain";
 
 export class JobWorkers {
-  constructor(config: Config, db: Db, connection: IORedis) {
-    logger.info("Initialising workers...");
-    const emailIntegration = new EmailIntegration(
-      config.resendApiKey,
-      config.sentFromEmailAddr,
-    );
-    new EmailWorker(db, connection, emailIntegration);
+  constructor(config: Config, db: Db, domain: Domain) {
+    logger.info("[Workers] Initialising workers...");
+    new EmailWorker(db, config.redisConnectionUrl, domain.integrations.email);
+    new PaymentWorker(config.redisConnectionUrl, domain);
   }
 }

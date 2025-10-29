@@ -3,6 +3,7 @@ import { createSubscriptionInputSchema } from "@/domain/subscriptions/dto";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { invalidInputErrorResponse } from "./utils";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 
 export class SubscriptionsController {
   constructor(private readonly domain: Domain) {}
@@ -11,7 +12,7 @@ export class SubscriptionsController {
     const { error, data: subscriptionsInput } =
       createSubscriptionInputSchema.safeParse({
         ...req.body,
-        userId: this.domain.session.getUserIdOrThrow(req.session),
+        userId: this.domain.session.getUserId(req.session),
       });
 
     if (error) {
@@ -19,8 +20,12 @@ export class SubscriptionsController {
       return;
     }
 
-    const { checkoutUrl } =
-      await this.domain.subscriptions.createSubscription(subscriptionsInput);
+    const { checkoutUrl } = await this.domain.subscriptions.createSubscription({
+      ...subscriptionsInput,
+      deviceFingerprint: createDeviceFingerprint(req),
+      userAgent: getRequestUserAgent(req),
+    });
+
     res.status(StatusCodes.OK).json({ url: checkoutUrl });
   };
 }

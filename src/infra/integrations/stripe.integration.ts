@@ -73,6 +73,10 @@ export class StripeIntegration {
     }
   };
 
+  getSubscription = async (subscriptionId: string) => {
+    return this.stripe.subscriptions.retrieve(subscriptionId);
+  };
+
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {
@@ -346,9 +350,16 @@ export class StripeIntegration {
       email?: string | null;
       stripeCustomerId?: string | null;
     },
-    setCustomerId: (id: string) => Promise<void>,
+    setCustomerId: (id: string | null) => Promise<void>,
   ): Promise<string> => {
-    if (params.stripeCustomerId) return params.stripeCustomerId;
+    if (params.stripeCustomerId) {
+      const stripeCustomer = await this.stripe.customers.retrieve(
+        params.stripeCustomerId,
+      );
+      if (stripeCustomer && Boolean(stripeCustomer?.deleted) === false) {
+        return stripeCustomer.id;
+      }
+    }
 
     const customer = await this.stripe.customers.create({
       email: params.email ?? undefined,

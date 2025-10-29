@@ -19,14 +19,13 @@ export const initDomain = (
   const userService = new UserService(db, integrations);
 
   const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
-  //#region schedulers
-  //#endregion
   return {
     preorders: new PreordersService(db, userService, integrations),
     session: new SessionService(),
     user: userService,
     auth: new AuthService(db, userService),
     integrations,
+    jobQueues,
     subscriptions: new SubscriptionsService(db, integrations, jobQueues),
   };
 };

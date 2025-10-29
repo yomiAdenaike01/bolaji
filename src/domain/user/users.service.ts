@@ -17,6 +17,19 @@ export class UserService {
     private readonly integrations: Integrations,
   ) {}
 
+  findUserAddreses = async (userId: string) => {
+    const addresses = await this.db.address.findMany({
+      where: {
+        userId,
+      },
+    });
+    return addresses.map(
+      ({ userId, createdAt, updatedAt, isDefault, ...address }) => ({
+        ...address,
+      }),
+    );
+  };
+
   changeUserStatus = (userId: string, status: UserStatus) => {
     logger.info(
       `[User Service] Changing status for userId=${userId} to status=${status}`,
@@ -80,7 +93,7 @@ export class UserService {
       if (foundOrCreatedUser?.status === UserStatus.ACTIVE) {
         throw new Error("User already exists with that email.");
       }
-
+      const passwordHash = await bcrypt.hash(input.password, 10);
       if (
         foundOrCreatedUser?.status &&
         (
@@ -97,14 +110,13 @@ export class UserService {
           where: { id: foundOrCreatedUser.id },
           data: {
             name: input.name || foundOrCreatedUser.name,
-            passwordHash: bcrypt.hashSync(input.password, 10),
+            passwordHash,
             status: input.status,
           },
         });
       } else {
         logger.info(`[User service] Creating user email=${input.email}`);
         // 🔹 CASE 3: New user creation
-        const passwordHash = bcrypt.hashSync(input.password, 10);
         foundOrCreatedUser = await db.user.create({
           data: {
             email: input.email,

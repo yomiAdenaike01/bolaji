@@ -1,3 +1,4 @@
+import bcrypt from "bcrypt";
 import { Db, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
-import { AdminEmailType } from "@/infra/integrations/email-types";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import z from "zod";
 
 export class SubscriptionsService {
@@ -209,9 +210,9 @@ export class SubscriptionsService {
       }
       if (!addressId) return { updatedSubscription, nextEdition };
       logger.info(
-        `[Subscription Service] Creating shipform for userId=${existingSubscription.userId} `,
+        `[Subscription Service] Creating shipment for userId=${existingSubscription.userId} `,
       );
-      await tx.shipment.create({
+      const shipment = await tx.shipment.create({
         data: {
           userId: existingSubscription.userId,
           status: ShipmentStatus.PENDING,
@@ -219,7 +220,9 @@ export class SubscriptionsService {
           addressId,
         },
       });
-
+      logger.info(
+        `[Subscription Service] Successfully created shipment for userId=${existingSubscription.userId} addressId=${shipment.addressId} editionId=${shipment.editionId}`,
+      );
       return { updatedSubscription, nextEdition };
     });
     return result;
@@ -269,26 +272,63 @@ export class SubscriptionsService {
   };
 
   createSubscription = async (
-    input: CreateSubscriptionInput,
+    input: CreateSubscriptionInput & {
+      deviceFingerprint?: string;
+      userAgent?: string;
+    },
   ): Promise<CreateSubscriptionResult> => {
+    let userId = input.userId;
+
+    if (!input.userId) {
+      const password = crypto.randomBytes(4).toString("hex");
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await this.db.user.upsert({
+        where: {
+          email: input.email,
+        },
+        update: {},
+        create: {
+          name: input.name,
+          email: input.email,
+          passwordHash,
+          ...(input.deviceFingerprint && input.userAgent
+            ? {
+                devices: {
+                  create: {
+                    fingerprint: input.deviceFingerprint,
+                    userAgent: input.userAgent,
+                  },
+                },
+              }
+            : {}),
+        },
+      });
+      this.integrations.email.sendEmail({
+        email: user.email,
+        type: EmailType.REGISTER,
+        content: {
+          password,
+          email: user.email,
+          name: user.name || "User",
+        },
+      });
+      userId = user.id;
+    }
     const startTime = Date.now();
     let addressId = input.addressId;
     logger.info(
       `[Subscription Service] 🟦 Starting subscription creation for userId=${input.userId}, planType=${input.plan || "unknown"}`,
     );
 
+    if (!userId) throw new Error("User id is not defined");
     try {
+      logger.info(
+        `[Subscription Service] PlanId missing. Fetching plan by type=${input.plan}`,
+      );
+      const plan = await this.db.subscriptionPlan.findFirstOrThrow({
+        where: { type: input.plan },
+      });
       // 1️⃣ Resolve plan
-      if (input.plan && !input.planId) {
-        logger.info(
-          `[Subscription Service] PlanId missing. Fetching plan by type=${input.plan}`,
-        );
-        const plan = await this.db.subscriptionPlan.findFirstOrThrow({
-          where: { type: input.plan },
-        });
-        input.planId = plan.id;
-      }
-      if (!input.planId) throw new Error("Plan id is not defined");
 
       // 2️⃣ Validate address if provided
       if (input.addressId) {
@@ -297,30 +337,32 @@ export class SubscriptionsService {
         );
         await this.db.address.findUniqueOrThrow({
           where: { id: input.addressId, userId: input.userId },
-          select: { userId: true },
         });
       }
 
       // 3️⃣ Find existing subscription (if any)
-      const {
-        subscription: existingSub,
-        user,
-        subscriptionPlan: plan,
-      } = await this.findExistingSubscription({
-        userId: input.userId,
-        planId: input.planId,
-      });
-
-      if (existingSub?.status === SubscriptionStatus.ACTIVE) {
-        throw new Error(
-          `Subscription already active (userId=${user.id}, planId=${plan.id})`,
+      const { subscription: existingSub, user } =
+        await this.findExistingSubscription({
+          userId: userId,
+          planId: plan.id,
+        });
+      if (
+        existingSub?.status === SubscriptionStatus.ACTIVE &&
+        existingSub.stripeSubscriptionId
+      ) {
+        const subscription = await this.integrations.payments.getSubscription(
+          existingSub.stripeSubscriptionId,
         );
+        if (subscription.status === "active")
+          throw new Error(
+            `Subscription already active (userId=${userId}, planId=${plan.id})`,
+          );
       }
 
       // 4️⃣ Create address if supplied in payload
       if (input.address) {
         logger.info(
-          `[Subscription Service] Creating new address for userId=${user.id}`,
+          `[Subscription Service] Creating new address for userId=${userId}`,
         );
         const { id } = await this.db.address.create({
           data: {
@@ -385,7 +427,7 @@ export class SubscriptionsService {
         }
       }
 
-      const planId = input.planId;
+      const planId = plan.id;
       if (!planId) throw new Error("Plan Id is not defined");
 
       // 6️⃣ Create placeholder subscription
@@ -396,13 +438,13 @@ export class SubscriptionsService {
         tx.subscription.upsert({
           where: {
             userId_planId_status: {
-              userId: input.userId,
+              userId: userId,
               planId,
               status: SubscriptionStatus.PENDING,
             },
           },
           create: {
-            userId: input.userId,
+            userId: userId,
             planId,
             status: SubscriptionStatus.PENDING,
             currentPeriodStart: new Date(),
@@ -415,8 +457,7 @@ export class SubscriptionsService {
         `[Subscription Service] ✅ Placeholder subscription created id=${placeholder.id}`,
       );
 
-      // 7️⃣ Ensure Stripe Price
-      const priceId = await this.integrations.payments.ensureStripePrice(
+      const ensurePricePromise = this.integrations.payments.ensureStripePrice(
         {
           id: plan.id,
           name: plan.name,
@@ -440,8 +481,7 @@ export class SubscriptionsService {
         },
       );
 
-      // 8️⃣ Ensure Stripe Customer
-      const customerId = await this.integrations.payments.ensureCustomer(
+      const ensureCustomerPromise = this.integrations.payments.ensureCustomer(
         {
           userId: user.id,
           email: user.email,
@@ -457,6 +497,10 @@ export class SubscriptionsService {
           );
         },
       );
+      const [priceId, customerId] = await Promise.all([
+        ensurePricePromise,
+        ensureCustomerPromise,
+      ]);
 
       // 9️⃣ Generate idempotency key
       const idempotencyKey = crypto

@@ -98,6 +98,7 @@ export interface EmailContentMap {
   [EmailType.REGISTER]: {
     name: string;
     email: string;
+    password?: string;
   };
   [EmailType.PREORDER_CONFIRMATION]: {
     name: string;

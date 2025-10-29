@@ -9,11 +9,13 @@ import { EmailIntegration } from "../integrations/email.integration";
 export class EmailWorker {
   constructor(
     private readonly db: Db,
-    connection: IORedis,
+    connection: string,
     private readonly emailIntegration: EmailIntegration,
   ) {
     new Worker("emails", async (job) => this.process(job), {
-      connection,
+      connection: {
+        url: connection,
+      },
     });
   }
   process = async (job: Job<any, any, string>) => {

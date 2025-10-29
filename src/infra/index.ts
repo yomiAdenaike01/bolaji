@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import IORedis from "ioredis";
 import { seed } from "./seed";
 import { JobWorkers } from "./workers/workers";
+import { Domain } from "@/domain/domain";
 
 const initDb = () => {
   const db = new PrismaClient().$extends(withAccelerate());
@@ -28,7 +29,6 @@ const initStore = (config: Config) => {
 
 const initRedis = (config: Config) => {
   const { redisConfig, redisConnectionUrl } = config;
-  logger.info(`Connecting to redis with config=${JSON.stringify(redisConfig)}`);
   const redisInstance = new IORedis(redisConnectionUrl, {
     maxRetriesPerRequest: null,
     tls: {},
@@ -42,14 +42,18 @@ const initRedis = (config: Config) => {
   return redisInstance;
 };
 
+const initWorkers = (config: Config, db: Db) => (domain: Domain) => {
+  return new JobWorkers(config, db, domain);
+};
+
 export const initInfra = (config: Config) => {
   const db = initDb();
   const redis = initRedis(config);
-  new JobWorkers(config, db, redis);
   return {
     db,
     store: initStore(config),
     redis,
+    initWorkers: initWorkers(config, db),
   };
 };
 

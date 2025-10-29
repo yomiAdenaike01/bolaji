@@ -33,7 +33,7 @@ export const setupMiddlewares = (
 ) => {
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
-  // app.use(compression({ filter: shouldCompress }));
+  app.use(compression({ filter: shouldCompress }));
 
   // fallback to standard filter function
 
@@ -83,21 +83,42 @@ export const setupMiddlewares = (
         sameSite: "none", // ✅ required for Framer cross-domain
         secure: true, // ✅ works now because trust proxy is set
         httpOnly: true,
+        partitioned: true,
       },
     }),
   );
+};
 
+export const setupErrorHandlers = (app: Application) => {
   app.use(
-    (error: HttpError, request: Request, res: Response, next: NextFunction) => {
-      logger.error(
-        error,
-        `Status=${error.status} Endpoint=${request.url} Message=${error.message}`,
-        error.details,
-      );
-      res.status(error.status).json({
-        error: error.message,
-        details: error?.details ?? null,
+    (
+      err: HttpError | Error,
+      req: Request,
+      res: Response,
+      _next: NextFunction,
+    ) => {
+      const status =
+        "status" in err && typeof (err as HttpError).status === "number"
+          ? (err as HttpError).status
+          : 500;
+
+      const message =
+        "message" in err && err.message ? err.message : "Internal Server Error";
+
+      logger.error(`❌ ${req.method} ${req.url} (${status}) — ${message}`);
+
+      res.status(status).json({
+        error: message,
+        details:
+          "details" in err && (err as HttpError).details
+            ? (err as HttpError).details
+            : null,
       });
     },
   );
+
+  // 🪶 Not found handler (optional but recommended)
+  app.use((req, res, _next) => {
+    res.status(404).json({ error: "Endpoint not found" });
+  });
 };

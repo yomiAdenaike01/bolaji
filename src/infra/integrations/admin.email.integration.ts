@@ -9,6 +9,7 @@ import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport
 import ExcelJS from "exceljs";
 import { logger } from "@/lib/logger";
 import { AdminEmailContent, AdminEmailType } from "./email-types";
+import { log } from "console";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
@@ -85,13 +86,19 @@ export class AdminEmailIntegration {
         logger.info(
           `[AdminEmailIntegration] Sending email to=${address} type=${type} subject=${subject}`,
         );
-        await this.integration.emails.send({
+        const response = await this.integration.emails.send({
           from: this.sentFromEmaillAddress,
           to: address,
           subject,
           html,
           attachments,
         });
+        if (response.error) {
+          logger.error(
+            response.error,
+            `[AdminEmailIntegration] Failed to send admin email to=${address} reason=${response.error.message}`,
+          );
+        }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     } catch (error) {

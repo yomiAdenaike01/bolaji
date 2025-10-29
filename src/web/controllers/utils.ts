@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import { Response } from "express";
+import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
 export const createErrorResponse = (
   res: Response,

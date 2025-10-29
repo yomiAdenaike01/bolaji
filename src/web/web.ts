@@ -3,7 +3,7 @@ import { Store } from "@/infra";
 import express, { type Application } from "express";
 import { Config } from "../config";
 import { initControllers } from "./controllers/controllers";
-import { setupMiddlewares } from "./middleware";
+import { setupErrorHandlers, setupMiddlewares } from "./middleware";
 import { makePaymentsRouter, setupRouters } from "./router";
 
 export const initWeb = (
@@ -13,9 +13,9 @@ export const initWeb = (
 ): Application => {
   const ctrls = initControllers(store, config, domain);
   const app = express();
-
   makePaymentsRouter(app, ctrls.stripePaymentWebhook);
   setupMiddlewares(app, store, config);
   setupRouters(ctrls, app);
+  setupErrorHandlers(app);
   return app;
 };
