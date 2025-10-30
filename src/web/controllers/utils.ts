@@ -7,7 +7,7 @@ export const createErrorResponse = (
   err: { endpoint: string; statusCode: number; error: string; details?: any },
 ) => {
   logger.error(
-    `endpoint=${err.endpoint} error=${err.error} details=${JSON.stringify(err.details)} status=${err.statusCode}`,
+    `[HttpError] endpoint=${err.endpoint} error=${err.error} details=${JSON.stringify(err.details)} status=${err.statusCode}`,
   );
   res
     .status(err.statusCode)

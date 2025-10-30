@@ -149,40 +149,6 @@ export class StripeIntegration {
   getSubscription = async (subscriptionId: string) => {
     return this.stripe.subscriptions.retrieve(subscriptionId);
   };
-  private handleAsyncPaymentComplete(
-    event: Stripe.CheckoutSessionAsyncPaymentSucceededEvent,
-  ) {}
-  private constructSubscriptionCreatedData = (
-    event: Stripe.CustomerSubscriptionCreatedEvent,
-  ): PaymentEvent | null => {
-    logger.info(
-      `[StripeIntegration] Event received: ${event.type}, id=${event.id}`,
-    );
-    const metadata = event.data.object?.metadata;
-    if (!metadata) {
-      logger.warn(
-        `[StripeIntegration] ⚠️ No metadata found in subscription.created event id=${event.id}`,
-      );
-      return null;
-    }
-    const parsed = onCreateSubscriptionInputSchema.parse(metadata);
-    logger.info(
-      `[StripeIntegration] ✅ Parsed subscription.created metadata for userId=${parsed.userId}`,
-    );
-
-    return {
-      ...parsed,
-      eventId: event.id,
-      amount: 0,
-      orderType: OrderType.SUBSCRIPTION_RENEWAL,
-      type: OrderType.SUBSCRIPTION_RENEWAL,
-      action: PaymentEventActions.SUBSCRIPTION_STARTED,
-      success: true,
-      rawPayload: JSON.stringify(event),
-      stripeEventType: event.type,
-      startDate: event.data.object.start_date,
-    };
-  };
 
   constructCheckoutEventData = (
     event: Stripe.CheckoutSessionCompletedEvent,
@@ -289,18 +255,6 @@ export class StripeIntegration {
       }
     }
   };
-  handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
-    throw new Error("Method not implemented.");
-  }
-  handleInvoiceSuccess(event: Stripe.InvoicePaymentSucceededEvent) {
-    throw new Error("Method not implemented.");
-  }
-  handleInvoiceFailed(event: Stripe.InvoicePaymentFailedEvent) {
-    throw new Error("Method not implemented.");
-  }
-  handleSubscriptionCanceled(event: Stripe.CustomerSubscriptionDeletedEvent) {
-    throw new Error("Method not implemented.");
-  }
 
   createPreorderPaymentLink = async (opts: {
     userId: string;
@@ -451,52 +405,6 @@ export class StripeIntegration {
     await setCustomerId(customer.id);
     return customer.id;
   };
-  private findOrCreateStripeProduct = async (
-    planName: string,
-  ): Promise<string> => {
-    const targetName =
-      `Bolaji Editions Subscription - ${planName}`.toLowerCase();
-
-    let foundProductId: string | null = null;
-    let startingAfter: string | undefined;
-
-    do {
-      const params = {
-        limit: 100,
-        active: true,
-        starting_after: startingAfter,
-      };
-
-      const { data: products, has_more } =
-        await this.stripe.products.list(params);
-
-      for (const product of products) {
-        const name = product.name.trim().toLowerCase();
-        if (name === targetName) {
-          foundProductId = product.id;
-          break;
-        }
-      }
-
-      if (!has_more) break;
-      startingAfter = products[products.length - 1]?.id;
-    } while (!foundProductId);
-
-    if (foundProductId) {
-      return foundProductId;
-    }
-
-    const product = await this.stripe.products.create({
-      name: `Bolaji Editions Subscription - ${planName}`,
-      description: "Access to monthly Bolaji Editions content.",
-      metadata: {
-        planName,
-        source: "backend_auto_create",
-      },
-    });
-
-    return product.id;
-  };
 
   ensureStripePrice = async (
     plan: {
@@ -613,4 +521,98 @@ export class StripeIntegration {
 
     return null;
   };
+  private findOrCreateStripeProduct = async (
+    planName: string,
+  ): Promise<string> => {
+    const targetName =
+      `Bolaji Editions Subscription - ${planName}`.toLowerCase();
+
+    let foundProductId: string | null = null;
+    let startingAfter: string | undefined;
+
+    do {
+      const params = {
+        limit: 100,
+        active: true,
+        starting_after: startingAfter,
+      };
+
+      const { data: products, has_more } =
+        await this.stripe.products.list(params);
+
+      for (const product of products) {
+        const name = product.name.trim().toLowerCase();
+        if (name === targetName) {
+          foundProductId = product.id;
+          break;
+        }
+      }
+
+      if (!has_more) break;
+      startingAfter = products[products.length - 1]?.id;
+    } while (!foundProductId);
+
+    if (foundProductId) {
+      return foundProductId;
+    }
+
+    const product = await this.stripe.products.create({
+      name: `Bolaji Editions Subscription - ${planName}`,
+      description: "Access to monthly Bolaji Editions content.",
+      metadata: {
+        planName,
+        source: "backend_auto_create",
+      },
+    });
+
+    return product.id;
+  };
+  private handleAsyncPaymentComplete(
+    event: Stripe.CheckoutSessionAsyncPaymentSucceededEvent,
+  ) {}
+  private constructSubscriptionCreatedData = (
+    event: Stripe.CustomerSubscriptionCreatedEvent,
+  ): PaymentEvent | null => {
+    logger.info(
+      `[StripeIntegration] Event received: ${event.type}, id=${event.id}`,
+    );
+    const metadata = event.data.object?.metadata;
+    if (!metadata) {
+      logger.warn(
+        `[StripeIntegration] ⚠️ No metadata found in subscription.created event id=${event.id}`,
+      );
+      return null;
+    }
+    const parsed = onCreateSubscriptionInputSchema.parse(metadata);
+    logger.info(
+      `[StripeIntegration] ✅ Parsed subscription.created metadata for userId=${parsed.userId}`,
+    );
+
+    return {
+      ...parsed,
+      eventId: event.id,
+      amount: 0,
+      orderType: OrderType.SUBSCRIPTION_RENEWAL,
+      type: OrderType.SUBSCRIPTION_RENEWAL,
+      action: PaymentEventActions.SUBSCRIPTION_STARTED,
+      success: true,
+      rawPayload: JSON.stringify(event),
+      stripeEventType: event.type,
+      startDate: event.data.object.start_date,
+    };
+  };
+  private handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
+    throw new Error("Method not implemented.");
+  }
+  private handleInvoiceSuccess(event: Stripe.InvoicePaymentSucceededEvent) {
+    throw new Error("Method not implemented.");
+  }
+  private handleInvoiceFailed(event: Stripe.InvoicePaymentFailedEvent) {
+    throw new Error("Method not implemented.");
+  }
+  private handleSubscriptionCanceled(
+    event: Stripe.CustomerSubscriptionDeletedEvent,
+  ) {
+    throw new Error("Method not implemented.");
+  }
 }
