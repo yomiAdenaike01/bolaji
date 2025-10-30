@@ -1,20 +1,20 @@
-import { Attachment, Resend } from "resend";
-import {
-  adminEmailTemplates,
-  adminEmailSubjects,
-} from "./admin.email.template";
-import { generatePendingOrdersSheet } from "@/lib/spreadsheets/generatePendingOrders";
 import { Db } from "@/infra";
+import { logger } from "@/lib/logger";
+import { generatePreorderSummaryReport } from "@/lib/spreadsheets/generatePreorderReport";
 import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport";
 import ExcelJS from "exceljs";
-import { logger } from "@/lib/logger";
+import { Attachment, Resend } from "resend";
+import {
+  adminEmailSubjects,
+  adminEmailTemplates,
+} from "./admin.email.template";
 import { AdminEmailContent, AdminEmailType } from "./email-types";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
 > = {
   [AdminEmailType.NEW_USER]: generateUsersReportSheet,
-  [AdminEmailType.NEW_PREORDER]: generatePendingOrdersSheet,
+  [AdminEmailType.NEW_PREORDER]: generatePreorderSummaryReport,
 };
 
 export class AdminEmailIntegration {
@@ -33,7 +33,7 @@ export class AdminEmailIntegration {
     const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     switch (type) {
       case AdminEmailType.NEW_PREORDER:
-        return `pending_orders_${date}.xlsx`;
+        return `preorders_${date}.xlsx`;
       case AdminEmailType.NEW_USER:
         return `new_users_${date}.xlsx`;
       case AdminEmailType.SUBSCRIPTION_STARTED:

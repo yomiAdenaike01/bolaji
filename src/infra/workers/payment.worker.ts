@@ -13,6 +13,7 @@ import { PaymentEvent } from "../integrations/checkout.dto";
 import { EmailType, AdminEmailType } from "../integrations/email-types";
 import { preorderSchema } from "../integrations/schema";
 import { PaymentEventActions } from "../integrations/stripe.integration";
+import { CompletePreorderStatus } from "@/domain/preorders/preorders.service";
 
 const failedPreorderDto = z.object({
   action: z.string(),
@@ -104,6 +105,17 @@ export class PaymentWorker {
       try {
         await this.domain.preorders.onCompletePreorder(onCompletePreorderDto);
       } catch (error) {
+        if (
+          [
+            CompletePreorderStatus.ALREADY_PAID,
+            CompletePreorderStatus.PREORDER_NOT_FOUND,
+          ].includes((error as any)?.status)
+        ) {
+          logger.warn(
+            `[Payment Worker] Failed to complete preorder reason status=${(error as any)?.status}`,
+          );
+          return;
+        }
         await this.domain.user.changeUserStatus(
           onCompletePreorderDto.userId,
           UserStatus.PENDING_RETRY,

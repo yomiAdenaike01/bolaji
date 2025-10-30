@@ -86,6 +86,7 @@ export class UserService {
     tx?: TransactionClient,
   ) => {
     const mutations = async (db: TransactionClient | Db) => {
+      let isNew = false;
       let foundOrCreatedUser = await db.user.findUnique({
         where: { email: input.email },
       });
@@ -115,6 +116,7 @@ export class UserService {
           },
         });
       } else {
+        isNew = true;
         logger.info(`[User service] Creating user email=${input.email}`);
         // 🔹 CASE 3: New user creation
         foundOrCreatedUser = await db.user.create({
@@ -126,7 +128,7 @@ export class UserService {
           },
         });
       }
-      return foundOrCreatedUser;
+      return { user: foundOrCreatedUser, isNew };
     };
     if (!tx) return this.db.$transaction((tx) => mutations(tx));
     return mutations(tx);
@@ -134,9 +136,9 @@ export class UserService {
 
   registerUser = async (input: CreateUserInput & { status?: UserStatus }) => {
     const userStatus = input.status || UserStatus.ACTIVE;
-    const { user, device, addressId } = await this.db.$transaction(
+    const { user, device, addressId, isNew } = await this.db.$transaction(
       async (tx) => {
-        let foundOrCreatedUser = await this.findOrCreateUser(
+        let { user: foundOrCreatedUser, isNew } = await this.findOrCreateUser(
           {
             email: input.email,
             name: input.name,
@@ -166,11 +168,20 @@ export class UserService {
           userId: foundOrCreatedUser.id,
           userAgent: input.userAgent,
         });
-        return { device, user: foundOrCreatedUser, addressId };
+        return { device, user: foundOrCreatedUser, addressId, isNew };
       },
     );
 
     if (!device.id) throw new Error("No device id found");
+    if (!isNew)
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+        deviceId: device.id,
+        addressId: addressId,
+      };
 
     const registerationEmailDto = z
       .object({

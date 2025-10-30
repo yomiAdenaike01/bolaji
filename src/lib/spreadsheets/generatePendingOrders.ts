@@ -2,34 +2,37 @@ import ExcelJS from "exceljs";
 import { Db } from "@/infra";
 
 const getOrders = async (db: Db) => {
-  const orders = await db.order.findMany({
-    include: {
-      user: { select: { email: true, name: true } },
-      edition: { select: { code: true, title: true } },
-      preorder: { select: { choice: true } },
-    },
-    where: { status: "PENDING" },
-    orderBy: { createdAt: "desc" },
+  return db.$transaction(async (tx) => {
+    const orders = await tx.order.findMany({
+      include: {
+        user: { select: { email: true, name: true } },
+        edition: { select: { code: true, title: true } },
+        preorder: { select: { choice: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const editionIds = orders
+      .map((o) => o.editionId)
+      .filter(Boolean) as string[];
+    const userIds = orders.map((o) => o.userId);
+
+    const shipments = await db.shipment.findMany({
+      where: {
+        editionId: { in: editionIds },
+        userId: { in: userIds },
+      },
+      include: { address: true },
+    });
+
+    const shipmentMap = new Map(
+      shipments.map((s) => [`${s.userId}-${s.editionId}`, s]),
+    );
+    return orders.map((o) => ({
+      ...o,
+      shipment: shipmentMap.get(`${o.userId}-${o.editionId}`),
+    }));
   });
-
-  const editionIds = orders.map((o) => o.editionId).filter(Boolean) as string[];
-  const userIds = orders.map((o) => o.userId);
-
-  const shipments = await db.shipment.findMany({
-    where: {
-      editionId: { in: editionIds },
-      userId: { in: userIds },
-    },
-    include: { address: true },
-  });
-
-  const shipmentMap = new Map(
-    shipments.map((s) => [`${s.userId}-${s.editionId}`, s]),
-  );
-  return orders.map((o) => ({
-    ...o,
-    shipment: shipmentMap.get(`${o.userId}-${o.editionId}`),
-  }));
 };
 
 export async function generatePendingOrdersSheet(db: Db) {

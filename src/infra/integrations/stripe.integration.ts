@@ -8,7 +8,6 @@ import Stripe from "stripe";
 import z from "zod";
 import { preorderSchema } from "./schema";
 import { PaymentEvent } from "./checkout.dto";
-import crypto from "crypto";
 
 export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
@@ -28,6 +27,21 @@ export class StripeIntegration {
       logger.error(error, "Failed to initlaise stripe");
     }
   }
+
+  invalidatePaymentLink = async (linkId: string) => {
+    try {
+      await this.stripe.paymentLinks.update(linkId, {
+        active: false,
+      });
+      logger.info(`[StripeIntegration] Invalidated payment link - ${linkId}`);
+    } catch (error) {
+      logger.warn(
+        error,
+        `[StripeIntegration] Failed to invalidate payment link - ${linkId}`,
+      );
+      return null;
+    }
+  };
 
   handlePreorderFailure = async (
     failedObject: Stripe.PaymentIntent | Stripe.Charge,
