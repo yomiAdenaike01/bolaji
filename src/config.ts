@@ -15,12 +15,16 @@ export const initConfig = () => {
     frontEndUrl: process.env.FRONTEND_URL || "",
     env: (process.env.NODE_ENV || "production") as "dev" | "production",
     preorderPassword: process.env.PREORDER_PASSWORD || "",
+    serverUrl: process.env.SERVER_URL || "",
     redisConfig: {
       host: process.env.REDIS_HOST || "",
       port: process.env.REDIS_PORT || "",
       username: process.env.REDIS_USERNAME || "",
       password: process.env.REDIS_PASSWORD || "",
     },
+    jwtRefreshSecret: process.env.JWT_REFRESH_TOKEN_SECRET || "",
+    accessTokenTtl: process.env.JWT_ACCESS_TOKEN_TTL || "30m",
+    refreshTokenTtl: process.env.JWT_REFRESH_TTL || "7d",
     privateAccessPageUrl: process.env.PREORDER_ACCESS_PAGE_URL || "",
     allowedOrigins: (process.env.ALLOWED_ORIGINS || "").split(",") as (
       | string

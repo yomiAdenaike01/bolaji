@@ -1,7 +1,6 @@
 import { Db } from "@/infra";
 import { logger } from "@/lib/logger";
 import { Job, Worker } from "bullmq";
-import IORedis from "ioredis";
 import z from "zod";
 import { EmailType } from "../integrations/email-types";
 import { EmailIntegration } from "../integrations/email.integration";

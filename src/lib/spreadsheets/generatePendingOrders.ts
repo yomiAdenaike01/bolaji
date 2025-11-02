@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { Db } from "@/infra";
+// TODO: GROUP ORDERS AND SHIPMENTS BY COUNTRY
 
 const getOrders = async (db: Db) => {
   return db.$transaction(async (tx) => {

@@ -14,6 +14,7 @@ import {
   PlanType,
   ShipmentStatus,
   SubscriptionStatus,
+  UserStatus,
 } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
@@ -225,10 +226,19 @@ export class SubscriptionsService {
       );
       return { updatedSubscription, nextEdition };
     });
+    await this.db.user.update({
+      where: {
+        id: result.updatedSubscription.user.id,
+        status: UserStatus.PENDING_SUBSCRIPTION,
+      },
+      data: {
+        status: UserStatus.ACTIVE,
+      },
+    });
     return result;
   };
 
-  private findExistingSubscription = async ({
+  private findExistingDbSubscription = async ({
     userId,
     planId,
   }: {
@@ -285,11 +295,15 @@ export class SubscriptionsService {
       const user = await this.db.user.upsert({
         where: {
           email: input.email,
+          status: {
+            not: UserStatus.ACTIVE,
+          },
         },
         update: {},
         create: {
           name: input.name,
           email: input.email,
+          status: UserStatus.PENDING_SUBSCRIPTION,
           passwordHash,
           ...(input.deviceFingerprint && input.userAgent
             ? {
@@ -342,18 +356,22 @@ export class SubscriptionsService {
 
       // 3️⃣ Find existing subscription (if any)
       const { subscription: existingSub, user } =
-        await this.findExistingSubscription({
+        await this.findExistingDbSubscription({
           userId: userId,
           planId: plan.id,
         });
       if (
         existingSub?.status === SubscriptionStatus.ACTIVE &&
-        existingSub.stripeSubscriptionId
+        existingSub.stripeSubscriptionId &&
+        user.stripeCustomerId
       ) {
-        const subscription = await this.integrations.payments.getSubscription(
-          existingSub.stripeSubscriptionId,
-        );
-        if (subscription.status === "active")
+        const hasActiveSubscription =
+          await this.integrations.payments.hasExistingSubscription({
+            customerId: user.stripeCustomerId,
+            subscriptionId: existingSub.stripeSubscriptionId,
+            planId: existingSub.planId,
+          });
+        if (hasActiveSubscription)
           throw new Error(
             `Subscription already active (userId=${userId}, planId=${plan.id})`,
           );
@@ -516,40 +534,76 @@ export class SubscriptionsService {
       logger.info(
         `[Subscription Service] Creating Stripe checkout session for userId=${user.id}, planId=${plan.id}, customerId=${customerId}`,
       );
-      const { checkoutUrl, stripeCheckoutSessionId } =
-        await this.integrations.payments.createSubscriptionCheckout(
-          {
-            userId: user.id,
-            planId: plan.id,
-            successUrl: input.redirectUrl,
-            cancelUrl: input.redirectUrl,
-            stripeCustomerId: customerId,
-            priceId,
-            subscriptionId: placeholder.id,
-            addressId,
-            isNewSubscription: true,
-          },
-          idempotencyKey,
-        );
+      const metadata = {
+        userId: user.id,
+        planId: plan.id,
+        successUrl: input.redirectUrl,
+        cancelUrl: input.redirectUrl,
+        stripeCustomerId: customerId,
+        priceId,
+        subscriptionId: placeholder.id,
+        addressId,
+        isNewSubscription: true,
+        type: OrderType.SUBSCRIPTION_RENEWAL,
+      };
+      const {
+        checkoutUrl,
+        stripeCheckoutSessionId,
+        stripePaymentIntentId,
+        stripePaymentLinkId,
+      } = await this.integrations.payments.createSubscriptionCheckout(
+        metadata,
+        idempotencyKey,
+      );
       logger.info(
         `[Subscription Service] ✅ Stripe checkout session created sessionId=${stripeCheckoutSessionId}`,
       );
 
       // 11️⃣ Update placeholder subscription
-      await this.db.subscription.update({
-        where: { id: placeholder.id },
-        data: {
-          stripeCheckoutSessionId,
-          status: SubscriptionStatus.AWAITING_PAYMENT,
-        },
+      this.db.$transaction(async (tx) => {
+        const { id: subscriptionId } = await tx.subscription.update({
+          where: { id: placeholder.id },
+          data: {
+            stripeCheckoutSessionId,
+            status: SubscriptionStatus.AWAITING_PAYMENT,
+          },
+        });
+        if (stripePaymentIntentId) {
+          logger.info(
+            `[Subscription Service] Creating stripe metadata - checkout:${stripeCheckoutSessionId} paymentIntent:${stripePaymentIntentId} userId:${userId}`,
+          );
+          await tx.stripeSubscriptionCheckoutMetadata.upsert({
+            where: {
+              sessionId: stripeCheckoutSessionId,
+              userId,
+              paymentIntentId: stripePaymentIntentId,
+            },
+            update: {},
+            create: {
+              paymentIntentId: stripePaymentIntentId,
+              subscriptionId,
+              sessionId: stripeCheckoutSessionId,
+              metadataJson: JSON.stringify({
+                ...metadata,
+                stripePaymentLinkId,
+              }),
+              userId,
+              stripeCustomerId: customerId,
+            },
+          });
+        }
+        logger.warn(
+          `[Subscription Service] No stripe payment intent id found on checkout - ${stripeCheckoutSessionId}`,
+        );
       });
+
       logger.info(
         `[Subscription Service] ✅ Placeholder updated with Stripe sessionId=${stripeCheckoutSessionId}`,
       );
 
       const duration = (Date.now() - startTime) / 1000;
       logger.info(
-        `[Subscription Service] 🎉 Subscription creation completed successfully for userId=${user.id}, planId=${plan.id}, elapsed=${duration.toFixed(
+        `[Subscription Service] 🎉 Subscription checout created successfully for userId=${user.id}, planId=${plan.id}, elapsed=${duration.toFixed(
           2,
         )}s`,
       );

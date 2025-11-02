@@ -3,6 +3,7 @@ import { Queue } from "bullmq";
 export class JobsQueues {
   private emailQueue: Queue<any, any, string, any, any, string>;
   private stripePaymentsQueue: Queue<any, any, string, any, any, string>;
+  editionsQueue: Queue<any, any, string, any, any, string>;
   constructor(connectionUrl: string) {
     this.emailQueue = new Queue("emails", {
       connection: {
@@ -10,6 +11,11 @@ export class JobsQueues {
       },
     });
     this.stripePaymentsQueue = new Queue("payments", {
+      connection: {
+        url: connectionUrl,
+      },
+    });
+    this.editionsQueue = new Queue("editions", {
       connection: {
         url: connectionUrl,
       },

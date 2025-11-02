@@ -7,6 +7,7 @@ import { createStripePaymentWebhook } from "./createStripeWebhook";
 import { SubscriptionsController } from "./subscriptions.controller";
 import { Config } from "@/config";
 import { Store } from "@/infra";
+import { ScreenController } from "./screen.controller";
 
 export const initControllers = (
   store: Store,
@@ -15,10 +16,11 @@ export const initControllers = (
 ) => {
   const integrations = new IntegrationsController(domain);
   return {
-    auth: new AuthController(domain),
+    auth: new AuthController(config, domain, store),
     user: new UserController(domain),
     preorders: new PreorderController(store, config, domain),
     subscriptions: new SubscriptionsController(domain),
+    screens: new ScreenController(config, domain),
     integrations,
     stripePaymentWebhook: createStripePaymentWebhook(integrations, domain),
   };

@@ -12,7 +12,14 @@ datasource db {
 // ENUMS
 //////////////////////////////////////////////////////////
 
+enum AccessStatus {
+  SCHEDULED
+  ACTIVE
+  REVOKED
+}
+
 enum UserStatus {
+  PENDING_SUBSCRIPTION
   ACTIVE // fully registered and functional
   PENDING_PREORDER // created, waiting for preorder completion (Stripe pending)
   PENDING_RETRY // failed preorder, but eligible for retry
@@ -94,6 +101,12 @@ enum TicketCategory {
   OTHER
 }
 
+enum EditionStatus {
+  PENDING
+  PREORDER_OPEN
+  CLOSED
+}
+
 //////////////////////////////////////////////////////////
 // CORE IDENTITY
 //////////////////////////////////////////////////////////
@@ -110,33 +123,36 @@ model User {
   stripeCustomerId String?    @unique
   status           UserStatus @default(ACTIVE)
 
-  devices                 Device[]
-  sessions                Session[]
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
-  preorders               Preorder[]
-  subscriptions           Subscription[]
-  orders                  Order[]
-  payments                Payment[]
-  editionAccess           EditionAccess[]
-  addresses               Address[]
-  shipments               Shipment[]
-  supportTickets          SupportTicket[]
-  authoredMessages        SupportMessage[]         @relation("AuthorMessages")
-  emails                  EmailLog[]
+  devices                    Device[]
+  sessions                   Session[]
+  emailVerificationTokens    EmailVerificationToken[]
+  passwordResetTokens        PasswordResetToken[]
+  preorders                  Preorder[]
+  subscriptions              Subscription[]
+  orders                     Order[]
+  payments                   Payment[]
+  editionAccess              EditionAccess[]
+  addresses                  Address[]
+  shipments                  Shipment[]
+  supportTickets             SupportTicket[]
+  authoredMessages           SupportMessage[]                     @relation("AuthorMessages")
+  emails                     EmailLog[]
+  StripeSubscriptionCheckout StripeSubscriptionCheckoutMetadata[]
+  UserRefreshToken           UserRefreshToken[]
 
   @@index([email])
   @@index([status])
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  ip        String?
-  userAgent String?
+  id               String             @id @default(cuid())
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  createdAt        DateTime           @default(now())
+  expiresAt        DateTime
+  ip               String?
+  userAgent        String?
+  UserRefreshToken UserRefreshToken[]
 
   @@index([userId, expiresAt])
 }
@@ -150,6 +166,30 @@ model EmailVerificationToken {
   expiresAt DateTime
 
   @@index([userId, expiresAt])
+}
+
+model UserRefreshToken {
+  id String @id @default(uuid())
+
+  // Relationships
+  version   Int     @default(1)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+
+  // Token details
+  tokenHash String    @unique
+  tokenJti  String // from JWT "jti" claim
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {
@@ -186,16 +226,20 @@ model Device {
 //////////////////////////////////////////////////////////
 
 model Edition {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  number      Int       @unique
-  code        String    @unique
-  title       String
-  releaseDate DateTime?
-  hub         Hub?
-  isLimited   Boolean   @default(false)
-  maxCopies   Int?
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  number          Int           @unique
+  code            String        @unique
+  title           String
+  releaseDate     DateTime?
+  hub             Hub?
+  isLimited       Boolean       @default(false)
+  maxCopies       Int?
+  status          EditionStatus @default(PENDING) // "PENDING" | "PREORDER_OPEN" | "CLOSED"
+  preorderOpenAt  DateTime?
+  preorderCloseAt DateTime?
+  releasedAt      DateTime?
 
   preorders     Preorder[]
   editionAccess EditionAccess[]
@@ -212,9 +256,13 @@ model EditionAccess {
   userId         String
   edition        Edition       @relation(fields: [editionId], references: [id], onDelete: Cascade)
   editionId      String
-  unlockedAt     DateTime      @default(now())
+  unlockedAt     DateTime? // the actual moment it was activated (nullable until unlocked)
+  unlockAt       DateTime // when it *should* become active
+  status         AccessStatus  @default(SCHEDULED)
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
   subscriptionId String?
+  grantedAt      DateTime      @default(now())
+  expiresAt      DateTime
 
   @@unique([userId, editionId])
   @@index([userId])
@@ -473,4 +521,24 @@ model StripeEvent {
   updatedAt  DateTime  @updatedAt
 
   @@unique([id, type])
+}
+
+model StripeSubscriptionCheckoutMetadata {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  paymentIntentId String   @unique
+  sessionId       String   @unique // Stripe Checkout Session ID
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscriptionId   String? // Your internal placeholder subscription
+  stripeCustomerId String?
+  metadataJson     Json // Full copy of metadata you sent to Stripe
+
+  status String @default("CREATED") // CREATED | COMPLETED | FAILED | EXPIRED
+
+  @@index([userId])
+  @@index([paymentIntentId])
+  @@index([subscriptionId])
 }

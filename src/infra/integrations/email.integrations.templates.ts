@@ -63,6 +63,56 @@ const wrap = (title: string, body: string) => `
 export const templates: {
   [K in EmailType]: (content: EmailContentMap[K]) => string;
 } = {
+  [EmailType.SUBSCRIPTION_FAILED_TO_START]: ({
+    name,
+    plan,
+    reason,
+    retryLink,
+  }) =>
+    wrap(
+      "We couldn’t start your subscription",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:18px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:16px;">
+        Unfortunately, your payment for the <strong>${plan}</strong> subscription didn’t go through, 
+        so your subscription couldn’t be activated. You can use the same details as before to re-subscribe
+      </p>
+
+      ${
+        reason
+          ? `<p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;margin-bottom:16px;">
+               Reason: ${reason}
+             </p>`
+          : ""
+      }
+
+      ${
+        retryLink
+          ? `<div style="text-align:center;margin:32px 0;">
+               <a href="${retryLink}"
+                  style="background:#6C63FF;color:#fff;text-decoration:none;
+                         padding:14px 32px;border-radius:6px;
+                         font-family:Inter,Arial,sans-serif;font-size:15px;
+                         display:inline-block;font-weight:500;">
+                 Retry Subscription →
+               </a>
+             </div>`
+          : ""
+      }
+
+      <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;">
+        Don’t worry — your account is still active. You can restart your subscription anytime 
+        by updating your payment method and completing checkout again.
+      </p>
+
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+        With appreciation,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+      </p>
+    `,
+    ),
   [EmailType.PREORDER_PAYMENT_FAILED]: ({
     name,
     editionCode,
@@ -356,4 +406,6 @@ export const subjects: Record<EmailType, string> = {
     "A new Bolaji Edition has arrived — explore now!",
   [EmailType.SUBSCRIPTION_STARTED]:
     "Your Bolaji Editions subscription is now active!",
+  [EmailType.SUBSCRIPTION_FAILED_TO_START]:
+    "We couldn’t start your subscription — please retry",
 };

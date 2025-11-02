@@ -6,7 +6,12 @@ import {
   updateSubscriptionInputSchema,
   onCreateSubscriptionInputSchema,
 } from "@/domain/subscriptions/dto";
-import { OrderType, PlanType, UserStatus } from "@/generated/prisma/enums";
+import {
+  OrderType,
+  PlanType,
+  SubscriptionStatus,
+  UserStatus,
+} from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import z, { ZodType } from "zod";
 import { PaymentEvent } from "../integrations/checkout.dto";
@@ -14,6 +19,7 @@ import { EmailType, AdminEmailType } from "../integrations/email-types";
 import { preorderSchema } from "../integrations/schema";
 import { PaymentEventActions } from "../integrations/stripe.integration";
 import { CompletePreorderStatus } from "@/domain/preorders/preorders.service";
+import { Config } from "@/config";
 
 const failedPreorderDto = z.object({
   action: z.string(),
@@ -28,16 +34,26 @@ const failedPreorderDto = z.object({
   redirectUrl: z.string(),
 });
 
+const failedSubscriptionStartDto = z.object({
+  userId: z.string(),
+  planId: z.string(),
+  stripePaymentLinkId: z.string(),
+  reason: z.string(),
+});
+
 type FailedPreorderInput = z.infer<typeof failedPreorderDto>;
+type FailedSubscriptionStartInput = z.infer<typeof failedSubscriptionStartDto>;
+
 export class PaymentWorker {
   worker: Worker<any, any, string>;
   constructor(
-    connection: string,
+    private readonly config: Config,
     private readonly domain: Domain,
+    private readonly db: Db,
   ) {
     this.worker = new Worker("payments", async (job) => this.process(job), {
       connection: {
-        url: connection,
+        url: config.redisConnectionUrl,
       },
     });
   }
@@ -215,6 +231,63 @@ export class PaymentWorker {
       await this.failPreorder(paymentEvent);
       return;
     }
+    // one time subscription
+    if (
+      paymentEvent.action ===
+      PaymentEventActions.SUBSCRIPTION_INITIAL_PAYMENT_FAILED
+    ) {
+      this.isValidOrThrow(paymentEvent, failedSubscriptionStartDto);
+      await this.failSubscription(paymentEvent);
+      return;
+    }
+  };
+
+  private failSubscription = async (
+    paymentEvent: FailedSubscriptionStartInput,
+  ) => {
+    const subscription = await this.db.subscription.findFirst({
+      where: {
+        userId: paymentEvent.userId,
+        planId: paymentEvent.planId,
+        status: {
+          not: SubscriptionStatus.AWAITING_PAYMENT,
+        },
+      },
+      include: {
+        plan: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+    if (!subscription) {
+      logger.warn(
+        `[Payment worker] No subscription found by userId=${paymentEvent.userId} planId=${paymentEvent.planId}`,
+      );
+    }
+    await this.domain.integrations.payments.invalidatePaymentLink(
+      paymentEvent.stripePaymentLinkId,
+    );
+    if (!subscription?.user.email || !subscription.user.name) {
+      logger.warn(
+        `[Payment worker] Failed to find user email attached to subscription - ${subscription?.id}`,
+      );
+      return;
+    }
+    await this.domain.integrations.email.sendEmail({
+      type: EmailType.SUBSCRIPTION_FAILED_TO_START,
+      email: subscription?.user.email,
+      content: {
+        plan: subscription.plan.type,
+        name: subscription.user.name,
+        email: subscription.user.email,
+        reason: paymentEvent.reason,
+        resetLink: `${this.config.frontEndUrl}/subscribe`,
+      },
+    });
   };
 
   private failPreorder = async (paymentEvent: FailedPreorderInput) => {

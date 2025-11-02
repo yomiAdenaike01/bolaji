@@ -8,15 +8,19 @@ import Stripe from "stripe";
 import z from "zod";
 import { preorderSchema } from "./schema";
 import { PaymentEvent } from "./checkout.dto";
+import { Db } from "..";
+import { log } from "console";
 
 export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   PREORDER_FAILED = "PREORDER_FAILED",
+  SUBSCRIPTION_INITIAL_PAYMENT_FAILED = "SUBSCRIPTION_INITIAL_PAYMENT_FAILED",
 }
 export class StripeIntegration {
   private stripe!: Stripe;
 
   constructor(
+    private readonly db: Db,
     apiKey: string,
     private readonly webhookSecret: string,
     private readonly paymentRedirectUrl: string,
@@ -43,13 +47,81 @@ export class StripeIntegration {
     }
   };
 
-  handlePreorderFailure = async (
+  private getSubscriptionMetadata = async (paymentIntentId: string) => {
+    try {
+      logger.info(
+        `[StripeIntegration] Finding stripe metadata by db payment intent - ${paymentIntentId} `,
+      );
+      if (!paymentIntentId) {
+        logger.warn(
+          `[StripeIntegration] Failed to find stripe metadata by db payment intent - ${paymentIntentId} `,
+        );
+
+        return null;
+      }
+      const dbMetadata =
+        await this.db.stripeSubscriptionCheckoutMetadata.findUnique({
+          where: {
+            paymentIntentId,
+          },
+        });
+      if (!dbMetadata?.metadataJson) {
+        logger.warn(
+          `[StripeIntegration] Failed to find stripe metadata by db payment intent - ${paymentIntentId} `,
+        );
+        return null;
+      }
+      const parsedMetadata = {
+        ...dbMetadata,
+        ...(dbMetadata.metadataJson as {
+          userId: string;
+          planId: string;
+          successUrl: string;
+          cancelUrl: string;
+          stripeCustomerId: string;
+          priceId: string;
+          subscriptionId: string;
+          addressId: string | undefined;
+          isNewSubscription: boolean;
+          stripePaymentLinkId?: string;
+        }),
+      };
+      return parsedMetadata;
+    } catch (error) {
+      logger.warn(
+        `[StripeIntegration] Failed to find stripe metadata by db payment intent - ${paymentIntentId} `,
+      );
+      return null;
+    }
+  };
+
+  handlePreorderOrSubscriptionCheckoutFailure = async (
     failedObject: Stripe.PaymentIntent | Stripe.Charge,
   ): Promise<PaymentEvent | null> => {
     // Ensure we have a PaymentIntent
-    const paymentIntentId =
-      (failedObject as Stripe.PaymentIntent).id ||
-      (failedObject as Stripe.Charge).payment_intent;
+    let paymentIntentId = (failedObject as Stripe.PaymentIntent).id;
+    const isSubscription = failedObject.description === "Subscription creation";
+    let meta: Record<string, string> | null = failedObject.metadata || null;
+    if (isSubscription) {
+      paymentIntentId = String((failedObject as Stripe.Charge).payment_intent);
+      const dbMetadata = await this.getSubscriptionMetadata(paymentIntentId);
+      if (dbMetadata)
+        return {
+          reason: failedObject.status,
+          action: PaymentEventActions.SUBSCRIPTION_INITIAL_PAYMENT_FAILED,
+          addressId: dbMetadata?.addressId || null,
+          orderType: OrderType.SUBSCRIPTION_RENEWAL,
+          rawPayload: JSON.stringify(failedObject),
+          stripeEventType: "charge.failed",
+          editionId: null,
+          planId: dbMetadata.planId,
+          success: false,
+          userId: dbMetadata.userId,
+          type: OrderType.SUBSCRIPTION_RENEWAL,
+          eventId: failedObject.id,
+          stripePaymentLinkId: dbMetadata?.stripePaymentLinkId,
+        } as any;
+    }
 
     if (!paymentIntentId) {
       logger.error(
@@ -58,25 +130,32 @@ export class StripeIntegration {
       return null;
     }
 
-    let meta: Record<string, string> | null = failedObject.metadata || null;
+    const hasMetaData = meta && Object.keys(meta).length > 0;
     // Fetch the full PaymentIntent from Stripe to get metadata
-    if (!meta) {
+    if (!hasMetaData) {
       try {
         const intent = await this.stripe.paymentIntents.retrieve(
           paymentIntentId as string,
           {
-            expand: ["latest_charge"],
+            expand: [isSubscription ? "invoice.subscription" : "latest_charge"],
           },
         );
-        meta = intent.metadata;
+        meta = Object.keys(intent.metadata).length > 0 ? intent.metadata : null;
       } catch (error) {
         const checkout = await this.getCheckoutById(paymentIntentId as string);
-        meta = checkout?.metadata || null;
+        meta =
+          ((Object.keys(checkout?.metadata || {}).length > 0
+            ? checkout?.metadata
+            : null) as Record<string, string>) || null;
       }
     }
 
-    if (!meta) return null;
-
+    if (!meta) {
+      logger.warn(
+        `[StripeIntegration] Failed to find metadata in failure paymentIntentId=${paymentIntentId}`,
+      );
+      return null;
+    }
     return {
       userId: meta.userId,
       redirectUrl: meta.redirectUrl || null,
@@ -114,7 +193,6 @@ export class StripeIntegration {
         `[StripeIntegration] Fetching payment link id=${paymentLinkId}`,
       );
       const link = await this.stripe.paymentLinks.retrieve(paymentLinkId);
-
       if (!link || !link?.active) {
         logger.warn(
           `[StripeIntegration] Payment link ${paymentLinkId} not found or deleted or inactive (status=${link.active}) .`,
@@ -332,6 +410,24 @@ export class StripeIntegration {
   retrievePaymentIntent = async (id: string) => {
     return await this.stripe.paymentIntents.retrieve(id);
   };
+
+  hasExistingSubscription = async ({
+    customerId,
+    planId,
+    subscriptionId,
+  }: {
+    customerId: string;
+    planId: string;
+    subscriptionId: string;
+  }) => {
+    const sub = await this.getSubscription(subscriptionId);
+
+    return (
+      sub.status === "active" &&
+      sub.metadata.planId === planId &&
+      customerId === sub.customer
+    );
+  };
   createSubscriptionCheckout = async (
     params: {
       userId: string;
@@ -345,7 +441,7 @@ export class StripeIntegration {
       isNewSubscription: boolean | null;
     },
     idempotencyKey?: string,
-  ): Promise<{ checkoutUrl: string; stripeCheckoutSessionId: string }> => {
+  ) => {
     logger.info(
       `[StripeIntegration] Creating subscription checkout for userId=${params.userId}, planId=${params.planId}`,
     );
@@ -379,7 +475,12 @@ export class StripeIntegration {
       `[StripeIntegration] ✅ Created Stripe checkout session id=${session.id}s`,
     );
     if (!session.url) throw new Error("Stripe did not return a checkout URL.");
-    return { checkoutUrl: session.url, stripeCheckoutSessionId: session.id };
+    return {
+      checkoutUrl: session.url,
+      stripePaymentLinkId: session.payment_link,
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: session.payment_intent?.toString(),
+    };
   };
   ensureCustomer = async (
     params: {
@@ -480,13 +581,17 @@ export class StripeIntegration {
 
       // 🔴 Async payment failed (SEPA, Bacs, etc.)
       case "checkout.session.async_payment_failed": {
-        return this.handlePreorderFailure(event.data.object as any);
+        return this.handlePreorderOrSubscriptionCheckoutFailure(
+          event.data.object as any,
+        );
       }
 
       // 🔴 Direct payment failures (card declined, etc.)
       case "payment_intent.payment_failed":
       case "charge.failed": {
-        return this.handlePreorderFailure(event.data.object);
+        return this.handlePreorderOrSubscriptionCheckoutFailure(
+          event.data.object,
+        );
       }
 
       // 🟢 Subscription lifecycle

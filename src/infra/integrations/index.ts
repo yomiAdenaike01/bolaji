@@ -37,6 +37,7 @@ export class Integrations {
     );
 
     this.payments = new StripeIntegration(
+      db,
       stripeApiKey,
       stripeWebhookSecret,
       stripePaymentRedirectUrl,

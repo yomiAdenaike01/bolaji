@@ -8,8 +8,8 @@ dotenv.config();
 
 const boostrap = () => {
   const config = initConfig();
-  const { db, store, redis, initWorkers } = initInfra(config);
-  const domain = initDomain(config, store, redis, db);
+  const { db, store, initWorkers } = initInfra(config);
+  const domain = initDomain(config, store, db);
 
   initWorkers(domain);
 

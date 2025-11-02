@@ -10,24 +10,23 @@ import createHttpError from "http-errors";
 export class UserController {
   constructor(private readonly domain: Domain) {}
   handleGetUserAddreses = async (req: Request, res: Response) => {
-    const userId = this.domain.session.getUserIdOrThrow(req.session);
+    const userId = await this.domain.session.getUserIdOrThrow(
+      (req as any).sessionId,
+    );
     const address = await this.domain.user.findUserAddreses(userId);
     res.status(200).json(address);
     return;
   };
-  public getUserIdOrUnauthorised(req: Request) {
-    try {
-      const userId = this.domain.session.getUserId(req.session);
-      if (!userId) throw new Error("User id not found on session");
-    } catch (error) {
-      throw createHttpError.Unauthorized(
-        "Failed to fetch user ID from session",
-      );
-    }
-  }
+  public getUserIdOrUnauthorised = async (req: Request) => {
+    const userId = await this.domain.session.getUserIdOrThrow(
+      (req as any).sessionId,
+    );
+  };
 
   handleGetEditionsAccess = async (req: Request, res: Response) => {
-    const userId = this.domain.session.getUserIdOrThrow(req.session);
+    const userId = await this.domain.session.getUserIdOrThrow(
+      (req as any).sessionId,
+    );
     const currentHubHeader = String(req.headers["x-hub-id"]);
     if (!currentHubHeader) {
       throw createHttpError.Forbidden("Hub not found");
@@ -66,8 +65,8 @@ export class UserController {
       const createdUser = await this.domain.user.registerUser(
         createUserInput.data,
       );
-
-      this.domain.session.setLoginInfo(req.session, {
+      const sessionId = (req as any).sessionId;
+      await this.domain.session.setLoginInfo(sessionId, {
         email: createdUser.email,
         userId: createdUser.id,
         deviceId: createdUser.deviceId,

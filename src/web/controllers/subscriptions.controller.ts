@@ -12,7 +12,9 @@ export class SubscriptionsController {
     const { error, data: subscriptionsInput } =
       createSubscriptionInputSchema.safeParse({
         ...req.body,
-        userId: this.domain.session.getUserId(req.session),
+        userId: await this.domain.session.getUserIdOrThrow(
+          (req as any).sessionId,
+        ),
       });
 
     if (error) {

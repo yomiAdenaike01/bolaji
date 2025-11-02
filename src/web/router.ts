@@ -13,6 +13,7 @@ import { PreorderController } from "./controllers/preorder.controller";
 import { UserController } from "./controllers/user.controller";
 import { AuthController } from "./controllers/auth.controller";
 import createHttpError from "http-errors";
+import { AuthGuard, initTokenAuthGuard } from "./middleware";
 
 const authGuard =
   (userController: UserController) =>
@@ -28,6 +29,7 @@ const authGuard =
 const makeAuthRouter = (authController: AuthController) => {
   const r = express.Router();
   r.post("/authenticate", authController.handleAuthenticateUser);
+  r.get("/dev/authenticate", authController.handleDevAuth);
   return r;
 };
 
@@ -56,11 +58,17 @@ const makeSubscriptionsRouter = (
   return r;
 };
 
-const makePreorderRouter = (preorderController: PreorderController) => {
+const makePreorderRouter = (
+  authGuard: AuthGuard,
+  preorderController: PreorderController,
+) => {
   const r = express.Router();
-  r.get("/private-access", preorderController.handleGetPrivateAccessPage);
+  r.post("/auth-exchange", preorderController.handlePreorderAuthExchange);
+  r.get("/verify", authGuard, preorderController.handleCanAccessPreorder);
+  r.get("/private-access", preorderController.renderPrivateAccessPage);
   r.post("/private-access", preorderController.handlePrivateAccessPassword);
-  r.post("/create", preorderController.handleCreatePreorder);
+  r.post("/", preorderController.handleCreatePreorder);
+  r.get("/thank-you", preorderController.handlePreorderThankYou);
   r.post(
     "/create-user-preorder",
     preorderController.handleCreateUserAndPreorder,
@@ -68,7 +76,11 @@ const makePreorderRouter = (preorderController: PreorderController) => {
   return r;
 };
 
-export const setupRouters = (controllers: Controllers, app: Application) => {
+export const setupRouters = (
+  authGuard: AuthGuard,
+  controllers: Controllers,
+  app: Application,
+) => {
   const router = express.Router();
   // #region auth router
   const authRouter = makeAuthRouter(controllers.auth);
@@ -79,7 +91,7 @@ export const setupRouters = (controllers: Controllers, app: Application) => {
   // #endregion
 
   //#region pre-order router
-  const preorderRouter = makePreorderRouter(controllers.preorders);
+  const preorderRouter = makePreorderRouter(authGuard, controllers.preorders);
   //#endregion
 
   //#region integration router
@@ -91,6 +103,7 @@ export const setupRouters = (controllers: Controllers, app: Application) => {
     controllers.subscriptions,
   );
   //#endregion
+
   router.use("/subscriptions", subscriptionsRouter);
   router.use("/integrations", integrationsRouter);
   router.use("/auth", authRouter);

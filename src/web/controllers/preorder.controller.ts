@@ -1,90 +1,184 @@
+import { Config } from "@/config";
 import { Domain } from "@/domain/domain";
 import {
   createPreorderSchema,
   createUserPreorderInputSchema,
+  shoudlValidateShippingAddress,
 } from "@/domain/schemas/preorder";
-import { SessionError } from "@/domain/session/session";
 import { PlanType, UserStatus } from "@/generated/prisma/enums";
+import { Store } from "@/infra";
 import { logger } from "@/lib/logger";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { createDeviceFingerprint, getRequestUserAgent, hash } from "@/utils";
 import { Request, Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
-import { Config } from "@/config";
 import jwt from "jsonwebtoken";
-import { getErrorPage } from "../templates/getErrorPage";
-import { Store } from "@/infra";
-
+import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils";
+import { DecodedJwt } from "@/domain/session/session";
+import { shippingAddressSchema } from "@/domain/schemas/users";
+import crypto from "crypto";
+import bcrpyt from "bcrypt";
+import { getThankYouPage } from "../templates/getPreorderThankyouPage";
+import z from "zod";
 export class PreorderController {
   constructor(
     private readonly store: Store,
     private readonly config: Config,
     private readonly domain: Domain,
   ) {}
+  /**
+   * GET /api/preorders/thank-you
+   * Renders post-checkout thank you page
+   */
+  handlePreorderThankYou = async (req: Request, res: Response) => {
+    const { preorder_id } = req.query;
+    if (!preorder_id)
+      return res.status(StatusCodes.BAD_REQUEST).send("Missing preorder_id");
 
-  handlePrivateAccessPassword = async (req: Request, res: Response) => {
+    const preorder = await this.domain.preorders.findPreorderById(
+      String(preorder_id),
+    );
+
+    if (!preorder || !preorder.user || !preorder.userId)
+      return res.status(404).send("Preorder not found");
+
+    // Generate new password
+    const newPassword = crypto.randomBytes(6).toString("base64url");
+    const hashed = await bcrpyt.hash(newPassword, 10);
+    await this.domain.user.updatePassword(preorder.userId, hashed);
+
+    const parsed = z
+      .object({
+        userName: z.string(),
+        plan: z.enum(PlanType),
+      })
+      .parse({
+        userName: preorder.user.name,
+        plan: preorder.choice,
+      });
+    // Render thank-you HTML
+    const html = getThankYouPage({
+      name: parsed.userName,
+      plan: parsed.plan,
+      password: newPassword,
+      redirectUrl: `${this.config.frontEndUrl}/subscribe`,
+    });
+
+    res.setHeader("Content-Type", "text/html");
+    return res.status(StatusCodes.OK).send(html);
+  };
+
+  /**
+   * GET /api/preorders/private-access
+   * Renders the password entry page
+   */
+  renderPrivateAccessPage = async (req: Request, res: Response) => {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(StatusCodes.BAD_REQUEST).send("Missing token");
+    }
+
     try {
-      const { token } = req.body;
-      jwt.verify(token, this.config.jwtSecret);
-      const redisKey = `access_attempts:${token}`;
-      const attempts = +((await this.store.get(redisKey)) || 0);
-
-      if (attempts >= 3) {
-        return res
-          .status(StatusCodes.FORBIDDEN)
-          .send(
-            getErrorPage(
-              "Too many failed attempts. Please request a new link.",
-            ),
-          );
-      }
-      const isCorrectPassword =
-        req.body.password === this.config.preorderPassword;
-
-      if (!isCorrectPassword) {
-        await this.store.set(redisKey, +attempts + 1, {
-          expiration: { type: "KEEPTTL" },
-        }); // expire in 5 min
-        return res
-          .status(StatusCodes.UNAUTHORIZED)
-          .send(
-            getPreorderPasswordPage(
-              token,
-              "Incorrect password. Please try again.",
-            ),
-          );
-      }
-      await this.store.multi().incr(redisKey).expire(redisKey, 300).exec();
-
-      return res.redirect(`${this.config.frontEndUrl}/preorder`);
+      // Verify token is at least structurally valid (optional deep verify later)
+      jwt.verify(token as string, this.config.jwtSecret);
+      const html = getPreorderPasswordPage(token as string);
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
     } catch (error) {
-      res.status(StatusCodes.UNAUTHORIZED).send();
+      logger.error(error, "Invalid preorder token");
+      res.status(StatusCodes.UNAUTHORIZED).send("Invalid or expired link");
     }
   };
 
-  handleGetPrivateAccessPage = (req: Request, res: Response) => {
-    try {
-      const token = String(req.query.token);
-      if (!token) throw new Error("No token found on request");
-      jwt.verify(token, this.config.jwtSecret);
+  /**
+   * POST /api/preorders/private-access
+   * Validates password + token, issues session, redirects to Framer site
+   */
+  handlePrivateAccessPassword = async (req: Request, res: Response) => {
+    const { password, token } = req.body;
 
-      const passwordPage = getPreorderPasswordPage(token);
-      return res.send(passwordPage);
+    if (!token || !password) {
+      const html = getPreorderPasswordPage("", "Missing password or token.");
+      res.setHeader("Content-Type", "text/html");
+      return res.status(StatusCodes.BAD_REQUEST).send(html);
+    }
+
+    try {
+      // 1. Decode and verify preorder token
+      const decoded = jwt.verify(token, this.config.jwtSecret) as {
+        email: string;
+        name: string;
+        userId: string;
+        version: number;
+        sessionKey: string;
+        type: string;
+      };
+      if (decoded?.type !== "PREORDER") throw createHttpError.Unauthorized();
+
+      const user = await this.domain.auth.authenticateUser({
+        principal: decoded.email,
+        password: password,
+        userAgent: getRequestUserAgent(req),
+        deviceFingerprint: createDeviceFingerprint(req),
+      });
+      // 2. Find the user
+
+      if (!user) {
+        const html = getPreorderPasswordPage(token, "Invalid preorder user.");
+        res.setHeader("Content-Type", "text/html");
+        return res.status(StatusCodes.UNAUTHORIZED).send(html);
+      }
+      const { accessToken } = await this.domain.session.initSession({
+        userId: user.id,
+        email: user.email,
+        deviceId: user.deviceId,
+      });
+      // TODO: AFTER EVERY 10 PEOPLE HAVE COMPLETED SEND AN EMAIL TO THE TEAM TO SEE WHO HAS GOTTEN ACCESS
+      // 6. Redirect to Framer preorder site
+      const redirectUrl = new URL(this.config.privateAccessPageUrl);
+      redirectUrl.searchParams.set("token", accessToken);
+
+      return res.redirect(redirectUrl.toString());
+    } catch (error: any) {
+      logger.error(error, "Preorder password validation failed");
+      const html = getPreorderPasswordPage(token, "Invalid or expired link.");
+      res.setHeader("Content-Type", "text/html");
+      return res.status(StatusCodes.UNAUTHORIZED).send(html);
+    }
+  };
+  /**
+   * POST /api/preorders/auth-exchange
+   * Exhanges preorder token for session token
+   */
+  handlePreorderAuthExchange = async (req: Request, res: Response) => {
+    try {
+      const token = String(req.body.token);
+
+      if (!token) throw new Error("No token found on request");
+
+      const decoded = jwt.verify(token, this.config.jwtSecret) as DecodedJwt;
+
+      await this.domain.session.deleteSession(decoded.sessionId);
+
+      const { accessToken } = await this.domain.session.initSession({
+        userId: decoded.sub,
+        email: decoded.email,
+      });
+      res.status(StatusCodes.OK).json({ token: accessToken });
     } catch (error) {
+      logger.error(error, "[PreorderController] Failed auth exchange");
       res.status(StatusCodes.UNAUTHORIZED);
     }
   };
-  shouldAssertAddress = (session: any, choice: PlanType) => {
-    const addressId = this.domain.session.getCurrentAddress(session);
-    if (choice !== "DIGITAL" && !addressId)
-      throw new Error("Address id is not defined");
-    return addressId;
-  };
-
+  /**
+   * POST /api/preorders/create-user-preorder
+   * Create user and preorder
+   */
   handleCreateUserAndPreorder = async (req: Request, res: Response) => {
     const combinedSchema = createUserPreorderInputSchema.safeParse(req.body);
+    const sessionId = (req as any).sessionId;
 
     if (combinedSchema.error) {
       const { issues } = combinedSchema.error;
@@ -100,12 +194,14 @@ export class PreorderController {
         endpoint: req.url,
       });
 
+    const password = this.config.preorderPassword;
+
     const user = await this.domain.user.registerUser({
       deviceFingerprint: createDeviceFingerprint(req),
       email: input.email,
       name: input.name,
       shippingAddress: input.shippingAddress,
-      password: input.password,
+      password: password,
       userAgent: getRequestUserAgent(req),
       status: UserStatus.PENDING_PREORDER,
     });
@@ -115,30 +211,48 @@ export class PreorderController {
       userId: user.id,
       email: user.email,
       addressId: user.addressId,
-      redirectUrl: input.redirectUrl,
     });
 
-    this.domain.session.setLoginInfo(req.session, {
+    await this.domain.session.setLoginInfo(sessionId, {
       userId: user.id,
       email: user.email,
       deviceId: user.deviceId,
       addressId: user.addressId,
     });
 
-    res.status(200).json(preoder);
+    res.status(StatusCodes.OK).json(preoder);
   };
 
+  // TODO: Add quantities for phyiscal copies
+  /**
+   * POST /api/preorders
+   * Create preorder for authenticated user
+   */
   handleCreatePreorder = async (req: Request, res: Response) => {
     try {
+      const token = req.headers.authorization?.split("Bearer ")[1];
+      if (!token) return this.handleCreateUserAndPreorder(req, res);
+      const { accessToken } =
+        await this.domain.session.checkAndRefreshAccessToken(token);
+      const { sessionId } = this.domain.session.parseOrThrow(accessToken);
       const { session: sessionDomain, preorders: preordersDomain } =
         this.domain;
-      const sessionUserId = sessionDomain.getUserIdOrThrow(req.session);
-      const sessionEmailAddress = sessionDomain.getEmailOrThrow(req.session);
-      const createPreoderInput = createPreorderSchema.safeParse({
-        userId: sessionUserId,
-        email: sessionEmailAddress,
-        ...req.body,
-      });
+
+      const [sessionUserId, sessionEmailAddress] = await Promise.all([
+        sessionDomain.getUserIdOrThrow(sessionId),
+        sessionDomain.getEmailOrThrow(sessionId),
+      ]);
+
+      const createPreoderInput = createPreorderSchema
+        .extend({
+          shippingAddress: shippingAddressSchema.optional(),
+        })
+        .superRefine(shoudlValidateShippingAddress)
+        .safeParse({
+          userId: sessionUserId,
+          email: sessionEmailAddress,
+          ...req.body,
+        });
 
       if (!createPreoderInput.success) {
         const { issues } = createPreoderInput.error;
@@ -153,26 +267,70 @@ export class PreorderController {
           endpoint: req.url,
         });
 
-      const { userId, choice, redirectUrl } = createPreoderInput.data;
+      const { userId, choice, shippingAddress } = createPreoderInput.data;
 
-      const addressId = this.shouldAssertAddress(req.session, choice);
+      let addressId: string | null = null;
+
+      if (shippingAddress) {
+        const address = await this.domain.user.createAddress({
+          userId: userId,
+          ...shippingAddress,
+        });
+        addressId = address.id;
+      }
+
+      this.shouldAssertAddress(choice, addressId);
+      const email = await sessionDomain.getEmailOrThrow(sessionId);
 
       const { preorderId, url } = await preordersDomain.registerPreorder({
         userId,
         choice,
-        email: sessionDomain.getEmailOrThrow(req.session),
+        email,
         addressId,
-        redirectUrl,
       });
+      const sessionPreorderKey = (req.session as any).preorderKey;
+      if (sessionPreorderKey) {
+        await this.store.del(sessionPreorderKey);
+      }
       res.status(StatusCodes.OK).json({ preorderId, url });
     } catch (error) {
       logger.error(error, "Failed to create preorder");
-      if (error instanceof SessionError) {
-        throw createHttpError(StatusCodes.UNAUTHORIZED, "User is unauthorised");
-      }
-      throw createHttpError(
-        StatusCodes.INTERNAL_SERVER_ERROR,
-        "Failed to create preorder",
+      throw error;
+    }
+  };
+  handlePreorderIntroScreen = async (req: Request, res: Response) => {
+    try {
+      const userId = await this.domain.session.getUserIdOrThrow(
+        (req as any).sessionId,
+      );
+      const preorder =
+        await this.domain.preorders.canAccessPreorderEdition(userId);
+      if (!preorder || !preorder.user?.name)
+        throw createHttpError.Unauthorized(
+          "Failed to find access to preorder edition",
+        );
+      res.status(200).json({ name: preorder.user.name });
+    } catch (error) {
+      return createHttpError.Unauthorized("User is not authenticated");
+    }
+  };
+  handleCanAccessPreorder = async (req: Request, res: Response) => {
+    try {
+      const userId = await this.domain.session.getUserIdOrThrow(
+        (req as any).sessionId,
+      );
+      const canAccess =
+        await this.domain.preorders.canAccessPreorderEdition(userId);
+      res.status(200).json({ result: !!canAccess });
+    } catch (error) {}
+  };
+  private shouldAssertAddress = (
+    choice: PlanType,
+    addressId?: string | null,
+  ) => {
+    if (choice !== PlanType.DIGITAL && !addressId) {
+      throw new Error(
+        `Address is required for plan=${choice} but is undefined`,
       );
     }
   };

@@ -1,5 +1,7 @@
+import { Config } from "@/config";
 import { Address } from "@/generated/prisma/client";
 import {
+  AccessStatus,
   OrderStatus,
   OrderType,
   PaymentProvider,
@@ -10,6 +12,7 @@ import {
 } from "@/generated/prisma/enums";
 import { Db, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import {
   CompletedPreoderEventDto,
   preorderSchema,
@@ -19,7 +22,7 @@ import z from "zod";
 import { createPreorderSchema } from "../schemas/preorder";
 import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+import { addYears, isAfter } from "date-fns";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
@@ -34,10 +37,95 @@ export enum CompletePreorderStatus {
 
 export class PreordersService {
   constructor(
+    private readonly config: Config,
     private readonly db: Db,
     private readonly user: UserService,
     private readonly integrations: Integrations,
   ) {}
+
+  findPreorderById = async (preorderId: string) => {
+    return this.db.preorder.findUnique({
+      where: {
+        id: preorderId,
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        edition: true,
+      },
+    });
+  };
+
+  canAccessPreorderEdition = async (userId: string) => {
+    logger.info(
+      `[PreorderService] Checking Edition 00 access for userId=${userId}`,
+    );
+
+    // 1️⃣ Find the user's paid preorder for Edition 00
+    const preorder = await this.db.preorder.findFirst({
+      where: {
+        userId,
+        status: OrderStatus.PAID,
+        edition: {
+          number: 0, // safer than code hard-string
+        },
+      },
+      include: {
+        edition: {
+          include: {
+            editionAccess: {
+              where: { userId },
+            },
+          },
+        },
+        user: true,
+      },
+    });
+
+    if (!preorder) {
+      logger.warn(
+        `[Preorder Service] No paid preorder found for user ${userId}`,
+      );
+      return null;
+    }
+
+    const access = preorder.edition.editionAccess[0];
+    if (!access) {
+      logger.warn(
+        `[Preorder Service] No edition access record for user ${userId}`,
+      );
+      return null;
+    }
+
+    // 2️⃣ Enforce expiry (Edition 00 → 1 year)
+    const now = new Date();
+    if (isAfter(now, access.expiresAt)) {
+      logger.warn(`[Preorder Service] Access expired for user ${userId}`);
+      return null;
+    }
+
+    // 3️⃣ Optionally check status
+    if (access.status !== AccessStatus.ACTIVE) {
+      logger.warn(
+        `[Preorder Service] Access not active (status=${access.status}) for user ${userId}`,
+      );
+      return null;
+    }
+
+    logger.info(
+      `[Preorder Service] Valid Edition 00 access found: preorderId=${preorder.id}, expiresAt=${access.expiresAt.toISOString()}`,
+    );
+
+    return {
+      preorderId: preorder.id,
+      expiresAt: access.expiresAt,
+      user: preorder.user,
+    };
+  };
 
   markAsFailed = async ({
     userId,
@@ -247,20 +335,18 @@ export class PreordersService {
       choice,
       email,
       addressId,
-      redirectUrl,
     }: {
       addressId: string | null;
       userId: string;
       choice: PlanType;
       email: string;
-      redirectUrl: string;
     },
     tx?: TransactionClient,
   ) => {
     const parsed = createPreorderSchema
       .omit({ name: true })
       .safeExtend(z.object({ addressId: z.string().min(1).nullable() }).shape)
-      .parse({ userId, choice, email, addressId, redirectUrl });
+      .parse({ userId, choice, email, addressId });
 
     const totalCents = this.getPrice(parsed.choice);
 
@@ -303,6 +389,9 @@ export class PreordersService {
 
       return { preorder, edition00 };
     });
+    if (preorder.status === OrderStatus.PAID) {
+      throw new Error("User has already paid");
+    }
 
     // 2️⃣ Stripe link handling (idempotent)
     const paymentLink = await this.findOrCreatePreorderPaymentLink({
@@ -313,7 +402,7 @@ export class PreordersService {
       editionId: edition00.id,
       preorderId: preorder.id,
       userId: parsed.userId,
-      redirectUrl,
+      redirectUrl: `${this.config.serverUrl}/preorders/thank-you?preorder_id=${preorder.id}`, // TODO: Needs to redirect to thank you page based on plan, must include - "SUBSCRIBE TO THE ONGOING EDITIONS"
     });
 
     // 3️⃣ Mark user as active once Stripe is ready
@@ -498,6 +587,50 @@ export class PreordersService {
       address: sendCommsDto.address,
     });
   };
+  private grantEditionAccess = async (
+    tx: TransactionClient,
+    {
+      userId,
+      editionId,
+      plan,
+    }: { plan: PlanType; userId: string; editionId: string },
+  ) => {
+    // ----  Grant edition access ----
+    if (plan !== PlanType.PHYSICAL) {
+      const existingAccess = await tx.editionAccess.findFirst({
+        where: { userId, editionId },
+      });
+      // Preorders unlock novemeber 9th 2025 9AM
+      if (!existingAccess) {
+        const unlockAt = new Date("2025-11-09T09:00:00.000Z");
+
+        await tx.editionAccess.create({
+          data: {
+            editionId,
+            userId,
+            unlockAt,
+            status: AccessStatus.SCHEDULED,
+            expiresAt: addYears(Date.now(), 1),
+          },
+        });
+        logger.info(
+          `[Preorder Service] 🆕 Created edition access userId=${userId}`,
+        );
+      } else if (
+        existingAccess.status === AccessStatus.SCHEDULED &&
+        isAfter(new Date(), existingAccess.unlockAt)
+      ) {
+        // Activate automatically if the unlock date has already passed
+        await tx.editionAccess.update({
+          where: { id: existingAccess.id },
+          data: { status: AccessStatus.ACTIVE, unlockedAt: new Date() },
+        });
+        logger.info(
+          `[Preorder Service] 🔓 Activated edition access for userId=${userId}`,
+        );
+      }
+    }
+  };
 
   private completePreorderTransaction = async (
     dto: CompletedPreoderEventDto,
@@ -617,7 +750,7 @@ export class PreordersService {
           );
         }
 
-        // ---- 4️⃣ Update preorder status if needed ----
+        // ---- Update preorder status if needed ----
         if (preorder.status !== OrderStatus.PAID) {
           await tx.preorder.update({
             where: { stripePaymentLinkId: paymentLinkId },
@@ -627,20 +760,12 @@ export class PreordersService {
           logger.info(`[Preorder Service] 🔄 Updated preorder → PAID`);
         }
 
-        // ---- 5️⃣ Grant edition access ----
-        if (plan !== PlanType.PHYSICAL) {
-          const existingAccess = await tx.editionAccess.findFirst({
-            where: { userId, editionId },
-          });
-          if (!existingAccess) {
-            await tx.editionAccess.create({
-              data: { editionId, userId, unlockedAt: new Date() },
-            });
-            logger.info(
-              `[Preorder Service] 🆕 Created edition access userId=${userId}`,
-            );
-          }
-        }
+        // ----  Grant edition access ----
+        await this.grantEditionAccess(tx, {
+          userId,
+          editionId,
+          plan,
+        });
 
         // ---- 6️⃣ Create or fix shipment ----
         let address: Address | null = null;
@@ -713,6 +838,8 @@ export class PreordersService {
     });
   };
 
+  // TODO: Update preorder prices DIGITAL=800 FULL=2000 ALL_ACCESS=2000
+  // Subscription prices DIGITAL=500 PHYSICAL=1000 ALL_ACCESS=1000
   private getPrice(choice: PlanType) {
     switch (choice) {
       case "DIGITAL":

@@ -12,6 +12,16 @@ import {
 } from "../schemas/users";
 
 export class UserService {
+  updatePassword = (userId: string, hashed: string) => {
+    return this.db.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        passwordHash: hashed,
+      },
+    });
+  };
   constructor(
     private readonly db: Db,
     private readonly integrations: Integrations,
@@ -51,8 +61,8 @@ export class UserService {
     });
   }
 
-  private createAddress = (
-    input: ShippingAddress & { name: string; userId: string },
+  createAddress = (
+    input: ShippingAddress & { userId: string },
     tx?: TransactionClient,
   ) => {
     const db = tx || this.db;
@@ -63,7 +73,7 @@ export class UserService {
         isDefault: true,
         line1: input.line1,
         line2: input.line2,
-        fullName: input.name,
+        fullName: input.fullName,
         postalCode: input.postalCode,
         city: input.city,
         country: input.country,
@@ -155,7 +165,7 @@ export class UserService {
             {
               ...input.shippingAddress,
               userId: foundOrCreatedUser.id,
-              name: foundOrCreatedUser.name || "",
+              fullName: foundOrCreatedUser.name || "",
             },
             tx,
           );

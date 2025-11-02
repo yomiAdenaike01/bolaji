@@ -7,9 +7,11 @@ import { RedisStore } from "connect-redis";
 import { logger } from "@/lib/logger";
 import { Store } from "@/infra";
 import { Config } from "@/config";
-import { HttpError } from "http-errors";
-import helmet from "helmet";
+import createHttpError, { HttpError } from "http-errors";
+
 import compression from "compression";
+import { AuthController } from "./controllers/auth.controller";
+import { SessionService } from "@/domain/session/session";
 
 function shouldCompress(req: any, res: any) {
   if (req.headers["x-no-compression"]) {
@@ -52,8 +54,8 @@ export const setupMiddlewares = (
         callback(new Error(`CORS blocked for origin: ${origin}`));
       },
       credentials: true,
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "x-hub-id"],
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+      allowedHeaders: ["Content-Type", "x-hub-id", "Authorization"],
     }),
   );
 
@@ -97,6 +99,7 @@ export const setupErrorHandlers = (app: Application) => {
       res: Response,
       _next: NextFunction,
     ) => {
+      if (res.headersSent) return _next(err);
       const status =
         "status" in err && typeof (err as HttpError).status === "number"
           ? (err as HttpError).status
@@ -122,3 +125,22 @@ export const setupErrorHandlers = (app: Application) => {
     res.status(404).json({ error: "Endpoint not found" });
   });
 };
+
+export const initTokenAuthGuard = (session: SessionService) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authHeader = req.headers.authorization?.split("Bearer ") || [];
+      const token = authHeader?.[1] || null;
+      if (!token) return next(createHttpError.Unauthorized());
+      const { accessToken, refreshed } =
+        await session.checkAndRefreshAccessToken(token);
+      const tkn = session.parseOrThrow(accessToken, "access");
+      (req as any).sessionId = tkn.sessionId;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+export type AuthGuard = ReturnType<typeof initTokenAuthGuard>;

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { Request } from "express";
+import { addYears } from "date-fns";
 
 export const getRequestUserAgent = (req: Request): string => {
   return req.headers["user-agent"] ?? "unknown";
@@ -19,3 +20,16 @@ export const formatDate = (date: string | Date) => {
     year: "numeric",
   });
 };
+
+export const hash = (data: string) =>
+  crypto.createHash("sha256").update(data).digest("hex");
+
+/**
+ * Determines expiry based on edition number.
+ * Edition 00 → 1 year
+ * All following editions → 2 years
+ */
+export function getEditionExpiry(editionNumber: number) {
+  const now = new Date();
+  return editionNumber === 0 ? addYears(now, 1) : addYears(now, 2);
+}

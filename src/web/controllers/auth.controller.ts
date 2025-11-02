@@ -8,9 +8,72 @@ import { Request, Response } from "express";
 import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 import { StatusCodes } from "http-status-codes";
 import { logger } from "@/lib/logger";
+import { Config } from "@/config";
+import createHttpError from "http-errors";
+import { access } from "fs";
+import { Store } from "@/infra";
 
 export class AuthController {
-  constructor(private readonly domain: Domain) {}
+  constructor(
+    private readonly config: Config,
+    private readonly domain: Domain,
+    private readonly store: Store,
+  ) {}
+
+  handleRefreshAccessToken = async (req: Request, res: Response) => {
+    const accessToken = String(
+      req.headers.authorization?.split("Bearer ")?.[1].trim(),
+    );
+    const accessTokenData = await this.domain.session.parseOrThrow(
+      accessToken,
+      "access",
+    );
+    if (!accessTokenData) {
+      throw createHttpError.Unauthorized("Failed to validate");
+    }
+  };
+  handleDevAuth = async (req: Request, res: Response) => {
+    try {
+      const user = await this.domain.auth.loginAsDev();
+      if (!user?.id) {
+        throw createHttpError.Unauthorized("user not found");
+      }
+      const { jwtPair } = await this.initSession({
+        id: user.id,
+        email: user.email,
+      });
+
+      res.status(200).json({ user, jwtPair });
+    } catch (error) {
+      throw error;
+    }
+  };
+  private initSession = async ({
+    id,
+    email,
+    deviceId,
+  }: {
+    id: string;
+    email: string;
+    deviceId?: string;
+  }) => {
+    const sessionId = await this.domain.session.createSession(
+      id,
+      email,
+      deviceId,
+    );
+
+    const jwtPair = this.domain.session.generateJwtPair({
+      email: email,
+      sessionId,
+      userId: id,
+    });
+
+    return {
+      sessionId,
+      jwtPair,
+    };
+  };
   handleAuthenticateUser = async (req: Request, res: Response) => {
     try {
       const input = {
@@ -34,14 +97,13 @@ export class AuthController {
       const user = await this.domain.auth.authenticateUser(
         authenticateUserInput.data,
       );
-
-      this.domain.session.setLoginInfo(req.session, {
-        deviceId: user.deviceId,
+      const { jwtPair } = await this.initSession({
+        id: user.id,
         email: user.email,
-        userId: user.id,
+        deviceId: user.deviceId,
       });
 
-      res.json(user);
+      res.status(200).json({ user, jwtPair });
     } catch (error) {
       logger.error(
         error,

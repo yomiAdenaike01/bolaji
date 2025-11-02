@@ -4,16 +4,24 @@ import bcrypt from "bcrypt";
 import { Prisma } from "@/generated/prisma/client";
 
 export class AuthService {
+  loginAsDev = async () => {
+    const user = await this.db.user.findFirst({
+      where: {
+        email: "adenaikeyomi@gmail.com",
+      },
+    });
+    return user;
+  };
   constructor(
     private readonly db: Db,
     private readonly userService: UserService,
   ) {}
-  async authenticateUser(input: {
+  authenticateUser = async (input: {
     principal: string;
     password: string;
     deviceFingerprint: string;
     userAgent: string;
-  }) {
+  }) => {
     return this.db.$transaction(async (tx) => {
       const existingUser = await tx.user.findUniqueOrThrow({
         where: {
@@ -42,5 +50,5 @@ export class AuthService {
         deviceId: device.id,
       };
     });
-  }
+  };
 }

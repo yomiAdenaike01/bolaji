@@ -2,6 +2,20 @@ import { z } from "zod";
 import { PlanType } from "@/generated/prisma/enums";
 import { createUserSchema } from "./users";
 
+export const shoudlValidateShippingAddress = (data: any, ctx: any) => {
+  const needsShipping = (
+    [PlanType.PHYSICAL, PlanType.FULL] as Array<PlanType>
+  ).includes(data.choice);
+
+  if (needsShipping && !data.shippingAddress) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Shipping address is required for physical or full editions.",
+      path: ["shippingAddress"],
+    });
+  }
+};
+
 export const createPreorderSchema = z.object({
   userId: z.string().min(0),
   name: z
@@ -13,33 +27,22 @@ export const createPreorderSchema = z.object({
   choice: z.enum(PlanType, {
     message: "Choice must be one of DIGITAL, PHYSICAL, or FULL",
   }),
-  redirectUrl: z.string().min(1),
+  quantity: z.number().nonnegative().optional(),
 });
 
 export const createUserPreorderInputSchema = createUserSchema
   .omit({
     deviceFingerprint: true,
     userAgent: true,
+    password: true,
   })
   .extend(
     createPreorderSchema.pick({
       choice: true,
-      redirectUrl: true,
+      quantity: true,
     }).shape,
   )
-  .superRefine((data, ctx) => {
-    const needsShipping = (
-      [PlanType.PHYSICAL, PlanType.FULL] as Array<PlanType>
-    ).includes(data.choice);
-
-    if (needsShipping && !data.shippingAddress) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Shipping address is required for physical or full editions.",
-        path: ["shippingAddress"],
-      });
-    }
-  });
+  .superRefine(shoudlValidateShippingAddress);
 
 export type CreatePreorderInput = z.infer<typeof createPreorderSchema>;
 export type CreateUserPreorderInput = z.infer<

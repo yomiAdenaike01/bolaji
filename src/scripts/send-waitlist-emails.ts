@@ -9,6 +9,10 @@ import { logger } from "../lib/logger";
 import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import jwt from "jsonwebtoken";
+import { initInfra } from "@/infra";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { UserStatus } from "@/generated/prisma/enums";
 dotenv.config();
 
 /**
@@ -32,6 +36,7 @@ async function parseWaitlistCsv(
  */
 async function sendWaitlistEmails() {
   const config = initConfig();
+  const { db, store } = initInfra(config);
   const csvPath = path.resolve(
     __dirname,
     "./BOLAJI_EDITIONS_WAITLIST_SAMPLE.csv",
@@ -55,13 +60,64 @@ async function sendWaitlistEmails() {
 
   const successful: { name: string; email: string }[] = [];
   const failed: { name: string; email: string; error: string }[] = [];
+  logger.info("Creating user passwords...");
 
+  const userEmailByPasswordHash: Record<
+    string,
+    { accountPasswordHash: string; accountPassword: string }
+  > = Object.fromEntries(
+    await Promise.all(
+      users.map(async (user) => {
+        const password = crypto.randomBytes(5).toString("hex");
+        return [
+          user.Email,
+          {
+            accountPasswordHash: await bcrypt.hash(password, 10),
+            accountPassword: password,
+          },
+        ];
+      }),
+    ),
+  );
+  const createdPasswords = Object.values(userEmailByPasswordHash);
+
+  if (
+    !createdPasswords.every(Boolean) ||
+    createdPasswords.length !== users.length
+  ) {
+    return logger.error("Failed to create passwords for users");
+  }
+
+  logger.info("Creating users...");
+  // TODO: HANDLE IF ALREADY EXISTS BUT THEY SHOULDN'T HAVE ANY PENDING ORDERS OR ANYTHING
+  const dbUsers = await db.user.createManyAndReturn({
+    data: users.map((u) => {
+      return {
+        email: u.Email,
+        name: u.Name,
+        status: UserStatus.PENDING_PREORDER,
+        passwordHash: userEmailByPasswordHash[u.Email].accountPasswordHash,
+      };
+    }),
+  });
+  const userIdsByEmail = Object.fromEntries(
+    dbUsers.map((user) => [user.email, user.id]),
+  );
+  logger.info(`✅ Successfully created ${users.length} users`);
+  const sessionVersion = 1;
   for (const user of users) {
     try {
+      const sessionKey = `preorder:session:version:${crypto.randomBytes(5).toString("hex")}`;
+      await store.set(sessionKey, sessionVersion);
       const token = jwt.sign(
         {
           email: user.Email,
           name: user.Name,
+          userId: userIdsByEmail[user.Email],
+          version: sessionVersion,
+          sessionKey,
+          type: "PREORDER",
+          password: userEmailByPasswordHash[user.Email].accountPassword,
         },
         config.jwtSecret,
         {
@@ -69,7 +125,9 @@ async function sendWaitlistEmails() {
         },
       );
 
-      const preorderUrl = new URL(config.privateAccessPageUrl);
+      const preorderUrl = new URL(
+        `${config.serverUrl}/preorders/private-access`,
+      );
       preorderUrl.searchParams.append("token", token);
 
       await emailIntegration.sendEmail({
@@ -77,8 +135,9 @@ async function sendWaitlistEmails() {
         type: EmailType.PREORDER_RELEASED,
         content: {
           name: user.Name,
+          email: user.Email,
           preorderLink: preorderUrl.toString(),
-          password: config.preorderPassword,
+          password: userEmailByPasswordHash[user.Email].accountPassword,
         },
       });
 
@@ -114,7 +173,11 @@ async function sendWaitlistEmails() {
   });
 }
 
-sendWaitlistEmails().catch((err) => {
-  logger.error("💥 Script failed", err);
-  process.exit(1);
-});
+sendWaitlistEmails()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    logger.error("💥 Script failed", err);
+    process.exit(1);
+  });

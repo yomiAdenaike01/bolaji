@@ -19,7 +19,7 @@ export type PaymentEvent = {
   | {
       orderType: OrderType;
       plan: PlanType;
-      editionId: string;
+      editionId: string | null;
       addressId: string | null;
       paymentLinkId: string;
     }
