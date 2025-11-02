@@ -26,7 +26,7 @@ export class StripeIntegration {
     private readonly paymentRedirectUrl: string,
   ) {
     try {
-      this.stripe = new Stripe(apiKey, { apiVersion: "2025-09-30.clover" });
+      this.stripe = new Stripe(apiKey, { apiVersion: "2025-10-29.clover" });
     } catch (error) {
       logger.error(error, "Failed to initlaise stripe");
     }

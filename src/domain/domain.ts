@@ -1,13 +1,13 @@
 import { Db, Store } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import { Config } from "../config";
+import { JobsQueues } from "../infra/workers/jobs-queue";
 import { AuthService } from "./auth/auth.service";
 import { PreordersService } from "./preorders/preorders.service";
 import { SessionService } from "./session/session";
-import { UserService } from "./user/users.service";
 import { SubscriptionsService } from "./subscriptions/subscriptions.service";
-import { JobsQueues } from "../infra/workers/jobs-queue";
-import { OrderStatus, PlanType } from "@/generated/prisma/enums";
+import { UserService } from "./user/users.service";
+import { EditionsService } from "./editions.service";
 
 export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   const integrations = new Integrations(db, store, appConfig);
@@ -19,9 +19,11 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
     db,
     userService,
     integrations,
+    store,
   );
   return {
     preorders,
+    editions: new EditionsService(db, store),
     session: new SessionService(appConfig, db, store),
     user: userService,
     auth: new AuthService(db, userService),

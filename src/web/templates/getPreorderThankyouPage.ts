@@ -1,16 +1,21 @@
+import { PREORDER_OPENING_DATETIME } from "@/constants";
 import { PlanType } from "@/generated/prisma/enums";
 
 export const getThankYouPage = ({
   name,
   plan,
-  password,
   redirectUrl,
 }: {
   name?: string;
   plan: PlanType;
-  password: string;
   redirectUrl: string;
-}) => `<!DOCTYPE html>
+}) => {
+  const formattedDate = PREORDER_OPENING_DATETIME.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+  });
+
+  return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -20,8 +25,7 @@ export const getThankYouPage = ({
         --tint: #6C63FF;
         --bg: #F9F8FF;
         --text: #111;
-        --muted: #666;
-        --success: #2A9D8F;
+        --muted: #555;
       }
 
       body {
@@ -41,7 +45,7 @@ export const getThankYouPage = ({
         padding: 48px 36px;
         border-radius: 16px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-        max-width: 460px;
+        max-width: 480px;
         width: 90%;
         text-align: center;
         animation: fadeIn 0.4s ease-out;
@@ -55,34 +59,22 @@ export const getThankYouPage = ({
       img.logo {
         width: 100px;
         height: auto;
-        margin-bottom: 16px;
+        margin-bottom: 20px;
       }
 
       h2 {
         font-family: 'Georgia', 'Times New Roman', serif;
         font-weight: 400;
         font-size: 1.7rem;
-        margin: 0 0 8px 0;
+        margin: 0 0 14px 0;
         color: var(--text);
       }
 
       p {
-        font-size: 0.92rem;
+        font-size: 0.94rem;
         color: var(--muted);
-        margin: 0 0 18px 0;
-        line-height: 1.6;
-      }
-
-      .password-box {
-        background: var(--bg);
-        border: 1px solid #E0E0E0;
-        border-radius: 10px;
-        padding: 12px 14px;
-        font-size: 15px;
-        font-weight: 500;
-        color: var(--text);
-        margin: 10px 0 20px 0;
-        letter-spacing: 0.3px;
+        margin: 0 0 16px 0;
+        line-height: 1.65;
       }
 
       button.primary {
@@ -96,18 +88,14 @@ export const getThankYouPage = ({
         width: 100%;
         cursor: pointer;
         transition: background 0.25s ease, transform 0.1s ease;
+        margin-top: 12px;
       }
 
-      button.primary:hover {
-        background-color: #5A52E0;
-      }
-
-      button.primary:active {
-        transform: scale(0.98);
-      }
+      button.primary:hover { background-color: #5A52E0; }
+      button.primary:active { transform: scale(0.98); }
 
       .subscribe-box {
-        margin-top: 24px;
+        margin-top: 28px;
         background: var(--bg);
         border: 1px solid #E2E0DC;
         border-radius: 14px;
@@ -163,16 +151,6 @@ export const getThankYouPage = ({
         background-color: #5A52E0;
       }
 
-      .note {
-        font-size: 13px;
-        color: var(--muted);
-        margin-top: 20px;
-        background: rgba(108, 99, 255, 0.05);
-        border-radius: 8px;
-        padding: 10px 12px;
-        border: 1px solid rgba(108, 99, 255, 0.15);
-      }
-
       footer {
         text-align: center;
         margin-top: 24px;
@@ -181,9 +159,7 @@ export const getThankYouPage = ({
       }
 
       @media (max-width: 480px) {
-        .card {
-          padding: 36px 24px;
-        }
+        .card { padding: 36px 24px; }
       }
     </style>
   </head>
@@ -196,39 +172,27 @@ export const getThankYouPage = ({
         class="logo"
       />
 
-      <h2>Thank You${name ? `, ${name.split(" ")[0]}` : ""} ✨</h2>
+      <h2>Thank You${name ? `, ${name.split(" ")[0]}` : ""}</h2>
 
-      ${
-        plan === "DIGITAL"
-          ? `<p>Your <strong>Digital Edition</strong> is now unlocked.  
-             You can log in right away to begin exploring your first Bolaji Edition.</p>`
-          : `<p>Your <strong>${plan === "FULL" ? "Full" : "Physical"} Edition</strong> preorder is confirmed.  
-             We’ll reach out shortly with shipping details and your next steps.</p>`
-      }
+      <p>Your <strong>${
+        plan === PlanType.FULL
+          ? "Full"
+          : plan === PlanType.PHYSICAL
+            ? "Physical"
+            : "Digital"
+      } Edition</strong> preorder has been received.</p>
 
-      <p>Your new login password:</p>
-      <div class="password-box">${password}</div>
+      <p>Edition 00 officially releases on <strong>${formattedDate}</strong>.  
+      You’ll receive an email when your edition unlocks — it will include your login password and access details.</p>
+
+      <p>Thank you for supporting the beginning of Bolaji Editions.  
+      We can’t wait for you to experience it.</p>
 
       <button class="primary" onclick="window.location.replace('${redirectUrl}')">
-        Go to Site →
+        Return to Site
       </button>
-
-      ${
-        plan === "DIGITAL"
-          ? `<div class="note">Use your password above to log in and access your digital edition immediately.</div>`
-          : `<div class="note">Keep your password safe — we’ll notify you when your physical edition ships.</div>`
-      }
-
-      <div class="subscribe-box">
-        <h3>Subscribe for Ongoing Editions</h3>
-        <p>Be among the first to receive future Bolaji Editions as they’re released.</p>
-        <form action="/subscribe" method="POST">
-          <input type="email" name="email" placeholder="Enter your email" required />
-          <button type="submit">Subscribe</button>
-        </form>
-      </div>
-    </div>
 
     <footer>© ${new Date().getFullYear()} Bolaji Editions</footer>
   </body>
 </html>`;
+};

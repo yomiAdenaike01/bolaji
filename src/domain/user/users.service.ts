@@ -12,16 +12,6 @@ import {
 } from "../schemas/users";
 
 export class UserService {
-  updatePassword = (userId: string, hashed: string) => {
-    return this.db.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        passwordHash: hashed,
-      },
-    });
-  };
   constructor(
     private readonly db: Db,
     private readonly integrations: Integrations,

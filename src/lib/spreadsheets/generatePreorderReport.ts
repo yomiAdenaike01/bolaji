@@ -3,6 +3,7 @@ import { logger } from "../logger";
 
 import { OrderStatus, PlanType } from "@/generated/prisma/enums";
 import { Db } from "@/infra";
+import { PREORDER_EDITION_MAX_COPIES } from "@/constants";
 
 /**
  * Generate a lean, fast preorder summary report for admins.
@@ -92,11 +93,11 @@ export async function generatePreorderSummaryReport(db: Db) {
   summary.addRow(["Pending", pending]);
   summary.addRow(["Total Revenue (£)", (revenue / 100).toFixed(2)]);
 
-  if (total >= 300) {
+  if (total >= PREORDER_EDITION_MAX_COPIES) {
     summary.insertRow(1, [
       "🚫 Preorder Limit Reached",
       "",
-      "Preorders have hit the 300-copy cap.",
+      `Preorders have hit the ${PREORDER_EDITION_MAX_COPIES}-copy cap.`,
     ]);
   }
 

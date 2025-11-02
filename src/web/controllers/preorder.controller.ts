@@ -41,12 +41,9 @@ export class PreorderController {
     );
 
     if (!preorder || !preorder.user || !preorder.userId)
-      return res.status(404).send("Preorder not found");
+      return res.status(StatusCodes.NOT_FOUND).send("Preorder not found");
 
     // Generate new password
-    const newPassword = crypto.randomBytes(6).toString("base64url");
-    const hashed = await bcrpyt.hash(newPassword, 10);
-    await this.domain.user.updatePassword(preorder.userId, hashed);
 
     const parsed = z
       .object({
@@ -61,7 +58,6 @@ export class PreorderController {
     const html = getThankYouPage({
       name: parsed.userName,
       plan: parsed.plan,
-      password: newPassword,
       redirectUrl: `${this.config.frontEndUrl}/subscribe`,
     });
 
@@ -186,7 +182,9 @@ export class PreorderController {
     }
     const { data: input } = combinedSchema;
 
-    const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder();
+    const canAcceptPreorder = await this.domain.preorders.canAcceptPreorder(
+      input.choice,
+    );
     if (!canAcceptPreorder)
       return createErrorResponse(res, {
         statusCode: StatusCodes.FORBIDDEN,
@@ -232,9 +230,12 @@ export class PreorderController {
     try {
       const token = req.headers.authorization?.split("Bearer ")[1];
       if (!token) return this.handleCreateUserAndPreorder(req, res);
+
       const { accessToken } =
         await this.domain.session.checkAndRefreshAccessToken(token);
+
       const { sessionId } = this.domain.session.parseOrThrow(accessToken);
+
       const { session: sessionDomain, preorders: preordersDomain } =
         this.domain;
 
@@ -259,7 +260,9 @@ export class PreorderController {
         return invalidInputErrorResponse(res, issues, req.url);
       }
 
-      const canAcceptPreorder = await preordersDomain.canAcceptPreorder();
+      const canAcceptPreorder = await preordersDomain.canAcceptPreorder(
+        createPreoderInput.data.choice,
+      );
       if (!canAcceptPreorder)
         return createErrorResponse(res, {
           statusCode: StatusCodes.FORBIDDEN,
@@ -267,7 +270,8 @@ export class PreorderController {
           endpoint: req.url,
         });
 
-      const { userId, choice, shippingAddress } = createPreoderInput.data;
+      const { userId, choice, shippingAddress, quantity } =
+        createPreoderInput.data;
 
       let addressId: string | null = null;
 
@@ -287,6 +291,7 @@ export class PreorderController {
         choice,
         email,
         addressId,
+        quantity,
       });
       const sessionPreorderKey = (req.session as any).preorderKey;
       if (sessionPreorderKey) {

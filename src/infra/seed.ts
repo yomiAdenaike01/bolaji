@@ -1,6 +1,12 @@
 import { EditionStatus, PlanType } from "@/generated/prisma/client";
 import { logger } from "@/lib/logger";
 import { Db, Store, TransactionClient } from ".";
+import {
+  EDITION_00_REMANING_CACHE_KEY,
+  PREORDER_CLOSING_DATETIME,
+  PREORDER_EDITION_MAX_COPIES,
+  PREORDER_OPENING_DATETIME,
+} from "@/constants";
 
 const ensureDefaultPlans = async (db: TransactionClient) => {
   const DEFAULT_PLANS = [
@@ -63,10 +69,10 @@ const ensurePreorderEdition = async (db: TransactionClient) => {
       code: "EDIT-00",
       title: "Edition 00 — Preorder",
       status: EditionStatus.PENDING, // will automatically open via time check or job
-      preorderOpenAt: new Date("2025-11-09T09:00:00Z"),
-      preorderCloseAt: new Date("2025-11-12T23:59:59Z"),
+      preorderOpenAt: PREORDER_OPENING_DATETIME,
+      preorderCloseAt: PREORDER_CLOSING_DATETIME,
       createdAt: new Date(),
-      maxCopies: 300,
+      maxCopies: PREORDER_EDITION_MAX_COPIES,
     },
   });
 
@@ -83,7 +89,7 @@ export const seed = async (db: Db, store: Store) => {
     return edition00;
   });
   await store.set(
-    `edition:${preorderEdition.number}:remaining`,
-    preorderEdition.maxCopies || 300,
+    EDITION_00_REMANING_CACHE_KEY,
+    preorderEdition.maxCopies || PREORDER_EDITION_MAX_COPIES,
   );
 };

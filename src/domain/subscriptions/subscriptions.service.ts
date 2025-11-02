@@ -19,7 +19,7 @@ import {
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
-import z from "zod";
+import { addYears } from "date-fns";
 
 export class SubscriptionsService {
   constructor(
@@ -201,6 +201,9 @@ export class SubscriptionsService {
           },
           update: {},
           create: {
+            status: "SCHEDULED",
+            unlockAt: new Date(),
+            expiresAt: addYears(new Date(), 2),
             userId: existingSubscription.userId,
             editionId: nextEdition.id,
             unlockedAt: new Date(),

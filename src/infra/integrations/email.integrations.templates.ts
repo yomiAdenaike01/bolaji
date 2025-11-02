@@ -277,7 +277,7 @@ export const templates: {
       <p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;line-height:1.6;">
         ${
           plan === PlanType.DIGITAL
-            ? `You’ll receive a digital download link when the edition releases.`
+            ? `You’ll receive an email when the digital edition releases.`
             : `We’ll notify you when your physical edition is prepared for shipment.`
         }
       </p>

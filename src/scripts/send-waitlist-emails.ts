@@ -178,6 +178,6 @@ sendWaitlistEmails()
     process.exit(0);
   })
   .catch((err) => {
-    logger.error("💥 Script failed", err);
+    logger.error(err, "💥 Script failed");
     process.exit(1);
   });
