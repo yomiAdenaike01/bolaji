@@ -20,21 +20,28 @@ import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
+import { Config } from "@/config";
 
 export class SubscriptionsService {
   constructor(
     private readonly db: Db,
     private readonly integrations: Integrations,
+    private readonly config: Config,
     private readonly queues: JobsQueues,
   ) {}
 
-  private getNextAvaliableEdition = async (
+  private getNextAvaliableEditionForSubscription = async (
     tx: Db | TransactionClient,
     userId: string,
   ) => {
     const [allEditions, unlocked] = await Promise.all([
       tx.edition.findMany({
         orderBy: { number: "asc" },
+        where: {
+          number: {
+            gte: 1,
+          },
+        },
         select: { id: true, number: true },
       }),
       tx.editionAccess.findMany({
@@ -172,7 +179,7 @@ export class SubscriptionsService {
       logger.info(`[Subscription Service] Created new order ${newOrder.id}`);
 
       logger.info("[SubscriptionService] Fetching next edition");
-      const nextEdition = await this.getNextAvaliableEdition(
+      const nextEdition = await this.getNextAvaliableEditionForSubscription(
         tx,
         existingSubscription.userId,
       );
@@ -540,8 +547,8 @@ export class SubscriptionsService {
       const metadata = {
         userId: user.id,
         planId: plan.id,
-        successUrl: input.redirectUrl,
-        cancelUrl: input.redirectUrl,
+        successUrl: `${this.config.serverUrl}/subscriptions/thank-you`,
+        cancelUrl: `${this.config.serverUrl}/subscriptions/cancel`,
         stripeCustomerId: customerId,
         priceId,
         subscriptionId: placeholder.id,

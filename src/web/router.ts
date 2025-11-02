@@ -66,10 +66,23 @@ const makeFaqsRouter = (faqController: FaqController) => {
 };
 
 const makeSubscriptionsRouter = (
+  authGuard: AuthGuard,
   subscriptionsController: SubscriptionsController,
 ) => {
   const r = Router();
-  r.post("/create", subscriptionsController.handleCreateSubscription);
+  r.get("/thank-you", subscriptionsController.handleThankYouPage);
+  r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
+  r.post(
+    "/create",
+    authGuard,
+    subscriptionsController.handleCreateSubscription,
+  );
+  r.get(
+    "/can-subscribe",
+    authGuard,
+    subscriptionsController.handleCanSubscribe,
+  );
+
   return r;
 };
 
@@ -97,6 +110,9 @@ export const setupRouters = (
   app: Application,
 ) => {
   const router = express.Router();
+  router.get("/healthz", (req, res) => {
+    res.status(StatusCodes.OK).send("ok");
+  });
   // #region auth router
   const authRouter = makeAuthRouter(authGuard, controllers.auth);
   // #endregion
@@ -115,6 +131,7 @@ export const setupRouters = (
 
   //#region subscriptions router
   const subscriptionsRouter = makeSubscriptionsRouter(
+    authGuard,
     controllers.subscriptions,
   );
   //#endregion

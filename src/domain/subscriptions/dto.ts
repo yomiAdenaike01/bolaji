@@ -5,7 +5,6 @@ import { shippingAddressSchema } from "../schemas/users";
 export const createSubscriptionInputSchema = z.object({
   name: z.string(),
   email: z.string(),
-  redirectUrl: z.url(),
   addressId: z.string().optional(),
   userId: z.string().optional(),
   plan: z.enum(PlanType),

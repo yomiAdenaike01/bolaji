@@ -29,7 +29,12 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
     auth: new AuthService(db, userService),
     integrations,
     jobQueues,
-    subscriptions: new SubscriptionsService(db, integrations, jobQueues),
+    subscriptions: new SubscriptionsService(
+      db,
+      integrations,
+      appConfig,
+      jobQueues,
+    ),
   };
 };
 

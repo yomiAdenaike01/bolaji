@@ -51,6 +51,30 @@ export class PreordersService {
     private readonly store: Store,
   ) {}
 
+  canSubscribe = async (userId: string) => {
+    try {
+      const cacheKey = `preorder-subscribe-page:access:${userId}`;
+      const cached = await this.store.get(cacheKey);
+      if (cached) {
+        try {
+          return Boolean(cached);
+        } catch {
+          return false;
+        }
+      }
+      const preorder = await this.db.preorder.findFirst({
+        where: {
+          userId,
+          status: OrderStatus.PAID,
+        },
+      });
+      await this.store.setEx(cacheKey, 1000 * 60 * 60, "true");
+      return !!preorder;
+    } catch (error) {
+      throw new Error("Failed to find preorder");
+    }
+  };
+
   findPreorderById = async (preorderId: string) => {
     return this.db.preorder.findUnique({
       where: {

@@ -20,7 +20,7 @@ export const initControllers = (
     auth: new AuthController(config, domain, store),
     user: new UserController(domain),
     preorders: new PreorderController(store, config, domain),
-    subscriptions: new SubscriptionsController(domain),
+    subscriptions: new SubscriptionsController(domain, config),
     screens: new ScreenController(config, domain),
     integrations,
     faqs: new FaqController(),
