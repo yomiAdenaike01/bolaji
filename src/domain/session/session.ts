@@ -116,7 +116,7 @@ export class SessionService {
     const ttlSeconds = 7 * 24 * 60 * 60;
     this.store.set(key, refreshToken, { EX: ttlSeconds });
 
-    logger.info(`[Session] Issued JWT pair for ${email}`);
+    logger.info(`[Session] Issued JWT pair for userId - ${userId}`);
     return { accessToken, refreshToken };
   };
 

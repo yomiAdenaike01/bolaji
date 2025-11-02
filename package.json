@@ -7,7 +7,9 @@
     "exec:waitlist-release": "yarn ts-node -r tsconfig-paths/register src/scripts/send-waitlist-emails.ts",
     "proxy": "ngrok http --region=us --hostname=bolaji-api-playground.ngrok.io --host-header=rewrite 3400",
     "dev": "nodemon",
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

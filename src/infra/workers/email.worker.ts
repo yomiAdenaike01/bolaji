@@ -4,12 +4,15 @@ import { Job, Worker } from "bullmq";
 import z from "zod";
 import { EmailType } from "../integrations/email-types";
 import { EmailIntegration } from "../integrations/email.integration";
+import { Config } from "@/config";
+import { OrderStatus, PlanType } from "@/generated/prisma/enums";
 
 export class EmailWorker {
   constructor(
     private readonly db: Db,
     connection: string,
     private readonly emailIntegration: EmailIntegration,
+    private readonly config: Config,
   ) {
     new Worker("emails", async (job) => this.process(job), {
       connection: {
@@ -21,6 +24,32 @@ export class EmailWorker {
     logger.info(`📬 [EmailWorker] Processing job: ${job.name}`);
 
     switch (job.name) {
+      case "email.edition00_release": {
+        const users = await this.db.preorder.findMany({
+          where: {
+            choice: {
+              not: PlanType.PHYSICAL,
+            },
+            status: OrderStatus.PAID,
+          },
+          include: { user: true },
+        });
+
+        for (const preorder of users) {
+          if (!preorder.user?.email || !preorder.user.name) continue;
+          await this.emailIntegration.sendEmail({
+            email: preorder.user.email,
+            type: EmailType.EDITION_00_DIGITAL_RELEASE,
+            content: {
+              name: preorder.user.name,
+              accessLink: `${this.config.frontEndUrl}/auth/login`,
+              subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
+            },
+          });
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        break;
+      }
       case "email.subscription_renewed": {
         const parsedData = z
           .object({

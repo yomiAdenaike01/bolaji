@@ -198,46 +198,95 @@ export const templates: {
     wrap(
       "Edition 00 — Private Access Now Open",
       `
-    <h2 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#111;font-size:22px;margin:0 0 20px 0;">
-      Edition 00 — Private Access Now Open
-    </h2>
+  <!-- Hero Image -->
+  <div style="text-align:center;margin-bottom:24px;">
+    <img 
+      src="https://framerusercontent.com/images/G2p7Ep8Gm07WQuiOpA2frgrrB0.jpg?scale-down-to=128"
+      alt="Bolaji Editions — Edition 00"
+      style="max-width:100%;height:auto;border-radius:8px;"
+    />
+  </div>
 
-    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
-      Hi ${name.split(" ")[0]},<br><br>
-      We’re excited to invite you to reserve <strong>Bolaji Edition&nbsp;00</strong> — 
-      the inaugural release in our ongoing exploration of art, form, and design.<br><br>
-      As part of our waitlist community, you have <b>exclusive early access</b> before the public release.
-      This private access is protected by a password.
+  <!-- Header -->
+  <h2 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#111;font-size:22px;margin:0 0 16px 0;">
+    You’re the First to Know
+  </h2>
+
+  <!-- Subheader -->
+  <h3 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;color:#444;font-size:18px;margin:0 0 24px 0;">
+    Bolaji Editions begins here
+  </h3>
+
+  <!-- Intro -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
+    Hi ${name.split(" ")[0]},<br><br>
+    We’re excited to invite you to reserve <strong>Bolaji&nbsp;Edition&nbsp;00</strong> — the inaugural release
+    in <strong>Bolaji’s ongoing exploration of art, form, and design.</strong><br><br>
+    You’re receiving this as part of our <strong>waitlist community</strong>, meaning you’re one of the first to know:
+  </p>
+
+  <!-- Context -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
+    <strong>Bolaji&nbsp;Editions</strong> is a new monthly art publication direct from the studio of multidisciplinary artist 
+    <strong>Adébayo&nbsp;Bolaji</strong>.
+  </p>
+
+  <!-- List -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
+    Each month offers a singular, curated experience of:
+  </p>
+  <ul style="font-family:Inter,Arial,sans-serif;font-size:15px;color:#222;line-height:1.8;margin:0 0 20px 20px;padding:0;">
+    <li>Poetic writings not published anywhere else</li>
+    <li>QR-coded video content including performances, teachings, and interviews</li>
+    <li>Short films, visual artworks, and exclusive sound</li>
+    <li>Artistic encounters you won’t find on social media or streaming platforms</li>
+  </ul>
+
+  <!-- Edition Info -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
+    <strong>Edition&nbsp;00</strong> is a one-time-only print release — limited to just <strong>300&nbsp;physical&nbsp;copies</strong> — 
+    and acts as the gateway into this world. It includes <em>Part&nbsp;One</em> of Bolaji’s new  <strong>“100&nbsp;People”</strong> short film 
+   titled <strong>"What we reach for"</strong>, only viewable via this Edition.
+  </p>
+
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
+    This is early private access before subscriptions open publicly on <strong>November&nbsp;9th</strong>, 
+    when the full monthly digital and physical editions begin with <strong>Edition&nbsp;01</strong>.
+  </p>
+
+  <!-- Password Block -->
+  <div style="text-align:center;margin:32px 0;">
+    <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:8px;">
+      Use the password below to enter the private preorder portal and secure your copy:
     </p>
-
-    <div style="text-align:center;margin:28px 0;">
-      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:8px;">
-        Use the password below to enter the private preorder portal:
-      </p>
-      <div style="display:inline-block;background:#111;color:#fff;padding:12px 24px;
-                  border-radius:8px;font-weight:600;letter-spacing:1.2px;font-size:16px;
-                  font-family:Inter,Arial,sans-serif;">
-        ${password}
-      </div>
+    <div style="display:inline-block;background:#111;color:#fff;padding:12px 24px;
+                border-radius:8px;font-weight:600;letter-spacing:1.2px;font-size:16px;
+                font-family:Inter,Arial,sans-serif;">
+      ${password}
     </div>
+  </div>
 
-    <div style="text-align:center;margin:32px 0;">
-      <a href="${preorderLink}" 
-         style="background:#6C63FF;color:#fff;text-decoration:none;
-                padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;
-                font-size:15px;display:inline-block;font-weight:500;">
-         Enter Private Access Page →
-      </a>
-    </div>
+  <!-- CTA -->
+  <div style="text-align:center;margin:32px 0;">
+    <a href="${preorderLink}" 
+       style="background:#6C63FF;color:#fff;text-decoration:none;
+              padding:14px 32px;border-radius:6px;font-family:Inter,Arial,sans-serif;
+              font-size:15px;display:inline-block;font-weight:500;">
+       Enter Private Access Page →
+    </a>
+  </div>
 
-    <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;margin:0 0 14px;">
-      Each edition celebrates creative craftsmanship across digital and physical mediums. 
-      Secure your copy today — limited quantities available.
-    </p>
+  <!-- Outro -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
+    This is not just a magazine. It’s a living archive — an artist’s internal studio shared through paper, 
+    performance, and poetic thought.<br><br>
+    <strong>Secure your copy today.</strong> Only 300 available.
+  </p>
 
-    <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:12px 0 0;">
-      With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>
-    </p>
+  <!-- Signature -->
+  <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:20px 0 0;">
+    With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+  </p>
   `,
     ),
 
@@ -390,9 +439,57 @@ export const templates: {
       </p>
     `,
     ),
+  [EmailType.EDITION_00_DIGITAL_RELEASE]: ({
+    name,
+    accessLink,
+    subscribeLink,
+  }) =>
+    wrap(
+      "Your Access to Bolaji Editions 0.0 Is Now Live",
+      `
+    <h1 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;font-size:28px;margin-bottom:18px;color:#111;text-align:center;">
+      Welcome — Your Digital Experience Begins Now
+    </h1>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+      Hi ${name.split(" ")[0]},
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+      We’re delighted to let you know that your access to <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now live and ready to explore.
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+      This inaugural edition marks the beginning of something entirely new — a monthly art publication blending physical and digital form, straight from the studio of multidisciplinary artist <strong>Adébayo&nbsp;Bolaji</strong>.
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+      If you’ve already subscribed to the ongoing series, <strong>Edition&nbsp;0.1</strong> will unlock on <strong>1&nbsp;December</strong>.
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:24px;">
+      If you haven’t subscribed yet, we’d love for you to continue the journey. Discover what’s next in this first-of-its-kind monthly publication — rich with artwork, writings, film, music, interviews and more.
+    </p>
+
+    <div style="text-align:center;margin-top:36px;">
+      <a href="${accessLink}" style="display:inline-block;background:#6C63FF;color:#fff !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:'Courier New',Courier,monospace;">
+        Access My Edition 0.0
+      </a>
+      ${
+        subscribeLink
+          ? `<a href="${subscribeLink}" style="display:inline-block;background:#F1F0FF;color:#111 !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:'Courier New',Courier,monospace;margin-left:8px;">
+              Subscribe for Ongoing Editions
+            </a>`
+          : ""
+      }
+    </div>
+    `,
+    ),
 };
 
 export const subjects: Record<EmailType, string> = {
+  [EmailType.EDITION_00_DIGITAL_RELEASE]:
+    "Your Access to Bolaji Editions 0.0 Is Now Live",
   [EmailType.REGISTER]: "Welcome to Bolaji Editions — your account is ready!",
   [EmailType.PREORDER_CONFIRMATION]: "Your Edition preorder is confirmed!",
   [EmailType.PAYMENT_FAILED]: "Payment issue — please update your details",

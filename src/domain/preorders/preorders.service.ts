@@ -74,65 +74,48 @@ export class PreordersService {
     );
 
     // 1️⃣ Find the user's paid preorder for Edition 00
-    const preorder = await this.db.preorder.findFirst({
+    const edtionAccess = await this.db.editionAccess.findFirst({
       where: {
         userId,
-        status: OrderStatus.PAID,
         edition: {
-          number: 0, // safer than code hard-string
+          number: 0, // safer than code hard-string,
+          // releaseDate: {
+          //   lte: new Date(),
+          // },
         },
       },
       include: {
-        edition: {
-          include: {
-            editionAccess: {
-              where: { userId },
-            },
-          },
-        },
         user: true,
       },
     });
 
-    if (!preorder) {
-      logger.warn(
-        `[Preorder Service] No paid preorder found for user ${userId}`,
-      );
-      return null;
-    }
-
-    const access = preorder.edition.editionAccess[0];
-    if (!access) {
+    if (!edtionAccess) {
       logger.warn(
         `[Preorder Service] No edition access record for user ${userId}`,
       );
-      return null;
+      return false;
     }
 
     // 2️⃣ Enforce expiry (Edition 00 → 1 year)
     const now = new Date();
-    if (isAfter(now, access.expiresAt)) {
+    if (isAfter(now, edtionAccess.expiresAt)) {
       logger.warn(`[Preorder Service] Access expired for user ${userId}`);
-      return null;
+      return false;
     }
 
     // 3️⃣ Optionally check status
-    if (access.status !== AccessStatus.ACTIVE) {
+    if (edtionAccess.status !== AccessStatus.ACTIVE) {
       logger.warn(
-        `[Preorder Service] Access not active (status=${access.status}) for user ${userId}`,
+        `[Preorder Service] Access not active (status=${edtionAccess.status}) for user ${userId}`,
       );
-      return null;
+      return false;
     }
 
     logger.info(
-      `[Preorder Service] Valid Edition 00 access found: preorderId=${preorder.id}, expiresAt=${access.expiresAt.toISOString()}`,
+      `[Preorder Service] Valid Edition 00 access found: accessId=${edtionAccess.id}, expiresAt=${edtionAccess.expiresAt.toISOString()}`,
     );
 
-    return {
-      preorderId: preorder.id,
-      expiresAt: access.expiresAt,
-      user: preorder.user,
-    };
+    return true;
   };
 
   markAsFailed = async ({
@@ -753,13 +736,18 @@ export class PreordersService {
       });
       // Preorders unlock novemeber 9th 2025 9AM
       if (!existingAccess) {
-        const unlockAt = new Date("2025-11-09T09:00:00.000Z");
+        const edition = await tx.edition.findUnique({
+          where: {
+            id: editionId,
+          },
+        });
 
         await tx.editionAccess.create({
           data: {
             editionId,
             userId,
-            unlockAt,
+            unlockAt:
+              edition?.releaseDate || edition?.preorderOpenAt || new Date(),
             status: AccessStatus.SCHEDULED,
             expiresAt: addYears(Date.now(), 1),
           },

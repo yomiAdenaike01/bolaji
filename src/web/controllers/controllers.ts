@@ -8,6 +8,7 @@ import { SubscriptionsController } from "./subscriptions.controller";
 import { Config } from "@/config";
 import { Store } from "@/infra";
 import { ScreenController } from "./screen.controller";
+import { FaqController } from "./faq.controller";
 
 export const initControllers = (
   store: Store,
@@ -22,6 +23,7 @@ export const initControllers = (
     subscriptions: new SubscriptionsController(domain),
     screens: new ScreenController(config, domain),
     integrations,
+    faqs: new FaqController(),
     stripePaymentWebhook: createStripePaymentWebhook(integrations, domain),
   };
 };

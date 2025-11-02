@@ -5,22 +5,21 @@ import {
   createUserPreorderInputSchema,
   shoudlValidateShippingAddress,
 } from "@/domain/schemas/preorder";
+import { shippingAddressSchema } from "@/domain/schemas/users";
+import { DecodedJwt } from "@/domain/session/session";
 import { PlanType, UserStatus } from "@/generated/prisma/enums";
 import { Store } from "@/infra";
 import { logger } from "@/lib/logger";
-import { createDeviceFingerprint, getRequestUserAgent, hash } from "@/utils";
-import { Request, Response } from "express";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { NextFunction, Request, Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
 import jwt from "jsonwebtoken";
-import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { DecodedJwt } from "@/domain/session/session";
-import { shippingAddressSchema } from "@/domain/schemas/users";
-import crypto from "crypto";
-import bcrpyt from "bcrypt";
-import { getThankYouPage } from "../templates/getPreorderThankyouPage";
 import z from "zod";
+import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
+import { getThankYouPage } from "../templates/getPreorderThankyouPage";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils";
+import { getNoAccessPage } from "../templates/getNoAccessPage";
 export class PreorderController {
   constructor(
     private readonly store: Store,
@@ -58,7 +57,7 @@ export class PreorderController {
     const html = getThankYouPage({
       name: parsed.userName,
       plan: parsed.plan,
-      redirectUrl: `${this.config.frontEndUrl}/subscribe`,
+      redirectUrl: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
     });
 
     res.setHeader("Content-Type", "text/html");
@@ -73,7 +72,10 @@ export class PreorderController {
     const { token } = req.query;
 
     if (!token) {
-      return res.status(StatusCodes.BAD_REQUEST).send("Missing token");
+      const html = getNoAccessPage();
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+      return;
     }
 
     try {
@@ -308,26 +310,33 @@ export class PreorderController {
       const userId = await this.domain.session.getUserIdOrThrow(
         (req as any).sessionId,
       );
-      const preorder =
+      const canAccess =
         await this.domain.preorders.canAccessPreorderEdition(userId);
-      if (!preorder || !preorder.user?.name)
+      if (!canAccess)
         throw createHttpError.Unauthorized(
           "Failed to find access to preorder edition",
         );
-      res.status(200).json({ name: preorder.user.name });
+      res.status(StatusCodes.OK).json({ granted: canAccess });
     } catch (error) {
       return createHttpError.Unauthorized("User is not authenticated");
     }
   };
-  handleCanAccessPreorder = async (req: Request, res: Response) => {
+  handleCanAccessPreorder = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
     try {
       const userId = await this.domain.session.getUserIdOrThrow(
         (req as any).sessionId,
       );
-      const canAccess =
-        await this.domain.preorders.canAccessPreorderEdition(userId);
-      res.status(200).json({ result: !!canAccess });
-    } catch (error) {}
+      const accessRegister =
+        await this.domain.editions.getUserEditionAccess(userId);
+      const canAccess = accessRegister.some((r) => r.edition.code === "ED00");
+      res.status(200).json({ granted: canAccess });
+    } catch (error) {
+      next(error);
+    }
   };
   private shouldAssertAddress = (
     choice: PlanType,

@@ -73,6 +73,7 @@ export type AdminEmailContent = {
 };
 
 export enum EmailType {
+  EDITION_00_DIGITAL_RELEASE = "EDITION_00_DIGITAL_RELEASE",
   SUBSCRIPTION_FAILED_TO_START = "SUBSCRIPTION_FAILED_TO_START", // 👈 NEW
   REGISTER = "REGISTER",
   PREORDER_CONFIRMATION = "PREORDER_CONFIRMATION",
@@ -86,6 +87,11 @@ export enum EmailType {
 }
 
 export interface EmailContentMap {
+  [EmailType.EDITION_00_DIGITAL_RELEASE]: {
+    name: string;
+    accessLink: string;
+    subscribeLink: string;
+  };
   [EmailType.SUBSCRIPTION_FAILED_TO_START]: {
     name: string;
     email: string;

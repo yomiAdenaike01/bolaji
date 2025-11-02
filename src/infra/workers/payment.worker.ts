@@ -285,7 +285,7 @@ export class PaymentWorker {
         name: subscription.user.name,
         email: subscription.user.email,
         reason: paymentEvent.reason,
-        resetLink: `${this.config.frontEndUrl}/subscribe`,
+        resetLink: `${this.config.frontEndUrl}/edition.00/payment`,
       },
     });
   };

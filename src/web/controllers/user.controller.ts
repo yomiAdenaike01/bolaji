@@ -9,13 +9,21 @@ import createHttpError from "http-errors";
 
 export class UserController {
   constructor(private readonly domain: Domain) {}
-  handleGetUserAddreses = async (req: Request, res: Response) => {
-    const userId = await this.domain.session.getUserIdOrThrow(
-      (req as any).sessionId,
-    );
-    const address = await this.domain.user.findUserAddreses(userId);
-    res.status(200).json(address);
-    return;
+  handleGetUserAddreses = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const userId = await this.domain.session.getUserIdOrThrow(
+        (req as any).sessionId,
+      );
+      const address = await this.domain.user.findUserAddreses(userId);
+      res.status(200).json(address);
+      return;
+    } catch (error) {
+      next(error);
+    }
   };
   public getUserIdOrUnauthorised = async (req: Request) => {
     const userId = await this.domain.session.getUserIdOrThrow(

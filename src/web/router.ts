@@ -1,19 +1,20 @@
 import bodyParser from "body-parser";
 import express, {
-  Request,
-  Response,
   Application,
   NextFunction,
+  Request,
+  Response,
   Router,
 } from "express";
-import { StatusCodes } from "http-status-codes";
-import { Controllers, PaymentsWebhookHandler } from "./controllers/controllers";
-import { SubscriptionsController } from "./controllers/subscriptions.controller";
-import { PreorderController } from "./controllers/preorder.controller";
-import { UserController } from "./controllers/user.controller";
-import { AuthController } from "./controllers/auth.controller";
 import createHttpError from "http-errors";
-import { AuthGuard, initTokenAuthGuard } from "./middleware";
+import { StatusCodes } from "http-status-codes";
+import { AuthController } from "./controllers/auth.controller";
+import { Controllers, PaymentsWebhookHandler } from "./controllers/controllers";
+import { FaqController } from "./controllers/faq.controller";
+import { PreorderController } from "./controllers/preorder.controller";
+import { SubscriptionsController } from "./controllers/subscriptions.controller";
+import { UserController } from "./controllers/user.controller";
+import { AuthGuard } from "./middleware";
 
 const authGuard =
   (userController: UserController) =>
@@ -26,11 +27,17 @@ const authGuard =
     }
   };
 
-const makeAuthRouter = (authController: AuthController) => {
+const makeAuthRouter = (
+  authGuard: AuthGuard,
+  authController: AuthController,
+) => {
   const r = express.Router();
   r.post("/authenticate", authController.handleAuthenticateUser);
   r.get("/dev/authenticate", authController.handleDevAuth);
   r.post("/reset-password", authController.handleResetPassword);
+  r.get("/is-valid", authGuard, (req, res) => {
+    res.status(200).json({ isValid: true });
+  });
 
   return r;
 };
@@ -49,6 +56,12 @@ const makeUserRouter = (userController: UserController) => {
     userController.handleGetUserAddreses,
   );
 
+  return r;
+};
+
+const makeFaqsRouter = (faqController: FaqController) => {
+  const r = Router();
+  r.get("/", faqController.handleGetFaqs);
   return r;
 };
 
@@ -85,7 +98,7 @@ export const setupRouters = (
 ) => {
   const router = express.Router();
   // #region auth router
-  const authRouter = makeAuthRouter(controllers.auth);
+  const authRouter = makeAuthRouter(authGuard, controllers.auth);
   // #endregion
 
   // #region user router
@@ -105,7 +118,9 @@ export const setupRouters = (
     controllers.subscriptions,
   );
   //#endregion
+  const faqRouter = makeFaqsRouter(controllers.faqs);
 
+  router.use("/faqs", faqRouter);
   router.use("/subscriptions", subscriptionsRouter);
   router.use("/integrations", integrationsRouter);
   router.use("/auth", authRouter);

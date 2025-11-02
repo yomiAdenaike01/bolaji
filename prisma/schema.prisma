@@ -542,3 +542,10 @@ model StripeSubscriptionCheckoutMetadata {
   @@index([paymentIntentId])
   @@index([subscriptionId])
 }
+
+model SystemFlag {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

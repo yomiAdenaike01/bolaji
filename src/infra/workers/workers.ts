@@ -10,7 +10,12 @@ import { EditionsWorker } from "./editions.worker";
 export class JobWorkers {
   constructor(config: Config, db: Db, domain: Domain) {
     logger.info("[Workers] Initialising workers...");
-    new EmailWorker(db, config.redisConnectionUrl, domain.integrations.email);
+    new EmailWorker(
+      db,
+      config.redisConnectionUrl,
+      domain.integrations.email,
+      config,
+    );
     new PaymentWorker(config, domain, db);
     new EditionsWorker(config, domain, db);
   }

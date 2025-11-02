@@ -1,5 +1,7 @@
+import { PREORDER_OPENING_DATETIME } from "@/constants";
 import { logger } from "@/lib/logger";
 import { Queue } from "bullmq";
+import { differenceInMilliseconds } from "date-fns";
 export class JobsQueues {
   private emailQueue: Queue<any, any, string, any, any, string>;
   private stripePaymentsQueue: Queue<any, any, string, any, any, string>;
@@ -20,7 +22,30 @@ export class JobsQueues {
         url: connectionUrl,
       },
     });
+
+    this.addPreorderReleaseJob();
   }
+  private addPreorderReleaseJob = async () => {
+    const releaseDate = PREORDER_OPENING_DATETIME;
+    const now = new Date();
+
+    const delay = Math.max(differenceInMilliseconds(releaseDate, now), 0);
+
+    await this.emailQueue.add(
+      "email.edition00_release",
+      {},
+      {
+        delay,
+        removeOnComplete: true,
+        attempts: 3, // retry if something transient fails
+        backoff: { type: "exponential", delay: 60_000 },
+      },
+    );
+
+    logger.info(
+      `[Scheduler] Scheduled digital release email for ${releaseDate.toISOString()}`,
+    );
+  };
 
   add = async (jobName: string, data: any, options?: any) => {
     const [queueName] = jobName.split(".");
