@@ -23,7 +23,7 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   );
   return {
     preorders,
-    editions: new EditionsService(db, store),
+    editions: new EditionsService(db, store, jobQueues),
     session: new SessionService(appConfig, db, store),
     user: userService,
     auth: new AuthService(db, userService),

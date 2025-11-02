@@ -1,12 +1,47 @@
-import { AccessStatus } from "@/generated/prisma/enums";
+import { AccessStatus, EditionStatus, Hub } from "@/generated/prisma/enums";
 import { Db, Store } from "@/infra";
+import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { isBefore } from "date-fns";
+
+export type UserEditionAccess = {
+  user: {
+    name: string | null;
+    email: string;
+  };
+  edition: {
+    number: number;
+    id: string;
+    status: EditionStatus;
+    createdAt: Date;
+    updatedAt: Date;
+    code: string;
+    title: string;
+    releaseDate: Date | null;
+    hub: Hub | null;
+    isLimited: boolean;
+    maxCopies: number | null;
+    preorderOpenAt: Date | null;
+    preorderCloseAt: Date | null;
+    releasedAt: Date | null;
+  };
+} & {
+  id: string;
+  status: AccessStatus;
+  userId: string;
+  editionId: string;
+  unlockedAt: Date | null;
+  unlockAt: Date;
+  subscriptionId: string | null;
+  grantedAt: Date;
+  expiresAt: Date;
+};
 
 export class EditionsService {
   readonly CACHE_TTL_SECONDS = 600;
   constructor(
     private readonly db: Db,
     private readonly store: Store,
+    private readonly jobQueues: JobsQueues,
   ) {}
 
   /**
@@ -69,7 +104,7 @@ export class EditionsService {
       for (const a of unlockedNow) {
         const user = a.user;
         if (!user?.email) continue;
-
+        this.jobQueues.add("email.new_edition_release", a);
         // sendEmail({
         //   to: user.email,
         //   subject: `Your Bolaji Edition ${a.edition.number} is now live ✨`,

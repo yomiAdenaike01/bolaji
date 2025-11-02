@@ -20,6 +20,18 @@ export class AuthController {
     private readonly store: Store,
   ) {}
 
+  handleResetPassword = async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      await this.domain.auth.updatePasswordByEmail({ email, password });
+      res.status(StatusCodes.OK).json({ success: true });
+    } catch (error) {
+      res
+        .status(StatusCodes.UNAUTHORIZED)
+        .json({ error: "Failed to reset password" });
+    }
+  };
+
   handleRefreshAccessToken = async (req: Request, res: Response) => {
     const accessToken = String(
       req.headers.authorization?.split("Bearer ")?.[1].trim(),
@@ -103,7 +115,7 @@ export class AuthController {
         deviceId: user.deviceId,
       });
 
-      res.status(200).json({ user, jwtPair });
+      res.status(200).json({ user, accessToken: jwtPair.accessToken });
     } catch (error) {
       logger.error(
         error,

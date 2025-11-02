@@ -16,6 +16,24 @@ export class AuthService {
     private readonly db: Db,
     private readonly userService: UserService,
   ) {}
+  updatePasswordByEmail = async ({
+    email,
+    password,
+  }: {
+    email: string;
+    password: string;
+  }) => {
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await this.db.user.update({
+      where: {
+        email,
+      },
+      data: {
+        passwordHash: hashed,
+      },
+    });
+    if (!user) throw new Error("User not found");
+  };
   authenticateUser = async (input: {
     principal: string;
     password: string;

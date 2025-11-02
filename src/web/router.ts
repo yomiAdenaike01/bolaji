@@ -30,6 +30,8 @@ const makeAuthRouter = (authController: AuthController) => {
   const r = express.Router();
   r.post("/authenticate", authController.handleAuthenticateUser);
   r.get("/dev/authenticate", authController.handleDevAuth);
+  r.post("/reset-password", authController.handleResetPassword);
+
   return r;
 };
 
