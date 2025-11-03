@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { IntegrationsController } from "./integrations.controller";
 import { createErrorResponse } from "./utils";
+import { PaymentEvent } from "@/infra/integrations/checkout.dto";
 
 export class WebhookController {
   constructor(
@@ -134,7 +135,7 @@ export class WebhookController {
   // };
 
   handle = () => async (req: Request, res: Response) => {
-    let paymentEvent = null;
+    let paymentEvent: PaymentEvent | null = null;
     try {
       paymentEvent = await this.integrationsCtrl.handlePaymentEvents(req, res);
       if (!paymentEvent) {

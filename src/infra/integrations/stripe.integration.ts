@@ -553,7 +553,7 @@ export class StripeIntegration {
       );
     } catch (error) {
       logger.error(
-        `Failed to handle stripe event type=${reqBody?.type || "no type found"}`,
+        `Failed to handle stripe event type=${(reqBody as any)?.type || "no type found"}`,
       );
       return null;
     }
@@ -674,7 +674,9 @@ export class StripeIntegration {
   };
   private handleAsyncPaymentComplete(
     event: Stripe.CheckoutSessionAsyncPaymentSucceededEvent,
-  ) {}
+  ) {
+    return null;
+  }
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {
@@ -707,17 +709,17 @@ export class StripeIntegration {
     };
   };
   private handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
-    throw new Error("Method not implemented.");
+    return null;
   }
   private handleInvoiceSuccess(event: Stripe.InvoicePaymentSucceededEvent) {
-    throw new Error("Method not implemented.");
+    return null;
   }
   private handleInvoiceFailed(event: Stripe.InvoicePaymentFailedEvent) {
-    throw new Error("Method not implemented.");
+    return null;
   }
   private handleSubscriptionCanceled(
     event: Stripe.CustomerSubscriptionDeletedEvent,
   ) {
-    throw new Error("Method not implemented.");
+    return null;
   }
 }
