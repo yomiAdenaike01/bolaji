@@ -10,5 +10,6 @@ module.exports = defineConfig({
   datasource: {
     url: env('DATABASE_URL'),
     directUrl: env('DIRECT_URL'),
+    extensions: { pgbouncer: true }, // 👈 Prisma handles Supabase pooling
   },
 });
