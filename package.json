@@ -4,12 +4,13 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
+    "build": "tsc && tsc-alias",
+    "migrate:prod": "prisma migrate deploy",
     "exec:waitlist-release": "yarn ts-node -r tsconfig-paths/register src/scripts/send-waitlist-emails.ts",
     "proxy": "ngrok http --region=us --hostname=bolaji-api-playground.ngrok.io --host-header=rewrite 3400",
     "dev": "nodemon",
-    "build": "tsc",
     "start": "node dist/main.js",
-    "start:prod": "node -r tsconfig-paths/register dist/main.js"
+    "start:prod": "node -r tsconfig-paths/register ./dist/main.js"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -28,6 +29,7 @@
     "prettier": "^3.6.2",
     "prisma": "^6.18.0",
     "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "zod": "^4.1.12"
