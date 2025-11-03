@@ -1,6 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
 export const initConfig = () => {
   return {
-    port: +(process.env.PORT || 0),
+    port: +(process.env.PORT || 3400),
     secret: String(process.env.SESSION_SECRET),
     jwtSecret: process.env.JWT_SECRET || "",
     maxAge: +(process.env.MAX_AGE || 0),
