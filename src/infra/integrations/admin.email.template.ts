@@ -105,13 +105,7 @@ export const adminEmailTemplates: {
       <p><b>Name:</b> ${name}</p>
       <p><b>Email:</b> ${email}</p>
       ${renderAddress(address)}
-      `,
-      [
-        {
-          label: "View User",
-          url: `https://api.bolaji-editions.com/admin/users?email=${email}`,
-        },
-      ],
+      `
     ),
 
   [AdminEmailType.NEW_PREORDER]: ({

@@ -61,7 +61,7 @@ export class SubscriptionsController {
     const { error, data: subscriptionsInput } =
       createSubscriptionInputSchema.safeParse({
         ...req.body,
-        userId: await this.domain.session.getUserId(
+        userId: req.body.userId || await this.domain.session.getUserId(
           (req as any).sessionId,
         ),
       });
@@ -81,8 +81,9 @@ export class SubscriptionsController {
     } catch (error) {
       logger.error(error,'[SubscriptionController] Failed to start subscription')
       if (error instanceof SubscriptionAlreadyActiveError) {
-        res.status(StatusCodes.CONFLICT).json({error:"Subscription already active"})
+       return res.status(StatusCodes.CONFLICT).json({error:"Subscription already active"})
       }
+      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error:"Failed to start subscription"})
     }
   };
 }

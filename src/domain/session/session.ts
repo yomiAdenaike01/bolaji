@@ -37,9 +37,10 @@ export class SessionService {
     private readonly db: Db,
     private readonly store: Store,
   ) {}
-  getUserId = (sessionId: string)=> {
+  getUserId = async (sessionId: string)=> {
     try {
-      return this.getUserIdOrThrow(sessionId) 
+      const uid = await this.getUserIdOrThrow(sessionId) 
+      return uid
     } catch (error) {
       return null
     }

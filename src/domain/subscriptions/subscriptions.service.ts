@@ -105,6 +105,7 @@ export class SubscriptionsService {
       subscriptionPlanId,
       stripeInvoiceId,
       addressId,
+      isNewSubscription = false
     } = params;
 
     const result = await this.db.$transaction(async (tx) => {
@@ -242,10 +243,11 @@ export class SubscriptionsService {
       );
       return { updatedSubscription, nextEdition };
     });
+    if (isNewSubscription)
     await this.db.user.update({
       where: {
         id: result.updatedSubscription.user.id,
-        status: UserStatus.PENDING_SUBSCRIPTION,
+        status: {not:UserStatus.ACTIVE},
       },
       data: {
         status: UserStatus.ACTIVE,
@@ -355,10 +357,10 @@ export class SubscriptionsService {
       // 2️⃣ Validate address if provided
       if (input.addressId) {
         logger.info(
-          `[Subscription Service] Validating address id=${input.addressId} for userId=${input.userId}`,
+          `[Subscription Service] Validating address id=${input.addressId} for userId=${userId}`,
         );
         await this.db.address.findUniqueOrThrow({
-          where: { id: input.addressId, userId: input.userId },
+          where: { id: input.addressId, userId },
         });
       }
 

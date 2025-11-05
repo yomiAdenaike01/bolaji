@@ -6,7 +6,7 @@ export const createSubscriptionInputSchema = z.object({
   name: z.string(),
   email: z.string(),
   addressId: z.string().optional(),
-  userId: z.string().optional(),
+  userId: z.string().optional().nullable(),
   plan: z.enum(PlanType),
   address: shippingAddressSchema.optional(),
 });
@@ -51,6 +51,7 @@ export const updateSubscriptionInputSchema = z.object({
   subscriptionPlanId: z.string().min(1),
   stripeInvoiceId: z.string().optional(),
   addressId: z.string().optional(),
+  isNewSubscription: z.boolean().optional()
 });
 
 export const onCreateSubscriptionInputSchema = z.object({

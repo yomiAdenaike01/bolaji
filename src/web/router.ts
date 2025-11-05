@@ -59,7 +59,7 @@ const makeSubscriptionsRouter = (
   r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
   r.post(
     "/create",
-    authGuard,
+    // authGuard,
     subscriptionsController.handleCreateSubscription,
   );
   r.get(

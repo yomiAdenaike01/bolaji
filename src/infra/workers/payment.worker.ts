@@ -151,6 +151,7 @@ export class PaymentWorker {
           stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
           subscriptionPlanId: paymentEvent.subscriptionPlanId,
           stripeInvoiceId: paymentEvent.stripeInvoiceId,
+          isNewSubscription: paymentEvent.isNewSubscription
         });
 
       const { user, plan } = updatedSubscription;

@@ -604,13 +604,15 @@ export class StripeIntegration {
       // 🟢 Subscription lifecycle
       case "customer.subscription.created": {
         // First subscription creation (user just subscribed)
-        return this.constructSubscriptionCreatedData(event);
+        logger.info(`[StripeIntegration] Subscription created (id=${event.data.object.id}) — handled via checkout.session.completed.`);
+
+        return null
       }
 
       // 🟢 Renewal success
       case "invoice.payment_succeeded": {
         // Renewal payment succeeded → unlock next edition
-        return this.handleInvoiceSuccess(event);
+        return this.handleRollingSubscription(event);
       }
 
       // 🔴 Renewal failure (retry attempts start)
@@ -718,8 +720,47 @@ export class StripeIntegration {
   private handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
     return null;
   }
-  private handleInvoiceSuccess(event: Stripe.InvoicePaymentSucceededEvent) {
-    return null;
+  private handleRollingSubscription(event: Stripe.InvoicePaymentSucceededEvent): PaymentEvent | null {
+      const invoice = event.data.object;
+      // 🔍 Detect whether this is the *first* invoice for a new subscription
+      if (invoice.billing_reason === "subscription_create") {
+        logger.info(`[StripeIntegration] Skipping first-cycle invoice; handled by checkout.session.completed`);
+        return null;
+      }
+
+      // ✅ Continue only if it's a recurring renewal
+      const metadata = invoice.lines.data[0]?.metadata;
+      if (!metadata) {
+        logger.warn(`[StripeIntegration] No metadata found on invoice ${invoice.id}`);
+        return null;
+      }
+        const {
+          userId,
+          subscriptionId,
+          planId,
+          type,
+          eventId,
+        } = subscriptionSchema.parse({
+          ...metadata,
+          eventId: event.id,
+          isNewSubscription: false,
+        });
+        const stripeSubscriptionId = z.string().min(1).parse(event.data.object.parent?.subscription_details?.subscription)
+    return {
+      isNewSubscription: false,
+      success:true,
+      stripeEventType:event.type,
+      type,
+      userId,
+      rawPayload: JSON.stringify(event.data),
+      eventId: eventId,
+      orderType: type,
+      subscriptionId,
+      subscriptionPlanId: planId,
+      amount: event.data.object.amount_paid,
+      stripeInvoiceId: event.data.object.id,
+      stripeSubscriptionId,
+    }
   }
   private handleInvoiceFailed(event: Stripe.InvoicePaymentFailedEvent) {
     return null;
