@@ -189,7 +189,7 @@ export const getThankYouPage = ({
       We can’t wait for you to experience it.</p>
 
       <button class="primary" onclick="window.location.replace('${redirectUrl}')">
-        Return to Site
+        Go to subscriptions
       </button>
 
     <footer>© ${new Date().getFullYear()} Bolaji Editions</footer>

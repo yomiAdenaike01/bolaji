@@ -1,7 +1,8 @@
 import { PREORDER_OPENING_DATETIME } from "@/constants";
 import { logger } from "@/lib/logger";
 import { Queue } from "bullmq";
-import { differenceInMilliseconds } from "date-fns";
+import { randomUUID } from 'crypto';
+import { add, differenceInMilliseconds } from "date-fns";
 export class JobsQueues {
   private emailQueue: Queue<any, any, string, any, any, string>;
   private stripePaymentsQueue: Queue<any, any, string, any, any, string>;
@@ -23,18 +24,20 @@ export class JobsQueues {
       },
     });
 
-    this.addPreorderReleaseJob();
+    this.addPreorderOpeningJob();
+    this.addSendPreorderReminderJob();
   }
-  private addPreorderReleaseJob = async () => {
-    const releaseDate = PREORDER_OPENING_DATETIME;
+  private addSendPreorderReminderJob = async () => {
+    const reminder = add(PREORDER_OPENING_DATETIME, { days: 3 });
     const now = new Date();
 
-    const delay = Math.max(differenceInMilliseconds(releaseDate, now), 0);
+    const delay = Math.max(differenceInMilliseconds(reminder, now), 0);
 
     await this.emailQueue.add(
-      "email.edition00_release",
+      "email.preorder_reminder",
       {},
       {
+        jobId: `edition_00_release-reminder${reminder.toISOString()}`,
         delay,
         removeOnComplete: true,
         attempts: 3, // retry if something transient fails
@@ -43,7 +46,30 @@ export class JobsQueues {
     );
 
     logger.info(
-      `[Scheduler] Scheduled digital release email for ${releaseDate.toISOString()}`,
+      `[Scheduler] Scheduled reminder emails for preorder ${reminder.toISOString()}`,
+    );
+  };
+
+  private addPreorderOpeningJob = async () => {
+    const releaseDate = PREORDER_OPENING_DATETIME;
+    const now = new Date();
+
+    const delay = Math.max(differenceInMilliseconds(releaseDate, now), 0);
+
+    await this.emailQueue.add(
+      "email.preorders_open",
+      {},
+      {
+        jobId: `email.preorders_open`,
+        delay: 2000,
+        removeOnComplete: true,
+        attempts: 3, // retry if something transient fails
+        backoff: { type: "exponential", delay: 60_000 },
+      },
+    );
+
+    logger.info(
+      `[Scheduler] Scheduled preorder opening for ${releaseDate.toISOString()}`,
     );
   };
 

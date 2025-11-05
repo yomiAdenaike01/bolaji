@@ -7,6 +7,8 @@ import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 import { getSubscriptionThankYouPage } from "../templates/getSubscriptionThankyouPage";
 import { Config } from "@/config";
 import { getSubscriptionCancelPage } from "../templates/getSubscriptionCancelledPage";
+import { SubscriptionAlreadyActiveError } from '@/domain/subscriptions/subscriptions.service';
+import { logger } from '@/lib/logger';
 
 export class SubscriptionsController {
   constructor(
@@ -55,10 +57,11 @@ export class SubscriptionsController {
    * POST - /api/subscriptions/create
    */
   handleCreateSubscription = async (req: Request, res: Response) => {
+    try {
     const { error, data: subscriptionsInput } =
       createSubscriptionInputSchema.safeParse({
         ...req.body,
-        userId: await this.domain.session.getUserIdOrThrow(
+        userId: await this.domain.session.getUserId(
           (req as any).sessionId,
         ),
       });
@@ -75,5 +78,11 @@ export class SubscriptionsController {
     });
 
     res.status(StatusCodes.OK).json({ url: checkoutUrl });
+    } catch (error) {
+      logger.error(error,'[SubscriptionController] Failed to start subscription')
+      if (error instanceof SubscriptionAlreadyActiveError) {
+        res.status(StatusCodes.CONFLICT).json({error:"Subscription already active"})
+      }
+    }
   };
 }

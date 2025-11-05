@@ -43,7 +43,7 @@ export class EmailIntegration {
       const emailContent = this.getEmailTemplate(type, input.content);
 
       const response = await this.integration.emails.send({
-        from: this.sourceEmailAddr,
+        from: `Bolaji Editions - <${this.sourceEmailAddr}>`,
         to: email,
         html: emailContent.template,
         subject: subject || emailContent.subject,

@@ -14,6 +14,7 @@ export class JobWorkers {
       db,
       config.redisConnectionUrl,
       domain.integrations.email,
+      domain.integrations.adminEmail,
       config,
     );
     new PaymentWorker(config, domain, db);

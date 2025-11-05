@@ -31,11 +31,19 @@ interface JwtPair {
 }
 
 export class SessionService {
+  
   constructor(
     private readonly config: Config,
     private readonly db: Db,
     private readonly store: Store,
   ) {}
+  getUserId = (sessionId: string)=> {
+    try {
+      return this.getUserIdOrThrow(sessionId) 
+    } catch (error) {
+      return null
+    }
+  }
   setUserId = (sessionId: any, userId: string): any => {
     return this.updateSessionProperty(sessionId, { userId });
   };
@@ -43,7 +51,7 @@ export class SessionService {
     return this.updateSessionProperty(sessionId, { email });
   }
   setLoginInfo = async (
-    sessionId: string,
+    sessionId: string | undefined = randomUUID(),
     sess: {
       userId: string;
       email: string;
@@ -112,9 +120,11 @@ export class SessionService {
       },
     );
 
-    const key = `auth:refresh:${hash(userId)}:${sessionId}`;
+    const key = `auth:refresh:${userId}:${sessionId}`;
     const ttlSeconds = 7 * 24 * 60 * 60;
-    this.store.set(key, refreshToken, { EX: ttlSeconds });
+    this.store.setEx(key, ttlSeconds, refreshToken).catch(err=>{
+      logger.error(err,'[Session] Failed to save refresh token')
+    });
 
     logger.info(`[Session] Issued JWT pair for userId - ${userId}`);
     return { accessToken, refreshToken };
@@ -163,7 +173,7 @@ export class SessionService {
     if (!decoded?.sub || !decoded?.sessionId)
       throw createHttpError.Unauthorized("Invalid access token");
 
-    const redisKey = `auth:refresh:${hash(decoded.sub)}:${decoded.sessionId}`;
+    const redisKey = `auth:refresh:${decoded.sub}:${decoded.sessionId}`;
     const storedRefresh = await this.store.get(redisKey);
     if (!storedRefresh)
       throw createHttpError.Unauthorized("No refresh token available");

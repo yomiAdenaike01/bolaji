@@ -15,6 +15,7 @@ export type PaymentEvent = {
   orderId?: string;
   redirectUrl?: string | null;
   isNewSubscription?: boolean | null;
+  quantity?:number
 } & (
   | {
       orderType: OrderType;

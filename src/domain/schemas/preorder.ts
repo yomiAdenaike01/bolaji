@@ -31,18 +31,17 @@ export const createPreorderSchema = z.object({
 });
 
 export const createUserPreorderInputSchema = createUserSchema
-  .omit({
-    deviceFingerprint: true,
-    userAgent: true,
-    password: true,
-  })
-  .extend(
-    createPreorderSchema.pick({
+  .extend({
+    deviceFingerprint: createUserSchema.shape.deviceFingerprint.optional(),
+    userAgent: createUserSchema.shape.userAgent.optional(),
+    password: createUserSchema.shape.password.optional(),
+    ...createPreorderSchema.pick({
       choice: true,
       quantity: true,
     }).shape,
-  )
+  })
   .superRefine(shoudlValidateShippingAddress);
+
 
 export type CreatePreorderInput = z.infer<typeof createPreorderSchema>;
 export type CreateUserPreorderInput = z.infer<

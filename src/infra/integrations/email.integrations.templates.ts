@@ -201,7 +201,7 @@ export const templates: {
   <!-- Hero Image -->
   <div style="text-align:center;margin-bottom:24px;">
     <img 
-      src="https://framerusercontent.com/images/G2p7Ep8Gm07WQuiOpA2frgrrB0.jpg?scale-down-to=128"
+      src="https://framerusercontent.com/images/G2p7Ep8Gm07WQuiOpA2frgrrB0.jpg?scale-down-to=400&width=300&height=300"
       alt="Bolaji Editions — Edition 00"
       style="max-width:100%;height:auto;border-radius:8px;"
     />
@@ -313,28 +313,58 @@ export const templates: {
     );
   },
 
-  [EmailType.PREORDER_CONFIRMATION]: ({ name, editionCode, plan }) =>
-    wrap(
-      "Your Preorder is Confirmed",
-      `
-      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
-        Thank you, ${name.split(" ")[0]}!
-      </h2>
-      <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 12px;">
-        Your preorder for <strong>Bolaji Edition&nbsp;${editionCode}</strong> is now confirmed.
-      </p>
-      <p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;line-height:1.6;">
-        ${
-          plan === PlanType.DIGITAL
-            ? `You’ll receive an email when the digital edition releases.`
-            : `We’ll notify you when your physical edition is prepared for shipment.`
-        }
-      </p>
-      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
-        — The Bolaji&nbsp;Editions Team
-      </p>
-    `,
-    ),
+[EmailType.PREORDER_CONFIRMATION]: ({
+  name,
+  editionCode,
+  plan,
+  newPassword,
+}) =>
+  wrap(
+    "Your Preorder is Confirmed",
+    `
+    <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
+      Thank you, ${name.split(" ")[0]}!
+    </h2>
+
+    <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 12px;">
+      Your preorder for <strong>Bolaji Edition&nbsp;${editionCode}</strong> is now confirmed.
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;color:#555;font-size:14px;line-height:1.6;margin:0 0 16px;">
+      ${
+        plan === PlanType.DIGITAL
+          ? `You’ll receive an email as soon as the digital edition releases.`
+          : `We’ll notify you when your physical edition is being prepared for shipment.`
+      }
+    </p>
+
+    ${
+      newPassword
+        ? `
+        <div style="background:#F8F8F8;border-radius:8px;padding:16px 20px;margin:20px 0;">
+          <p style="font-family:Inter,Arial,sans-serif;color:#111;font-size:15px;margin:0 0 6px;">
+            An account has been created for you to manage your editions and access future releases.
+          </p>
+          <p style="font-family:Inter,Arial,sans-serif;color:#333;font-size:14px;margin:0;">
+            <strong>Your temporary password:</strong>
+            <span style="display:inline-block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-family:monospace;font-size:14px;margin-left:6px;">
+              ${newPassword}
+            </span>
+          </p>
+          <p style="font-family:Inter,Arial,sans-serif;color:#666;font-size:13px;margin-top:8px;">
+            You can change your password anytime from your account settings after logging in.
+          </p>
+        </div>
+        `
+        : ""
+    }
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+      — The Bolaji&nbsp;Editions Team
+    </p>
+  `
+  ),
+
 
   [EmailType.PAYMENT_FAILED]: ({ name, reason }) =>
     wrap(

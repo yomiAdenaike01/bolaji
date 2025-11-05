@@ -163,6 +163,7 @@ export class StripeIntegration {
       stripeEventType: "payment_intent.payment_failed",
       orderType: OrderType.PREORDER,
       type: OrderType.PREORDER,
+      quantity: +meta.quantity || 1,
       plan: (meta.plan as PlanType) ?? PlanType.DIGITAL,
       editionId: meta.editionId ?? "",
       addressId: meta.addressId ?? null,
@@ -261,11 +262,13 @@ export class StripeIntegration {
           amount,
           eventId,
           paymentLinkId,
+          quantity
         } = preorderSchema.parse({
           ...metadata,
           amount: orderTotal,
           eventId: event.id,
           paymentLinkId: session.payment_link,
+          quantity: +(metadata.quantity || 1)
         });
 
         logger.info(
@@ -284,6 +287,7 @@ export class StripeIntegration {
           eventId,
           amount,
           type,
+          quantity,
           paymentLinkId,
         };
       }
@@ -342,6 +346,7 @@ export class StripeIntegration {
     addressId: string | null;
     redirectUrl: string;
     preorderId: string;
+    quantity?: number
   }) => {
     logger.info(
       `[StripeIntegration] Creating preorder payment link for userId=${opts.userId}, editionId=${opts.editionId}, plan=${opts.choice}`,
@@ -350,11 +355,12 @@ export class StripeIntegration {
       .object({
         userId: z.string().min(1),
         editionId: z.string().min(1),
-        choice: z.enum(["DIGITAL", "PHYSICAL", "FULL"]),
+        choice: z.enum(PlanType),
         amount: z.number().min(1),
         addressId: z.string().min(1).nullable(),
         redirectUrl: z.string().min(1),
         preorderId: z.string().min(1),
+        quantity: z.number().nonnegative(),
       })
       .parse(opts);
 
@@ -368,6 +374,7 @@ export class StripeIntegration {
       addressId: parsed.addressId,
       preorderId: parsed.preorderId,
       redirectUrl: parsed.redirectUrl,
+      quantity: parsed.quantity,
     };
 
     const params: Stripe.PaymentLinkCreateParams = {
@@ -380,7 +387,7 @@ export class StripeIntegration {
             },
             unit_amount: priceInCents,
           },
-          quantity: 1,
+          quantity: Math.max(1,(opts.quantity || 1)),
         },
       ],
       metadata,

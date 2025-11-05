@@ -68,25 +68,47 @@ export class PreorderController {
    * GET /api/preorders/private-access
    * Renders the password entry page
    */
+  /**
+   * GET /api/preorders/private-access
+   * Renders the password entry page
+   */
   renderPrivateAccessPage = async (req: Request, res: Response) => {
     const { token } = req.query;
 
     if (!token) {
       const html = getNoAccessPage();
       res.setHeader("Content-Type", "text/html");
-      res.send(html);
-      return;
+      return res.status(StatusCodes.UNAUTHORIZED).send(html);
     }
 
     try {
-      // Verify token is at least structurally valid (optional deep verify later)
-      jwt.verify(token as string, this.config.jwtSecret);
+      const decoded = jwt.verify(token as string, this.config.jwtSecret) as {
+        userId: string;
+      };
+
+      const clickedKey = `preorder-clicked:${decoded.userId}`;
+
+      // ✅ Check if we've already marked the user as having clicked before
+      const hasClicked = await this.store.get(clickedKey);
+
+      if (!hasClicked) {
+        // First-time click → mark it in both store and DB
+        await this.domain.user.markPreorderEmailClicked(decoded.userId);
+
+        // Cache this fact to avoid future DB writes
+        await this.store.set(clickedKey, "true", { EX: 60 * 60 * 24 * 7 }); // 7 days TTL (adjust as you wish)
+      }
+
+      // ✅ Render preorder password page
       const html = getPreorderPasswordPage(token as string);
       res.setHeader("Content-Type", "text/html");
       res.send(html);
     } catch (error) {
-      logger.error(error, "Invalid preorder token");
-      res.status(StatusCodes.UNAUTHORIZED).send("Invalid or expired link");
+      logger.error(error, "[Preorder] Invalid preorder token");
+      res
+        .status(StatusCodes.UNAUTHORIZED)
+        .setHeader("Content-Type", "text/plain")
+        .send("Invalid or expired link");
     }
   };
 
@@ -138,7 +160,7 @@ export class PreorderController {
       const redirectUrl = new URL(this.config.privateAccessPageUrl);
       redirectUrl.searchParams.set("token", accessToken);
 
-      return res.redirect(redirectUrl.toString());
+      return res.redirect(303,redirectUrl.toString());
     } catch (error: any) {
       logger.error(error, "Preorder password validation failed");
       const html = getPreorderPasswordPage(token, "Invalid or expired link.");
@@ -176,7 +198,7 @@ export class PreorderController {
    */
   handleCreateUserAndPreorder = async (req: Request, res: Response) => {
     const combinedSchema = createUserPreorderInputSchema.safeParse(req.body);
-    const sessionId = (req as any).sessionId;
+    const sessionId: string | undefined = (req as any).sessionId;
 
     if (combinedSchema.error) {
       const { issues } = combinedSchema.error;
@@ -211,8 +233,9 @@ export class PreorderController {
       userId: user.id,
       email: user.email,
       addressId: user.addressId,
+      quantity: input.quantity
     });
-
+    
     await this.domain.session.setLoginInfo(sessionId, {
       userId: user.id,
       email: user.email,

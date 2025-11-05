@@ -1,4 +1,4 @@
-import { EditionStatus, Hub, PlanType } from "@/generated/prisma/client";
+import { EditionStatus, Hub, OrderStatus, PlanType } from "@/generated/prisma/client";
 import { logger } from "@/lib/logger";
 import { Db, Store, TransactionClient } from ".";
 import {
@@ -80,11 +80,12 @@ const ensureEditions = async (db: TransactionClient) => {
   });
   const totalFuture = 12;
 
+
   const futureSeeds = Array.from({ length: totalFuture }, (_, i) => {
     const number = i + 1; // starts at 1
     const padded = String(number).padStart(2, "0"); // "01", "02", ...
     const hub = number <= 6 ? Hub.HUB1 : Hub.HUB2;
-    logger.info(`🌱 Attempting to seed edition ED${padded}`);
+    logger.info(`🌱 Seeding edition ED${padded}...`);
     const prom = db.edition.upsert({
       where: { number },
       update: {},
@@ -97,7 +98,6 @@ const ensureEditions = async (db: TransactionClient) => {
         createdAt: new Date(),
       },
     });
-    logger.info(`🌱 Seeded ED${padded}`);
     return prom;
   });
 
@@ -107,6 +107,53 @@ const ensureEditions = async (db: TransactionClient) => {
   return edition;
 };
 
+
+ async function initializeEditionStock(
+  db: Db,
+  store: Store,
+  preorderEdition: { id: string; maxCopies: number | null }
+) {
+  logger.info("[Stock Init] Checking preorder edition stock...");
+
+  const edition0Id = preorderEdition.id;
+  const maxCopies = preorderEdition.maxCopies || PREORDER_EDITION_MAX_COPIES;
+
+  // 🧮 Sum total quantity of PAID orders tied to physical/full preorders
+  const paidOrders = await db.order.aggregate({
+    where: {
+      editionId: edition0Id,
+      status: OrderStatus.PAID,
+      // The order may come from a preorder of type physical/full
+      preorder: {
+        choice: { in: [PlanType.PHYSICAL, PlanType.FULL] },
+      },
+    },
+    _sum: {
+      quantity: true,
+    },
+  });
+
+
+  const totalReserved = (paidOrders._sum as any).quantity ?? 0;
+  const remaining = Math.max(maxCopies - totalReserved, 0);
+
+  // 🧠 Check existing cache
+  const existing = await store.get(EDITION_00_REMANING_CACHE_KEY);
+  const existingNum = existing ? Number(existing) : null;
+
+  if (existingNum !== remaining) {
+    await store.set(EDITION_00_REMANING_CACHE_KEY, remaining);
+    logger.info(
+      `[Stock Init] 🔄 Updated Redis stock: ${remaining} remaining (Max: ${maxCopies}, Reserved: ${totalReserved})`
+    );
+  } else {
+    logger.info("[Stock Init] ✅ Cache already up to date.");
+  }
+
+  return remaining;
+}
+
+
 export const seed = async (db: Db, store: Store) => {
   const preorderEdition = await db.$transaction(async (tx) => {
     const [, edition00] = await Promise.all([
@@ -115,8 +162,6 @@ export const seed = async (db: Db, store: Store) => {
     ]);
     return edition00;
   });
-  await store.set(
-    EDITION_00_REMANING_CACHE_KEY,
-    preorderEdition.maxCopies || PREORDER_EDITION_MAX_COPIES,
-  );
+   await initializeEditionStock(db,store, preorderEdition)
+  logger.info('[Seed] ✅ Seeding complete')
 };

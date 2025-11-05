@@ -1,17 +1,16 @@
+import { Config } from "@/config";
 import { Domain } from "@/domain/domain";
 import {
   authenticateUserSchema,
   deviceIdentifierSchema,
 } from "@/domain/schemas/users";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { Request, Response } from "express";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
-import { StatusCodes } from "http-status-codes";
-import { logger } from "@/lib/logger";
-import { Config } from "@/config";
-import createHttpError from "http-errors";
-import { access } from "fs";
 import { Store } from "@/infra";
+import { logger } from "@/lib/logger";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { Request, Response } from "express";
+import createHttpError from "http-errors";
+import { StatusCodes } from "http-status-codes";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 
 export class AuthController {
   constructor(

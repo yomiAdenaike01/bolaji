@@ -1,107 +1,124 @@
 import ExcelJS from "exceljs";
 import { logger } from "../logger";
-
-import { OrderStatus, PlanType } from "@/generated/prisma/enums";
+import {
+  OrderStatus,
+  PlanType,
+  ShipmentStatus,
+} from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { PREORDER_EDITION_MAX_COPIES } from "@/constants";
 
+function capitalize(str: string): string {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 /**
- * Generate a lean, fast preorder summary report for admins.
- * - Aggregates totals and statuses efficiently
- * - Avoids loading unnecessary relations
- * - Creates 2 sheets: Overview + Problem Cases
+ * Generates preorder summary + pending shipments
+ * Includes edition 0 physical stock remaining (efficient and Prisma-safe)
  */
 export async function generatePreorderSummaryReport(db: Db) {
-  logger.info("[Preorder Report] Generating preorder summary...");
+  logger.info("[Preorder Report] Generating preorder summary (Edition 0 only)...");
 
-  // 🚀 Fetch only required fields (minimize query size)
-  const preorders = await db.preorder.findMany({
-    select: {
-      id: true,
-      status: true,
-      totalCents: true,
-      choice: true,
-      user: {
-        select: { name: true, email: true },
-      },
-    },
+  // ⚡️ Run all major queries in one transaction
+const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
+  await db.$transaction(async (tx) => {
+    return Promise.all([
+      tx.preorder.groupBy({
+        by: ["choice", "status"],
+        _count: { _all: true },
+        _sum: { totalCents: true },
+      }),
+
+      tx.preorder.findMany({
+        where: { status: { not: OrderStatus.PAID } },
+        select: {
+          choice: true,
+          status: true,
+          user: { select: { name: true, email: true } },
+        },
+      }),
+
+      tx.shipment.findMany({
+        where: { status: ShipmentStatus.PENDING },
+        include: {
+          address: true,
+          user: { select: { name: true, email: true } },
+          edition: { select: { id: true, code: true, number: true, title: true } },
+        },
+        orderBy: [{ address: { country: "asc" } }, { createdAt: "asc" }],
+      }),
+
+      tx.order.findMany({
+        where: { status: OrderStatus.PAID, editionId: { not: null } },
+        select: { editionId: true, quantity: true },
+      }),
+
+      tx.edition.findUnique({
+        where: { number: 0 },
+        select: { id: true, maxCopies: true, title: true, code: true },
+      }),
+    ]);
   });
 
-  // 🧩 Initialize aggregates (O(1) counters)
+      // 1️⃣ Aggregate preorder totals;
+
+  // ---- 📊 Aggregate preorder totals
   let total = 0;
   let paid = 0;
   let failed = 0;
   let pending = 0;
   let revenue = 0;
-  const byPlan = {
+  const byPlan: Record<PlanType, number> = {
     [PlanType.DIGITAL]: 0,
     [PlanType.PHYSICAL]: 0,
     [PlanType.FULL]: 0,
-  } as Record<PlanType, number>;
+  };
 
-  const issues: {
-    name: string;
-    email: string;
-    plan: PlanType;
-    status: OrderStatus;
-    reason: string;
-  }[] = [];
+  for (const row of preorderAgg as any[]) {
+    total += row._count._all;
+    byPlan[row.choice] += row._count._all;
 
-  // ⚡️ Single-pass loop for all calculations
-  for (const p of preorders) {
-    total++;
-    byPlan[p.choice]++;
-
-    if (p.status === OrderStatus.PAID) {
-      paid++;
-      revenue += p.totalCents;
-    } else {
-      if (p.status === OrderStatus.FAILED) failed++;
-      else if (p.status === OrderStatus.PENDING) pending++;
-
-      issues.push({
-        name: p.user?.name || "—",
-        email: p.user?.email || "—",
-        plan: p.choice,
-        status: p.status,
-        reason:
-          p.status === OrderStatus.FAILED
-            ? "Payment failed"
-            : p.status === OrderStatus.PENDING
-              ? "Awaiting checkout"
-              : "Unknown",
-      });
-    }
+    if (row.status === OrderStatus.PAID) {
+      paid += row._count._all;
+      revenue += row._sum.totalCents ?? 0;
+    } else if (row.status === OrderStatus.FAILED) failed += row._count._all;
+    else if (row.status === OrderStatus.PENDING) pending += row._count._all;
   }
 
+  // ---- 📦 Calculate remaining physical copies for Edition 0
+  const edition0Id = editionZero?.id;
+  const maxCopies = editionZero?.maxCopies ?? PREORDER_EDITION_MAX_COPIES;
+
+  const physicalSold = await db.preorder.count({
+    where: {
+      editionId: edition0Id,
+      choice: { in: [PlanType.PHYSICAL, PlanType.FULL] },
+      status: OrderStatus.PAID,
+    },
+  });
+
+  const physicalRemaining = Math.max(maxCopies - physicalSold, 0);
+
+  // ---- 🧾 Initialize Excel workbook
   const workbook = new ExcelJS.Workbook();
 
-  // ---- 📊 Sheet 1: Overview
+  // ---- 📈 Sheet 1: Overview
   const summary = workbook.addWorksheet("Overview");
   summary.addRow(["Metric", "Count", "Notes"]);
-
   summary.addRow(["Total Preorders", total]);
   summary.addRow(["Digital", byPlan[PlanType.DIGITAL]]);
   summary.addRow(["Physical", byPlan[PlanType.PHYSICAL]]);
   summary.addRow(["Full", byPlan[PlanType.FULL]]);
-  summary.addRow([
-    "Paid",
-    paid,
-    total ? `${((paid / total) * 100).toFixed(1)}% success` : "—",
-  ]);
+  summary.addRow(["Paid", paid, `${((paid / total) * 100).toFixed(1)}% success`]);
   summary.addRow(["Failed", failed]);
   summary.addRow(["Pending", pending]);
   summary.addRow(["Total Revenue (£)", (revenue / 100).toFixed(2)]);
+  summary.addRow(["Edition 0 Max Copies", maxCopies]);
+  summary.addRow(["Physical Copies Sold", physicalSold]);
+  summary.addRow(["Physical Copies Remaining", physicalRemaining]);
 
-  if (total >= PREORDER_EDITION_MAX_COPIES) {
-    summary.insertRow(1, [
-      "🚫 Preorder Limit Reached",
-      "",
-      `Preorders have hit the ${PREORDER_EDITION_MAX_COPIES}-copy cap.`,
-    ]);
-  }
-
-  summary.columns.forEach((c) => (c.width = 25));
+  summary.columns.forEach((c) => (c.width = 30));
   summary.getRow(1).font = { bold: true };
 
   // ---- ⚠️ Sheet 2: Problem Cases
@@ -111,49 +128,84 @@ export async function generatePreorderSummaryReport(db: Db) {
     { header: "Email", key: "email", width: 35 },
     { header: "Plan", key: "plan", width: 15 },
     { header: "Status", key: "status", width: 15 },
-    { header: "Reason / Missing Info", key: "reason", width: 45 },
+  ];
+  for (const issue of issues) {
+    issuesSheet.addRow({
+      name: issue.user?.name ?? "—",
+      email: issue.user?.email ?? "—",
+      plan: issue.choice,
+      status: issue.status,
+    });
+  }
+
+  // ---- 🚚 Sheet 3: Pending Shipments by Country
+  const shipmentsSheet = workbook.addWorksheet("Pending Shipments by Country");
+  shipmentsSheet.columns = [
+    { header: "Country", key: "country", width: 20 },
+    { header: "Recipient", key: "recipient", width: 25 },
+    { header: "Email", key: "email", width: 30 },
+    { header: "Edition", key: "edition", width: 20 },
+    { header: "Quantity", key: "quantity", width: 10 },
+    { header: "Address Line 1", key: "line1", width: 35 },
+    { header: "City", key: "city", width: 20 },
+    { header: "Postal Code", key: "postalCode", width: 15 },
+    { header: "Status", key: "status", width: 15 },
+    { header: "Created At", key: "createdAt", width: 20 },
   ];
 
-  for (const issue of issues) issuesSheet.addRow(issue);
+  // Map quantities per edition
+  const editionQuantityMap = paidOrders.reduce<Record<string, number>>(
+    (acc, o) => {
+      if (o.editionId)
+      acc[o.editionId] = (acc[o.editionId] ?? 0) + o.quantity;
+      return acc;
+    },
+    {},
+  );
+
+  // Group shipments by country
+  const groupedByCountry = (pendingShipments as any[]).reduce((acc, s) => {
+    const country = (s.address?.country ?? "Unknown").toLowerCase();
+    if (!acc[country]) acc[country] = [];
+    acc[country].push(s);
+    return acc;
+  }, {} as Record<string, typeof pendingShipments>);
+
+  for (const [country, shipments] of Object.entries(groupedByCountry) as any) {
+    const countryLabel = capitalize(country);
+
+    shipmentsSheet.addRow({
+      country: `${countryLabel} (${shipments.length} pending shipments)`,
+    });
+    shipmentsSheet.getRow(shipmentsSheet.lastRow?.number || 1).font = {
+      bold: true,
+      color: { argb: "FF444444" },
+    };
+
+    for (const s of shipments) {
+      const qty = editionQuantityMap[s.edition.id] ?? 1;
+      shipmentsSheet.addRow({
+        country: countryLabel,
+        recipient: s.user?.name ?? "—",
+        email: s.user?.email ?? "—",
+        edition: s.edition?.code ?? `Edition ${s.edition?.number ?? "?"}`,
+        quantity: qty,
+        line1: s.address?.line1 ?? "—",
+        city: s.address?.city ?? "—",
+        postalCode: s.address?.postalCode ?? "—",
+        status: s.status,
+        createdAt: s.createdAt.toISOString().split("T")[0],
+      });
+    }
+
+    shipmentsSheet.addRow({});
+  }
+
+  shipmentsSheet.getRow(1).font = { bold: true };
 
   logger.info(
-    `[Preorder Report] Summary generated with ${total} preorders (${paid} paid, ${failed} failed, ${pending} pending).`,
+    `[Preorder Report] Edition 0: ${physicalRemaining} physical copies remaining out of ${maxCopies} total. Generated report with ${total} preorders (${paid} paid, ${failed} failed, ${pending} pending) and ${pendingShipments.length} pending shipments.`,
   );
 
   return workbook.xlsx.writeBuffer();
-}
-
-export async function generatePreorderEmailStatusReport(
-  successful: { name: string; email: string }[],
-  failed: { name: string; email: string; error: string }[],
-) {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Preorder Emails");
-
-  sheet.columns = [
-    { header: "Name", key: "name", width: 25 },
-    { header: "Email", key: "email", width: 35 },
-    { header: "Status", key: "status", width: 15 },
-    { header: "Error (if failed)", key: "error", width: 40 },
-  ];
-
-  successful.forEach((s) =>
-    sheet.addRow({ name: s.name, email: s.email, status: "SENT", error: "" }),
-  );
-  failed.forEach((f) =>
-    sheet.addRow({
-      name: f.name,
-      email: f.email,
-      status: "FAILED",
-      error: f.error,
-    }),
-  );
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  const filename = `preorder_release_report_${new Date().toISOString().split("T")[0]}.xlsx`;
-  logger.info(`📊 Report generated: ${filename}`);
-  return {
-    buffer,
-    filename,
-  };
 }

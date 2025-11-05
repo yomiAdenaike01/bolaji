@@ -113,16 +113,18 @@ enum EditionStatus {
 //////////////////////////////////////////////////////////
 
 model User {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  name             String?
-  email            String     @unique
-  emailVerifiedAt  DateTime?
-  passwordHash     String?
-  stripeCustomerId String?    @unique
-  status           UserStatus @default(ACTIVE)
+  id                    String     @id @default(cuid())
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  preorderEmailSentAt   DateTime?
+  reminderEmailSentAt   DateTime?
+  preorderLinkClickedAt DateTime? // 👈 New field
+  name                  String?
+  email                 String     @unique
+  emailVerifiedAt       DateTime?
+  passwordHash          String?
+  stripeCustomerId      String?    @unique
+  status                UserStatus @default(ACTIVE)
 
   devices                    Device[]
   sessions                   Session[]
@@ -378,6 +380,7 @@ model Order {
   edition               Edition?      @relation(fields: [editionId], references: [id], onDelete: SetNull)
   editionId             String?
   totalCents            Int
+  quantity Int @default(1)
   currency              String        @default("GBP")
   stripePaymentIntentId String?       @unique
   payments              Payment[]
@@ -464,7 +467,6 @@ model Shipment {
   dispatchedAt   DateTime?
   deliveredAt    DateTime?
   shippingMonth  DateTime?
-
   @@index([userId, status])
   @@index([editionId, status])
 }

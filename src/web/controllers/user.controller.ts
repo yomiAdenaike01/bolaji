@@ -6,6 +6,7 @@ import { StatusCodes } from "http-status-codes";
 import { createErrorResponse, invalidInputErrorResponse } from "./utils";
 import { Hub } from "@/generated/prisma/enums";
 import createHttpError from "http-errors";
+import { randomUUID } from "crypto";
 
 export class UserController {
   constructor(private readonly domain: Domain) {}
@@ -73,7 +74,7 @@ export class UserController {
       const createdUser = await this.domain.user.registerUser(
         createUserInput.data,
       );
-      const sessionId = (req as any).sessionId;
+      const sessionId = randomUUID();
       await this.domain.session.setLoginInfo(sessionId, {
         email: createdUser.email,
         userId: createdUser.id,

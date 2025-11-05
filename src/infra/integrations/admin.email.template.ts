@@ -121,6 +121,7 @@ export const adminEmailTemplates: {
     editionCode,
     amount,
     address,
+    quantity = 1
   }) =>
     wrapAdmin(
       "🧾 New Preorder Placed",
@@ -129,14 +130,9 @@ export const adminEmailTemplates: {
       <p><b>Edition:</b> ${editionCode}</p>
       <p><b>Plan:</b> ${plan}</p>
       <p><b>Amount:</b> ${amount}</p>
+      <p><b>Quantity:</b> ${quantity}</p>
       ${renderAddress(address)}
-      `,
-      [
-        {
-          label: "View Preorder",
-          url: `https://api.bolaji-editions.com/admin/preorders?user=${email}`,
-        },
-      ],
+      `
     ),
 
   [AdminEmailType.SUBSCRIPTION_STARTED]: ({
@@ -153,12 +149,7 @@ export const adminEmailTemplates: {
       <p><b>Plan:</b> ${plan}</p>
       <p><b>Period:</b> ${formatDate(periodStart)} → ${formatDate(periodEnd)}</p>
       `,
-      [
-        {
-          label: "View Subscription",
-          url: `https://api.bolaji-editions.com/admin/subscriptions?user=${email}`,
-        },
-      ],
+      
     ),
 
   // 🆕 Subscription Renewed
@@ -177,13 +168,7 @@ export const adminEmailTemplates: {
       <p><b>Renewed At:</b> ${formatDate(renewedAt)}</p>
       <p><b>Next Period Ends:</b> ${formatDate(nextPeriodEnd)}</p>
       <p>The user's subscription has been renewed successfully and billing is complete.</p>
-      `,
-      [
-        {
-          label: "View Subscription",
-          url: `https://api.bolaji-editions.com/admin/subscriptions?user=${email}`,
-        },
-      ],
+      `
     ),
 
   [AdminEmailType.SUBSCRIPTION_CANCELED]: ({ name, email, plan, canceledAt }) =>
@@ -193,13 +178,7 @@ export const adminEmailTemplates: {
       <p><b>User:</b> ${name} (${email})</p>
       <p><b>Plan:</b> ${plan}</p>
       <p><b>Canceled At:</b> ${formatDate(canceledAt)}</p>
-      `,
-      [
-        {
-          label: "View Subscription",
-          url: `https://api.bolaji-editions.com/admin/subscriptions?user=${email}`,
-        },
-      ],
+      `
     ),
 
   [AdminEmailType.SUPPORT_TICKET_CREATED]: ({
@@ -216,13 +195,7 @@ export const adminEmailTemplates: {
       <p><b>Subject:</b> ${subject}</p>
       <p><b>Category:</b> ${category}</p>
       <p><b>Ticket ID:</b> ${ticketId}</p>
-      `,
-      [
-        {
-          label: "View Ticket",
-          url: `https://api.bolaji-editions.com/admin/support/${ticketId}`,
-        },
-      ],
+      `
     ),
 
   // 🆕 Publish / Add Edition
@@ -238,17 +211,7 @@ export const adminEmailTemplates: {
       <p><b>Edition:</b> ${editionTitle} (${editionCode})</p>
       <p><b>Total Preorders:</b> ${totalPreorders}</p>
       <p>This edition is ready to be published. You can either publish it to make it available for subscribers, or add a new edition to continue the cycle.</p>
-      `,
-      [
-        {
-          label: "Publish Edition",
-          url: `https://api.bolaji-editions.com/admin/editions/publish/${editionId}`,
-        },
-        {
-          label: "Add New Edition",
-          url: `https://api.bolaji-editions.com/admin/editions/create`,
-        },
-      ],
+      `
     ),
 };
 

@@ -30,6 +30,7 @@ export type AdminEmailContent = {
     plan: string;
     editionCode: string;
     amount: string;
+    quantity: number
     address?: ShippingAddress;
   };
 
@@ -74,6 +75,7 @@ export type AdminEmailContent = {
 
 export enum EmailType {
   EDITION_00_DIGITAL_RELEASE = "EDITION_00_DIGITAL_RELEASE",
+  // EDITION_00_DIGITAL_RELEASE_REMINDER = "EDITION_00_DIGITAL_RELEASE_REMINDER",
   SUBSCRIPTION_FAILED_TO_START = "SUBSCRIPTION_FAILED_TO_START", // 👈 NEW
   REGISTER = "REGISTER",
   PREORDER_CONFIRMATION = "PREORDER_CONFIRMATION",
@@ -123,6 +125,7 @@ export interface EmailContentMap {
     email: string;
     editionCode: string;
     plan: PlanType;
+    newPassword: string
   };
 
   [EmailType.PAYMENT_FAILED]: {

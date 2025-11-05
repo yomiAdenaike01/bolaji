@@ -22,6 +22,12 @@ import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
 import { Config } from "@/config";
 
+export class SubscriptionAlreadyActiveError extends Error {
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 export class SubscriptionsService {
   constructor(
     private readonly db: Db,
@@ -327,15 +333,7 @@ export class SubscriptionsService {
             : {}),
         },
       });
-      this.integrations.email.sendEmail({
-        email: user.email,
-        type: EmailType.REGISTER,
-        content: {
-          password,
-          email: user.email,
-          name: user.name || "User",
-        },
-      });
+  
       userId = user.id;
     }
     const startTime = Date.now();
@@ -382,7 +380,7 @@ export class SubscriptionsService {
             planId: existingSub.planId,
           });
         if (hasActiveSubscription)
-          throw new Error(
+          throw new SubscriptionAlreadyActiveError(
             `Subscription already active (userId=${userId}, planId=${plan.id})`,
           );
       }

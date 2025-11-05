@@ -17,6 +17,13 @@ export class UserService {
     private readonly integrations: Integrations,
   ) {}
 
+  markPreorderEmailClicked = (userId: any) => {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { preorderLinkClickedAt: new Date() },
+    });
+  };
+
   findUserAddreses = async (userId: string) => {
     const addresses = await this.db.address.findMany({
       where: {

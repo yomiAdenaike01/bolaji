@@ -10,6 +10,8 @@ export const preorderSchema = z.object({
   amount: z.number(),
   eventId: z.string().min(1),
   paymentLinkId: z.string().min(1),
+  quantity: z.number().nonnegative(),
+
 });
 
 export type CompletedPreoderEventDto = z.infer<typeof preorderSchema>;

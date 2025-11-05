@@ -65,7 +65,16 @@ export class PreordersService {
       const preorder = await this.db.preorder.findFirst({
         where: {
           userId,
-          status: OrderStatus.PAID,
+          OR:[
+            {
+              status: OrderStatus.PAID,
+            },
+            {
+              user:{
+                status: UserStatus.PENDING_PREORDER
+              }
+            }
+          ]
         },
       });
       await this.store.setEx(cacheKey, 1000 * 60 * 60, "true");
@@ -146,14 +155,13 @@ export class PreordersService {
     userId,
     editionId,
     preorderId,
-    redirectUrl,
-    addressId,
+    quantity
   }: {
     preorderId: string;
     userId: string;
     editionId: string;
-    redirectUrl: string;
     addressId: string | null;
+    quantity: number
   }) => {
     const preorder = await this.db.preorder.update({
       where: {
@@ -184,41 +192,10 @@ export class PreordersService {
       logger.info(
         `[Preorder Service] Marked preorder as FAILED — id=${preorder.id}, edition=${editionId}, user=${userId}`,
       );
-      let paymentUrl: string | null = null;
-
-      if (preorder.stripePaymentLinkId) {
-        logger.info(
-          `[Preorder Service] Fetching preorder payment link url — id=${preorder.id}, edition=${editionId}, user=${userId}`,
-        );
-        const [, paymentLink] = await Promise.all([
-          this.integrations.payments.invalidatePaymentLink(
-            preorder.stripePaymentLinkId,
-          ),
-          this.findOrCreatePreorderPaymentLink({
-            stripePaymentLinkId: preorder.stripePaymentLinkId,
-            amount: preorder.totalCents,
-            editionId,
-            preorderId,
-            redirectUrl,
-            addressId,
-            choice: preorder.choice,
-            userId: preorder.userId,
-          }),
-
-          this.store.incr(EDITION_00_REMANING_CACHE_KEY),
-        ]);
-
-        if (paymentLink?.url) {
-          logger.info(
-            `[Preorder Service] Fetched preorder payment link url — id=${preorder.id} url=${paymentLink.url}, edition=${editionId}, user=${userId}`,
-          );
-          paymentUrl = paymentLink.url;
-        }
-        logger.warn(
-          `[Preorder Service] Failed to find or create payment link - id=${preorder.id}, edition=${editionId}, user=${userId}`,
-        );
-      }
-      return { ...preorder, retryUrl: paymentUrl };
+      logger.info(`[Preorder Service] Restoring edition00 quantity=${quantity}`)
+     await this.store.incrBy(EDITION_00_REMANING_CACHE_KEY,quantity);
+     
+     return preorder
     }
     logger.warn(
       `[Preorder Service] No eligible preorder found to mark as failed (userId=${userId}, editionId=${editionId})`,
@@ -235,7 +212,9 @@ export class PreordersService {
     addressId,
     redirectUrl,
     preorderId,
+    quantity
   }: {
+    quantity?: number,
     stripePaymentLinkId?: string | null;
     amount: number;
     choice: PlanType;
@@ -273,6 +252,7 @@ export class PreordersService {
           addressId,
           redirectUrl,
           preorderId,
+          quantity
         });
 
       // ✅ 3️⃣ Save in DB atomically
@@ -344,11 +324,13 @@ export class PreordersService {
   private getExistingPreorder = async (
     userId: string,
     editionId: string,
+    choice: PlanType,
     tx?: TransactionClient,
   ) => {
     return (tx || this.db).preorder.findFirst({
       where: {
         userId,
+        choice,
         editionId: editionId,
         status: {
           in: [OrderStatus.PENDING, OrderStatus.PAID],
@@ -367,99 +349,96 @@ export class PreordersService {
    * Uses Redis for atomic operations and falls back to DB if Redis not initialized.
    * Returns `true` if reservation succeeded, otherwise throws an error.
    */
-  private reservePhysicalStock = async (plan: PlanType): Promise<boolean> => {
-    // Only relevant for physical or full editions
-    if (plan === PlanType.DIGITAL) return false;
+private reservePhysicalStock = async (
+  plan: PlanType,
+  quantity = 1,
+): Promise<boolean> => {
+  // Only relevant for physical or full editions
+  if (plan === PlanType.DIGITAL) return false;
 
-    const key = EDITION_00_REMANING_CACHE_KEY; // Edition 00 is the only preorderable edition
-    const context = { plan, key };
+  const key = EDITION_00_REMANING_CACHE_KEY; // Edition 00 is the only preorderable edition
+  const context = { plan, key, quantity };
 
-    try {
-      // 1️⃣ Try Redis first
-      const remainingStr = await this.store.get(key);
+  try {
+    // 1️⃣ Try Redis first
+    const remainingStr = await this.store.get(key);
 
-      if (remainingStr !== null) {
-        const remaining = Number(remainingStr);
-        logger.debug(
-          { ...context, remaining },
-          "🔍 Checking Redis remaining stock for preorder",
-        );
+    if (remainingStr !== null) {
+      const remaining = Number(remainingStr);
+      logger.info({ ...context, remaining }, "🔍 Checking Redis stock");
 
-        if (remaining < 1) {
-          logger.warn(
-            { ...context, remaining },
-            "❌ Redis reports sold out — no remaining stock",
-          );
-          throw new Error("Sold out");
-        }
-
-        // Atomically decrement by one
-        const newRemaining = await this.store.decr(key);
-
-        if (newRemaining < 0) {
-          // Undo decrement if overshoot
-          await this.store.incr(key);
-          logger.error(
-            { ...context, remaining, newRemaining },
-            "⚠️ Race condition: Redis stock overshot below zero, rollback performed",
-          );
-          throw new Error("Sold out");
-        }
-
-        logger.info(
-          {
-            ...context,
-            remainingBefore: remaining,
-            remainingAfter: newRemaining,
-          },
-          "✅ Reserved preorder slot via Redis",
-        );
-        return true;
+      if (remaining < quantity) {
+        logger.warn({ ...context, remaining }, "❌ Not enough stock in Redis");
+        throw new Error("Sold out");
       }
 
-      // 2️⃣ Fallback to DB check if Redis key not initialized
-      logger.warn(
-        { ...context },
-        "[Preorder Service] ⚠️ Redis key missing — falling back to DB preorder count",
-      );
+      // Atomically decrement by custom quantity using Lua or multi() transaction
+      const newRemaining = await this.store.decrBy(key, quantity);
 
-      const [preorderCount, preorderEdition] = await this.db.$transaction(
-        (tx) =>
-          Promise.all([
-            tx.preorder.count({
-              where: {
-                status: { in: [OrderStatus.PENDING, OrderStatus.PAID] },
-              },
-            }),
-            tx.edition.findUniqueOrThrow({ where: { number: 0 } }),
-          ]),
-      );
-
-      const preorderMaxCopies =
-        preorderEdition.maxCopies || PREORDER_EDITION_MAX_COPIES;
-
-      if (preorderCount >= preorderMaxCopies) {
-        logger.warn(
-          { ...context, preorderCount, preorderMaxCopies },
-          "[Preorder service] ❌ Edition sold out according to database count",
+      if (Number(newRemaining) < 0) {
+        // Undo overshoot
+        await this.store.incrBy(key, quantity);
+        logger.error(
+          { ...context, remaining, newRemaining },
+          "⚠️ Race condition: Redis stock went below zero, rollback performed",
         );
         throw new Error("Sold out");
       }
 
       logger.info(
-        { ...context, preorderCount, preorderMaxCopies },
-        "[Preorder Service] ✅ Reserved preorder slot via DB fallback (Redis missing)",
+        {
+          ...context,
+          remainingBefore: remaining,
+          remainingAfter: newRemaining,
+        },
+        "✅ Reserved preorder stock via Redis",
       );
-
       return true;
-    } catch (err) {
-      logger.error(
-        { ...context, error: (err as any).message, stack: (err as any).stack },
-        "[Preorder Service]💥 Failed to reserve preorder slot",
-      );
-      throw err;
     }
-  };
+
+    // 2️⃣ Fallback to DB check
+    logger.warn(
+      { ...context },
+      "[Preorder Service] ⚠️ Redis key missing — falling back to DB preorder count",
+    );
+
+    const [preorderCount, preorderEdition] = await this.db.$transaction((tx) =>
+      Promise.all([
+        tx.preorder.count({
+          where: {
+            status: { in: [OrderStatus.PENDING, OrderStatus.PAID] },
+          },
+        }),
+        tx.edition.findUniqueOrThrow({ where: { number: 0 } }),
+      ]),
+    );
+
+    const preorderMaxCopies =
+      preorderEdition.maxCopies || PREORDER_EDITION_MAX_COPIES;
+
+    if (preorderCount + quantity > preorderMaxCopies) {
+      logger.warn(
+        { ...context, preorderCount, preorderMaxCopies },
+        "[Preorder Service] ❌ Edition sold out (DB fallback)",
+      );
+      throw new Error("Sold out");
+    }
+
+    logger.info(
+      { ...context, preorderCount, preorderMaxCopies },
+      "[Preorder Service] ✅ Reserved stock via DB fallback",
+    );
+
+    return true;
+  } catch (err) {
+    logger.error(
+      { ...context, error: (err as any).message },
+      "[Preorder Service] 💥 Failed to reserve preorder slot",
+    );
+    throw err;
+  }
+};
+
 
   registerPreorder = async (
     {
@@ -485,9 +464,10 @@ export class PreordersService {
     let reservedPhysicalCopy = false;
 
     try {
-      const totalCents = this.getPrice(parsed.choice) * quantity;
+      const totalCents = this.getPrice(parsed.choice);
+      const totalIncQuantity = totalCents * quantity // used for db records
 
-      await this.reservePhysicalStock(parsed.choice);
+      reservedPhysicalCopy = await this.reservePhysicalStock(parsed.choice, quantity);
 
       // 1️⃣ Atomic DB step — ensure edition and preorder consistency
       const { preorder, edition00 } = await this.db.$transaction(async (tx) => {
@@ -498,6 +478,7 @@ export class PreordersService {
         const existing = await this.getExistingPreorder(
           userId,
           edition00.id,
+          choice,
           tx,
         );
 
@@ -520,7 +501,7 @@ export class PreordersService {
             userId: parsed.userId,
             choice: parsed.choice,
             editionId: edition00.id,
-            totalCents,
+            totalCents: totalIncQuantity,
             currency: "GBP",
             status: OrderStatus.PENDING,
           },
@@ -545,7 +526,8 @@ export class PreordersService {
         editionId: edition00.id,
         preorderId: preorder.id,
         userId: parsed.userId,
-        redirectUrl: `${this.config.serverUrl}/preorders/thank-you?preorder_id=${preorder.id}`, // TODO: Needs to redirect to thank you page based on plan, must include - "SUBSCRIBE TO THE ONGOING EDITIONS"
+        quantity: parsed.quantity,
+        redirectUrl: `${this.config.serverUrl}/preorders/thank-you?preorder_id=${preorder.id}`,
       });
 
       // 3️⃣ Mark user as active once Stripe is ready
@@ -559,25 +541,6 @@ export class PreordersService {
       if (!user?.name)
         throw new Error(`Missing name for user id=${userId} during preorder.`);
 
-      this.integrations.email
-        .sendEmail({
-          email,
-          content: {
-            name: user.name,
-            email,
-            editionCode: edition00.code,
-          },
-          type: EmailType.PREORDER_CONFIRMATION,
-        })
-        .then(() =>
-          logger.info(
-            `📨 Sent preorder confirmation to ${email} (${preorder.id})`,
-          ),
-        )
-        .catch((err) =>
-          logger.error(err, `⚠️ Failed to send preorder email to ${email}`),
-        );
-
       // 5️⃣ Return consistent shape
       return {
         preorderId: preorder.id,
@@ -587,13 +550,13 @@ export class PreordersService {
       };
     } catch (error) {
       if (reservedPhysicalCopy && parsed.choice !== PlanType.DIGITAL) {
-        await this.store.incr(EDITION_00_REMANING_CACHE_KEY);
+        await this.store.incrBy(EDITION_00_REMANING_CACHE_KEY, quantity);
       }
       throw error;
     }
   };
 
-  private sendCheckOutCompleteComms = ({
+  private sendCheckOutCompleteEmails = ({
     name,
     email,
     choice,
@@ -601,6 +564,7 @@ export class PreordersService {
     edition,
     address,
     newUserPassword,
+    quantity = 1
   }: {
     amount: string;
     name: string;
@@ -609,6 +573,7 @@ export class PreordersService {
     edition: string;
     address?: ShippingAddress;
     newUserPassword: string;
+    quantity: number
   }) => {
     // TODO: Include password with email
     const sendConfirmEmail = this.integrations.email.sendEmail({
@@ -619,7 +584,7 @@ export class PreordersService {
         email: email,
         name: name || "",
         plan: choice,
-        // newUserPassword
+        newPassword: newUserPassword
       },
     });
 
@@ -632,6 +597,7 @@ export class PreordersService {
         name,
         plan: choice,
         address,
+        quantity
       },
     });
 
@@ -735,7 +701,7 @@ export class PreordersService {
           : {}),
       });
 
-    this.sendCheckOutCompleteComms({
+    this.sendCheckOutCompleteEmails({
       name: sendCommsDto.name,
       email: sendCommsDto.email,
       choice: plan,
@@ -743,6 +709,7 @@ export class PreordersService {
       edition: sendCommsDto.editionCode,
       address: sendCommsDto.address,
       newUserPassword: newPassword,
+      quantity: completedPreorderDto.quantity
     });
   };
   private grantEditionAccess = async (
@@ -806,6 +773,7 @@ export class PreordersService {
       amount,
       plan,
       addressId,
+      quantity = 1
     } = dto;
 
     logger.info(
@@ -867,6 +835,7 @@ export class PreordersService {
               stripePaymentIntentId: eventId,
               currency: "GBP",
               status: OrderStatus.PAID,
+              quantity,
               totalCents: amount,
               type: OrderType.PREORDER,
               preorder: {

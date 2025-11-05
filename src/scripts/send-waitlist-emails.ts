@@ -4,15 +4,17 @@ import dotenv from "dotenv";
 import path from "path";
 import { EmailIntegration } from "../infra/integrations/email.integration";
 import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
-import { initConfig } from "../config";
+import { Config, initConfig } from "../config";
 import { logger } from "../lib/logger";
 import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import jwt from "jsonwebtoken";
-import { initInfra } from "@/infra";
+import { Db, initInfra } from "@/infra";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { UserStatus } from "@/generated/prisma/enums";
+import { Job } from "bullmq";
+import { Integrations } from "@/infra/integrations";
 dotenv.config();
 
 /**
@@ -34,9 +36,20 @@ async function parseWaitlistCsv(
 /**
  * Send preorder release emails to waitlist users
  */
-async function sendWaitlistEmails() {
-  const config = initConfig();
-  const { db, store } = initInfra(config);
+export async function sendWaitlistEmails({
+  job,
+  config,
+  db,
+  emailIntegration,
+  adminEmailIntegration,
+}: {
+  job: Job<any, any, string>;
+  config: Config;
+  db: Db;
+  emailIntegration: EmailIntegration;
+  adminEmailIntegration: AdminEmailIntegration;
+}) {
+  logger.info(`[Job] Starting preorder email job id=${job.id}`);
   const csvPath = path.resolve(
     __dirname,
     "./BOLAJI_EDITIONS_WAITLIST_SAMPLE.csv",
@@ -45,18 +58,6 @@ async function sendWaitlistEmails() {
 
   logger.info(`📋 Loaded ${users.length} users from waitlist CSV`);
   logger.info(`🚀 Preparing to send preorder release emails...`);
-
-  const emailIntegration = new EmailIntegration(
-    config.resendApiKey,
-    config.sentFromEmailAddr,
-  );
-
-  const adminEmailIntegration = new AdminEmailIntegration(
-    config.resendApiKey,
-    config.adminEmailAddresses,
-    {} as any,
-    config.sentFromEmailAddr,
-  );
 
   const successful: { name: string; email: string }[] = [];
   const failed: { name: string; email: string; error: string }[] = [];
@@ -107,15 +108,12 @@ async function sendWaitlistEmails() {
   const sessionVersion = 1;
   for (const user of users) {
     try {
-      const sessionKey = `preorder:session:version:${crypto.randomBytes(5).toString("hex")}`;
-      await store.set(sessionKey, sessionVersion);
       const token = jwt.sign(
         {
           email: user.Email,
           name: user.Name,
           userId: userIdsByEmail[user.Email],
           version: sessionVersion,
-          sessionKey,
           type: "PREORDER",
           password: userEmailByPasswordHash[user.Email].accountPassword,
         },
@@ -144,7 +142,7 @@ async function sendWaitlistEmails() {
       successful.push({ name: user.Name, email: user.Email });
       logger.info(`✅ Email sent to ${user.Name} (${user.Email})`);
 
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 1000));
     } catch (err: any) {
       failed.push({ name: user.Name, email: user.Email, error: err.message });
       logger.error(`❌ Failed to send to ${user.Email}`, err);
@@ -171,13 +169,5 @@ async function sendWaitlistEmails() {
       buffer,
     },
   });
+  logger.info(`[Job] Preorder email job complete ✅`);
 }
-
-sendWaitlistEmails()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((err) => {
-    logger.error(err, "💥 Script failed");
-    process.exit(1);
-  });

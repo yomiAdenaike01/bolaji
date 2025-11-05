@@ -15,7 +15,7 @@ export class IntegrationsController {
       sig = z.string().min(1).parse(sig);
       return this.domain.integrations.payments.handleWebhook(req.body, sig);
     } catch (error: any) {
-      logger.error(`Failed to handle stripe event`);
+      logger.error(error,`Failed to handle stripe event`);
       return null;
     }
   };

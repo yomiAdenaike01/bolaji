@@ -1,12 +1,8 @@
 import bodyParser from "body-parser";
 import express, {
   Application,
-  NextFunction,
-  Request,
-  Response,
-  Router,
+  Router
 } from "express";
-import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
 import { AuthController } from "./controllers/auth.controller";
 import { Controllers, PaymentsWebhookHandler } from "./controllers/controllers";
@@ -16,16 +12,7 @@ import { SubscriptionsController } from "./controllers/subscriptions.controller"
 import { UserController } from "./controllers/user.controller";
 import { AuthGuard } from "./middleware";
 
-const authGuard =
-  (userController: UserController) =>
-  (req: Request, _: Response, next: NextFunction) => {
-    try {
-      userController.getUserIdOrUnauthorised(req);
-      next();
-    } catch (error) {
-      next(createHttpError.Unauthorized("User is not authenticated"));
-    }
-  };
+
 
 const makeAuthRouter = (
   authGuard: AuthGuard,
@@ -47,12 +34,10 @@ const makeUserRouter = (userController: UserController) => {
   r.post("/create", userController.handleCreateUser);
   r.get(
     "/editions/access",
-    authGuard(userController),
     userController.handleGetEditionsAccess,
   );
   r.get(
     "/addresses",
-    authGuard(userController),
     userController.handleGetUserAddreses,
   );
 
@@ -104,6 +89,22 @@ const makePreorderRouter = (
   return r;
 };
 
+export const makePaymentsRouter = (
+  app: Application,
+  paymentWebhookHandler: PaymentsWebhookHandler,
+) => {
+  const paymentsRouter = express.Router();
+  paymentsRouter.post(
+    "/webhook",
+    bodyParser.raw({ type: "application/json" }),
+    paymentWebhookHandler,
+  );
+  paymentsRouter.get("/redirect", (req, res) => {
+    res.status(StatusCodes.OK).json(req.body);
+  });
+  app.use("/api/integrations/payments", paymentsRouter);
+};
+
 export const setupRouters = (
   authGuard: AuthGuard,
   controllers: Controllers,
@@ -144,20 +145,4 @@ export const setupRouters = (
   router.use("/preorders", preorderRouter);
   router.use("/users", userRouter);
   app.use("/api", router);
-};
-
-export const makePaymentsRouter = (
-  app: Application,
-  paymentWebhookHandler: PaymentsWebhookHandler,
-) => {
-  const paymentsRouter = express.Router();
-  paymentsRouter.post(
-    "/webhook",
-    bodyParser.raw({ type: "application/json" }),
-    paymentWebhookHandler,
-  );
-  paymentsRouter.get("/redirect", (req, res) => {
-    res.status(StatusCodes.OK).json(req.body);
-  });
-  app.use("/api/integrations/payments", paymentsRouter);
 };

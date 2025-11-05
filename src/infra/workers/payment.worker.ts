@@ -31,7 +31,7 @@ const failedPreorderDto = z.object({
   type: z.enum(OrderType),
   userId: z.string(),
   orderId: z.string(),
-  redirectUrl: z.string(),
+  quantity: z.number().nonnegative()
 });
 
 const failedSubscriptionStartDto = z.object({
@@ -296,7 +296,7 @@ export class PaymentWorker {
       editionId: paymentEvent.editionId,
       preorderId: paymentEvent.orderId,
       addressId: paymentEvent.addressId || null,
-      redirectUrl: paymentEvent.redirectUrl,
+      quantity: paymentEvent.quantity
     });
 
     if (!failedPreorder?.id)
@@ -317,9 +317,6 @@ export class PaymentWorker {
         email,
         editionCode: failedPreorder.edition.code,
         plan: failedPreorder.choice,
-        ...(failedPreorder.retryUrl
-          ? { retryLink: failedPreorder.retryUrl }
-          : {}),
       },
     });
   };
