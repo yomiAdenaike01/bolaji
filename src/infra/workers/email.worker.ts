@@ -25,6 +25,9 @@ export class EmailWorker {
       },
       concurrency: 5,
     });
+    w.on("completed", (job) => {
+      logger.info(`✅ Job name:${job.name} id:${job.id} complete`);
+    });
     w.on("failed", (job) => {
       logger.warn(
         `[EmailWorker] Failed to complete job - $${job?.name} ${job?.id}`,
@@ -109,14 +112,13 @@ export class EmailWorker {
         break;
       }
       case "email.preorders_open": {
-        await sendWaitlistEmails({
+        return await sendWaitlistEmails({
           job,
           config: this.config,
           db: this.db,
           emailIntegration: this.emailIntegration,
           adminEmailIntegration: this.adminEmailIntegration,
         });
-        break;
       }
       case "email.preorder_reminder": {
         const users = await this.db.user.findMany({

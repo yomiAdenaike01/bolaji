@@ -262,13 +262,13 @@ export class StripeIntegration {
           amount,
           eventId,
           paymentLinkId,
-          quantity
+          quantity,
         } = preorderSchema.parse({
           ...metadata,
           amount: orderTotal,
           eventId: event.id,
           paymentLinkId: session.payment_link,
-          quantity: +(metadata.quantity || 1)
+          quantity: +(metadata.quantity || 1),
         });
 
         logger.info(
@@ -299,6 +299,7 @@ export class StripeIntegration {
           planId,
           type,
           eventId,
+          addressId,
           isNewSubscription,
         } = subscriptionSchema.parse({
           ...metadata,
@@ -320,6 +321,7 @@ export class StripeIntegration {
           subscriptionPlanId: planId,
           eventId,
           amount: orderTotal,
+          addressId: addressId as any,
           type,
           stripeSubscriptionId: session.subscription?.toString(),
           stripeInvoiceId:
@@ -346,7 +348,7 @@ export class StripeIntegration {
     addressId: string | null;
     redirectUrl: string;
     preorderId: string;
-    quantity?: number
+    quantity?: number;
   }) => {
     logger.info(
       `[StripeIntegration] Creating preorder payment link for userId=${opts.userId}, editionId=${opts.editionId}, plan=${opts.choice}`,
@@ -387,7 +389,7 @@ export class StripeIntegration {
             },
             unit_amount: priceInCents,
           },
-          quantity: Math.max(1,(opts.quantity || 1)),
+          quantity: Math.max(1, opts.quantity || 1),
         },
       ],
       metadata,
@@ -604,9 +606,11 @@ export class StripeIntegration {
       // 🟢 Subscription lifecycle
       case "customer.subscription.created": {
         // First subscription creation (user just subscribed)
-        logger.info(`[StripeIntegration] Subscription created (id=${event.data.object.id}) — handled via checkout.session.completed.`);
+        logger.info(
+          `[StripeIntegration] Subscription created (id=${event.data.object.id}) — handled via checkout.session.completed.`,
+        );
 
-        return null
+        return null;
       }
 
       // 🟢 Renewal success
@@ -686,6 +690,9 @@ export class StripeIntegration {
   ) {
     return null;
   }
+  /**
+   * @deprecated Unused
+   */
   private constructSubscriptionCreatedData = (
     event: Stripe.CustomerSubscriptionCreatedEvent,
   ): PaymentEvent | null => {
@@ -720,36 +727,40 @@ export class StripeIntegration {
   private handlePaymentFailed(event: Stripe.PaymentIntentPaymentFailedEvent) {
     return null;
   }
-  private handleRollingSubscription(event: Stripe.InvoicePaymentSucceededEvent): PaymentEvent | null {
-      const invoice = event.data.object;
-      // 🔍 Detect whether this is the *first* invoice for a new subscription
-      if (invoice.billing_reason === "subscription_create") {
-        logger.info(`[StripeIntegration] Skipping first-cycle invoice; handled by checkout.session.completed`);
-        return null;
-      }
+  private handleRollingSubscription(
+    event: Stripe.InvoicePaymentSucceededEvent,
+  ): PaymentEvent | null {
+    const invoice = event.data.object;
+    // 🔍 Detect whether this is the *first* invoice for a new subscription
+    if (invoice.billing_reason === "subscription_create") {
+      logger.info(
+        `[StripeIntegration] Skipping first-cycle invoice; handled by checkout.session.completed`,
+      );
+      return null;
+    }
 
-      // ✅ Continue only if it's a recurring renewal
-      const metadata = invoice.lines.data[0]?.metadata;
-      if (!metadata) {
-        logger.warn(`[StripeIntegration] No metadata found on invoice ${invoice.id}`);
-        return null;
-      }
-        const {
-          userId,
-          subscriptionId,
-          planId,
-          type,
-          eventId,
-        } = subscriptionSchema.parse({
-          ...metadata,
-          eventId: event.id,
-          isNewSubscription: false,
-        });
-        const stripeSubscriptionId = z.string().min(1).parse(event.data.object.parent?.subscription_details?.subscription)
+    // ✅ Continue only if it's a recurring renewal
+    const metadata = invoice.lines.data[0]?.metadata;
+    if (!metadata) {
+      logger.warn(
+        `[StripeIntegration] No metadata found on invoice ${invoice.id}`,
+      );
+      return null;
+    }
+    const { userId, subscriptionId, planId, type, eventId } =
+      subscriptionSchema.parse({
+        ...metadata,
+        eventId: event.id,
+        isNewSubscription: false,
+      });
+    const stripeSubscriptionId = z
+      .string()
+      .min(1)
+      .parse(event.data.object.parent?.subscription_details?.subscription);
     return {
       isNewSubscription: false,
-      success:true,
-      stripeEventType:event.type,
+      success: true,
+      stripeEventType: event.type,
       type,
       userId,
       rawPayload: JSON.stringify(event.data),
@@ -760,7 +771,7 @@ export class StripeIntegration {
       amount: event.data.object.amount_paid,
       stripeInvoiceId: event.data.object.id,
       stripeSubscriptionId,
-    }
+    };
   }
   private handleInvoiceFailed(event: Stripe.InvoicePaymentFailedEvent) {
     return null;

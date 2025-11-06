@@ -41,6 +41,7 @@ export const subscriptionSchema = z.object({
   type: z.literal(OrderType.SUBSCRIPTION_RENEWAL),
   eventId: z.string().min(1, "EventId is required"),
   isNewSubscription: z.boolean().nullable(),
+  addressId: z.string().optional(),
 });
 
 export const updateSubscriptionInputSchema = z.object({
@@ -51,7 +52,7 @@ export const updateSubscriptionInputSchema = z.object({
   subscriptionPlanId: z.string().min(1),
   stripeInvoiceId: z.string().optional(),
   addressId: z.string().optional(),
-  isNewSubscription: z.boolean().optional()
+  isNewSubscription: z.boolean().optional(),
 });
 
 export const onCreateSubscriptionInputSchema = z.object({

@@ -113,7 +113,7 @@ export const getSubscriptionThankYouPage = (
       <h2>Subscription Confirmed</h2>
 
       <p>Thank you for subscribing to <strong>Bolaji Editions</strong>.  
-      ${isPrerelease ? "Your first edition will be released from 1st Decemeber" : ""} 
+      ${isPrerelease ? "Your first edition will be released from 1st Decemeber." : ""} 
       Every month a new edition is released. You’ll receive ongoing access to each new edition.</p>
 
       <p>An email has been sent for your confirmation.</p>

@@ -18,6 +18,7 @@ export const initConfig = () => {
     env: (process.env.NODE_ENV || "production") as "dev" | "production",
     preorderPassword: process.env.PREORDER_PASSWORD || "",
     serverUrl: process.env.SERVER_URL || "",
+    adminApiKey: process.env.ADMIN_API_KEY || "",
     redisConfig: {
       host: process.env.REDIS_HOST || "",
       port: process.env.REDIS_PORT || "",

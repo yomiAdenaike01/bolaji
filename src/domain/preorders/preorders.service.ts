@@ -29,7 +29,8 @@ import {
   PREORDER_EDITION_MAX_COPIES,
 } from "@/constants";
 import crypto from "crypto";
-import bcrpyt from "bcrypt";
+import bcrypt from "bcrypt";
+import { PasswordService } from "../password/password.service";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
@@ -49,6 +50,7 @@ export class PreordersService {
     private readonly user: UserService,
     private readonly integrations: Integrations,
     private readonly store: Store,
+    private readonly passwordService: PasswordService,
   ) {}
 
   canSubscribe = async (userId: string) => {
@@ -580,10 +582,9 @@ export class PreordersService {
     choice: PlanType;
     edition: string;
     address?: ShippingAddress;
-    newUserPassword: string;
+    newUserPassword?: string;
     quantity: number;
   }) => {
-    // TODO: Include password with email
     const sendConfirmEmail = this.integrations.email.sendEmail({
       email: email,
       type: EmailType.PREORDER_CONFIRMATION,
@@ -612,6 +613,29 @@ export class PreordersService {
     Promise.all([sendConfirmEmail, sendAdminEmail]).catch((err) => {
       logger.error(err, "Failed to confirm or admin email");
     });
+  };
+
+  hasSuccessfulPreorder = async (userId: string, tx?: TransactionClient) => {
+    const db = tx || this.db;
+    logger.info(`[Preorder Service] Has user preordered before - ${userId}`);
+    const hasPreorederBefore = await db.order.findFirst({
+      where: {
+        userId,
+        type: OrderType.PREORDER,
+        status: OrderStatus.PAID,
+        stripePaymentIntentId: {
+          not: null,
+        },
+        edition: {
+          number: 0,
+        },
+      },
+    });
+    const result = !!hasPreorederBefore;
+    logger.info(
+      `[Preorder Service] User - ${userId} has successful preorder - ${result}`,
+    );
+    return result;
   };
 
   public onCompletePreorder = async (
@@ -657,23 +681,27 @@ export class PreordersService {
       throw { message: "Failed to create preorder", status: resultStatus };
     }
 
-    const newPassword = crypto.randomBytes(6).toString("base64url");
-    const hashed = await bcrpyt.hash(newPassword, 10);
-
-    await this.db.user.update({
-      where: {
-        id: completedPreorderDto.userId,
-        status: {
-          not: UserStatus.ACTIVE,
-        },
-      },
-      data: {
-        status: UserStatus.ACTIVE,
-        passwordHash: hashed,
-      },
-    });
-
     if (!result) return null;
+
+    const shouldUpdatePassword = plan !== PlanType.PHYSICAL;
+
+    const { plainPassword, hashedPassword } =
+      await this.passwordService.generatePassword();
+
+    if (shouldUpdatePassword) {
+      await this.db.user.update({
+        where: {
+          id: completedPreorderDto.userId,
+          status: {
+            not: UserStatus.ACTIVE,
+          },
+        },
+        data: {
+          status: UserStatus.ACTIVE,
+          passwordHash: hashedPassword,
+        },
+      });
+    }
 
     const formattedAmount = new Intl.NumberFormat("en-GB", {
       currency: "gbp",
@@ -716,7 +744,7 @@ export class PreordersService {
       amount: formattedAmount,
       edition: sendCommsDto.editionCode,
       address: sendCommsDto.address,
-      newUserPassword: newPassword,
+      newUserPassword: shouldUpdatePassword ? plainPassword : undefined,
       quantity: completedPreorderDto.quantity,
     });
   };
@@ -729,45 +757,44 @@ export class PreordersService {
     }: { plan: PlanType; userId: string; editionId: string },
   ) => {
     // ----  Grant edition access ----
-    if (plan !== PlanType.PHYSICAL) {
-      const existingAccess = await tx.editionAccess.findFirst({
-        where: { userId, editionId },
+    const existingAccess = await tx.editionAccess.findFirst({
+      where: { userId, editionId, accessType: plan },
+    });
+    // Preorders unlock novemeber 9th 2025 9AM
+    if (!existingAccess) {
+      const edition = await tx.edition.findUnique({
+        where: {
+          id: editionId,
+        },
       });
-      // Preorders unlock novemeber 9th 2025 9AM
-      if (!existingAccess) {
-        const edition = await tx.edition.findUnique({
-          where: {
-            id: editionId,
-          },
-        });
 
-        await tx.editionAccess.create({
-          data: {
-            editionId,
-            userId,
-            unlockAt:
-              edition?.releaseDate || edition?.preorderOpenAt || new Date(),
-            status: AccessStatus.SCHEDULED,
-            expiresAt: addYears(Date.now(), 1),
-          },
-        });
-        logger.info(
-          `[Preorder Service] 🆕 Created edition access userId=${userId}`,
-        );
-      } else if (
-        existingAccess.unlockAt &&
-        existingAccess.status === AccessStatus.SCHEDULED &&
-        isAfter(new Date(), existingAccess.unlockAt)
-      ) {
-        // Activate automatically if the unlock date has already passed
-        await tx.editionAccess.update({
-          where: { id: existingAccess.id },
-          data: { status: AccessStatus.ACTIVE, unlockedAt: new Date() },
-        });
-        logger.info(
-          `[Preorder Service] 🔓 Activated edition access for userId=${userId}`,
-        );
-      }
+      await tx.editionAccess.create({
+        data: {
+          editionId,
+          userId,
+          accessType: plan,
+          unlockAt:
+            edition?.releaseDate || edition?.preorderOpenAt || new Date(),
+          status: AccessStatus.SCHEDULED,
+          expiresAt: addYears(Date.now(), 1),
+        },
+      });
+      logger.info(
+        `[Preorder Service] 🆕 Created edition access userId=${userId}`,
+      );
+    } else if (
+      existingAccess.unlockAt &&
+      existingAccess.status === AccessStatus.SCHEDULED &&
+      isAfter(new Date(), existingAccess.unlockAt)
+    ) {
+      // Activate automatically if the unlock date has already passed
+      await tx.editionAccess.update({
+        where: { id: existingAccess.id, accessType: plan },
+        data: { status: AccessStatus.ACTIVE, unlockedAt: new Date() },
+      });
+      logger.info(
+        `[Preorder Service] 🔓 Activated edition access for userId=${userId}`,
+      );
     }
   };
 

@@ -3,16 +3,19 @@ import { EmailType, EmailContentMap } from "./email-types";
 
 const LOGO_URL = `${process.env.SERVER_URL}/images/logo.png`;
 
-const renderPassword = (password: string) => {
+const defaultPasswordSubtitle =
+  "You can change this password anytime from your account settings after signing in.";
+
+const renderPassword = (password: string, subtitle?: string) => {
   return `<div style="margin-top:24px;background:#f5f5f5;padding:16px;border-radius:8px;text-align:center;">
         <p style="font-family:Inter,Arial,sans-serif;color:#333;font-size:14px;margin-bottom:8px;">
-          Your temporary password:
+          Your password:
         </p>
         <div style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:6px;font-weight:600;font-size:16px;letter-spacing:1px;">
           ${password}
         </div>
          <p style="font-family:Inter,Arial,sans-serif;color:#666;font-size:13px;margin-top:20px;line-height:1.5;">
-        You can change this password anytime from your account settings after signing in.
+        ${subtitle || defaultPasswordSubtitle}
       </p>
       </div>`;
 };
@@ -331,26 +334,7 @@ export const templates: {
       }
     </p>
 
-    ${
-      newPassword
-        ? `
-        <div style="background:#F8F8F8;border-radius:8px;padding:16px 20px;margin:20px 0;">
-          <p style="font-family:Inter,Arial,sans-serif;color:#111;font-size:15px;margin:0 0 6px;">
-            An account has been created for you to manage your editions and access future releases.
-          </p>
-          <p style="font-family:Inter,Arial,sans-serif;color:#333;font-size:14px;margin:0;">
-            <strong>Your account password:</strong>
-            <span style="display:inline-block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-family:monospace;font-size:14px;margin-left:6px;">
-              ${newPassword}
-            </span>
-          </p>
-          <p style="font-family:Inter,Arial,sans-serif;color:#666;font-size:13px;margin-top:8px;">
-            You can change your password anytime from your account settings after logging in. Please note, you will not be able to access your preordered Digital Edition before it's release on <strong>9th Novemeber</strong>.
-          </p>
-        </div>
-        `
-        : ""
-    }
+    ${newPassword ? renderPassword(newPassword) : ""}
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
       — The Bolaji&nbsp;Editions Team
@@ -405,45 +389,58 @@ export const templates: {
     name,
     planType,
     nextEdition,
+    newPassword,
     isPrerelease = false,
-  }) =>
-    wrap(
+  }) => {
+    return wrap(
       "Your Subscription Has Begun",
       `
-      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
-        Welcome back, ${name.split(" ")[0]}!
-      </h2>
+    <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
+      Welcome back, ${name.split(" ")[0]}!
+    </h2>
 
-      <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 14px;">
-        Your Bolaji Editions <strong>${planType}</strong> subscription ${isPrerelease ? "will be active from the 1st December" : "is now active"}. ${
-          isPrerelease
-            ? planType !== PlanType.DIGITAL
-              ? "Edition 01 releases on 1st December"
-              : `You will receive your first edition in <strong>December</strong> along with an email notifying you of it's release.`
-            : ""
-        }
-        Every month, a new edition is released and a notification will appear in your account as soon as they are published. ${`Your full access will begin from the 1st December with Edition ${nextEdition}`}
-      </p>
+    <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 14px;">
+      Your Bolaji Editions <strong>${planType}</strong> subscription ${
+        isPrerelease ? "will be active from the 1st December" : "is now active"
+      }. ${
+        isPrerelease
+          ? planType !== PlanType.DIGITAL
+            ? "Edition 01 releases on 1st December."
+            : `You will receive your first edition in <strong>December</strong> along with an email notifying you of its release.`
+          : ""
+      }
+      Every month, a new edition is released, and a notification will appear in your account as soon as they are published.
+      Your full access will begin from the 1st December with Edition ${nextEdition}.
+    </p>
 
-      <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
-        You’ll automatically receive each new Edition as it’s released every month.
-        ${
-          planType === PlanType.DIGITAL
-            ? "Your digital editions will appear in your account as soon as they’re published."
-            : ""
-        }
-      </p>
+    <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
+      You’ll automatically receive each new Edition as it’s released every month.
+      ${
+        planType === PlanType.DIGITAL || planType === PlanType.FULL
+          ? "Your digital editions will appear in your account as soon as they’re published."
+          : ""
+      }
+      ${planType === PlanType.FULL || planType === PlanType.PHYSICAL ? "You will be notified when your edition has been released for shipping" : ""} 
+    </p>
 
-      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;">
-        We’re thrilled to have you on this journey. Each month, your subscription supports
-        independent artists and creative craftsmanship. ${planType === PlanType.DIGITAL ? "Please remmeber to use your username and unique password anytime you want to access your digital subscription." : ""}
-      </p>
+    ${newPassword ? renderPassword(newPassword, isPrerelease ? `You'll be able to login from <strong>1st December</strong>. ${defaultPasswordSubtitle}` : "") : ""}
 
-      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
-        With appreciation,<br><strong>The Bolaji&nbsp;Editions Team</strong>
-      </p>
-    `,
-    ),
+    <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;">
+      We’re thrilled to have you on this journey. Each month, your subscription supports
+      independent artists and creative craftsmanship.
+      ${
+        planType === PlanType.DIGITAL
+          ? "Please remember to use your username and unique password anytime you want to access your digital subscription."
+          : ""
+      }
+    </p>
+
+    <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
+      With appreciation,<br><strong>The Bolaji&nbsp;Editions Team</strong>
+    </p>
+  `,
+    );
+  },
 
   [EmailType.SUBSCRIPTION_RENEWED]: ({ name, nextEdition }) =>
     wrap(
@@ -488,7 +485,7 @@ export const templates: {
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
-      If you’ve already subscribed to the ongoing series, <strong>Edition&nbsp;0.1</strong> will unlock on <strong>1&nbsp;December</strong>.
+      If you’ve already subscribed to the ongoing series, <strong>Edition&nbsp;01</strong> will unlock on <strong>1&nbsp;December</strong>.
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:24px;">
@@ -496,9 +493,6 @@ export const templates: {
     </p>
 
     <div style="text-align:center;margin-top:36px;">
-      <a href="${accessLink}" style="display:inline-block;background:#6C63FF;color:#fff !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:'Courier New',Courier,monospace;">
-        Access My Edition 0.0
-      </a>
       ${
         subscribeLink
           ? `<a href="${subscribeLink}" style="display:inline-block;background:#F1F0FF;color:#111 !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:'Courier New',Courier,monospace;margin-left:8px;">

@@ -7,6 +7,7 @@ import {
   onCreateSubscriptionInputSchema,
 } from "@/domain/subscriptions/dto";
 import {
+  OrderStatus,
   OrderType,
   PlanType,
   SubscriptionStatus,
@@ -21,6 +22,10 @@ import { PaymentEventActions } from "../integrations/stripe.integration";
 import { CompletePreorderStatus } from "@/domain/preorders/preorders.service";
 import { Config } from "@/config";
 import { padNumber } from "@/utils";
+import { isBefore } from "date-fns";
+import { EDITION_01_RELEASE } from "@/constants";
+import { hash } from "crypto";
+import { GeneratedPassword } from "@/domain/password/password.service";
 
 const failedPreorderDto = z.object({
   action: z.string(),
@@ -153,6 +158,9 @@ export class PaymentWorker {
           subscriptionPlanId: paymentEvent.subscriptionPlanId,
           stripeInvoiceId: paymentEvent.stripeInvoiceId,
           isNewSubscription: paymentEvent.isNewSubscription,
+          addressId: paymentEvent.addressId,
+          currentPeriodEnd: paymentEvent.currentPeriodEnd,
+          currentPeriodStart: paymentEvent.currentPeriodStart,
         });
 
       const { user, plan } = updatedSubscription;
@@ -164,8 +172,31 @@ export class PaymentWorker {
         "[Subscription Service] 🎉 Successfully completed subscription transactions",
       );
       if (paymentEvent.isNewSubscription) {
-        // TODO: change account password
-        (this.domain.integrations.email.sendEmail({
+        let passwordDetails: GeneratedPassword =
+          await this.domain.password.generatePassword();
+        // if the user has preordered then don't set a password
+        const shouldUpdatePassword = await this.db.$transaction(async (tx) => {
+          const hasPreorder = await this.domain.preorders.hasSuccessfulPreorder(
+            user.id,
+            tx,
+          );
+
+          let shouldUpdatePwd = false;
+
+          if (!hasPreorder && plan.type !== PlanType.PHYSICAL) {
+            await tx.user.update({
+              where: {
+                id: user.id,
+              },
+              data: {
+                passwordHash: passwordDetails.hashedPassword,
+              },
+            });
+            shouldUpdatePwd = true;
+          }
+          return shouldUpdatePwd;
+        });
+        this.domain.integrations.email.sendEmail({
           type: EmailType.SUBSCRIPTION_STARTED,
           email: user.email,
           content: {
@@ -173,22 +204,26 @@ export class PaymentWorker {
             email: user.email,
             nextEdition: padNumber(nextEdition?.number || 0),
             planType: plan.type,
+            newPassword: shouldUpdatePassword
+              ? passwordDetails?.plainPassword
+              : undefined,
+            isPrerelease: isBefore(Date.now(), EDITION_01_RELEASE),
           },
-        }),
-          this.domain.integrations.adminEmail.send({
-            type: AdminEmailType.SUBSCRIPTION_STARTED,
-            attachReport: true,
-            content: {
-              name: user.name,
-              email: user.email,
-              plan: plan.type,
-              periodStart: updatedSubscription.currentPeriodStart,
-              periodEnd: updatedSubscription.currentPeriodEnd,
-            },
-          }),
-          logger.info(
-            "[Subscription Service] 🎉 Successfully sent subscription created comms",
-          ));
+        });
+        this.domain.integrations.adminEmail.send({
+          type: AdminEmailType.SUBSCRIPTION_STARTED,
+          attachReport: true,
+          content: {
+            name: user.name,
+            email: user.email,
+            plan: plan.type,
+            periodStart: updatedSubscription.currentPeriodStart,
+            periodEnd: updatedSubscription.currentPeriodEnd,
+          },
+        });
+        logger.info(
+          "[Subscription Service] 🎉 Successfully sent subscription created comms",
+        );
       } else {
         this.domain.integrations.email.sendEmail({
           type: EmailType.SUBSCRIPTION_RENEWED,

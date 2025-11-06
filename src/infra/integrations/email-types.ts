@@ -109,6 +109,7 @@ export interface EmailContentMap {
     name: string;
     planType: PlanType;
     nextEdition: number;
+    newPassword?: string;
     isPrerelease?: boolean;
   };
 
@@ -129,7 +130,7 @@ export interface EmailContentMap {
     email: string;
     editionCode: string;
     plan: PlanType;
-    newPassword: string;
+    newPassword?: string;
   };
 
   [EmailType.PAYMENT_FAILED]: {

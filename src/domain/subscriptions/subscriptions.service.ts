@@ -8,6 +8,7 @@ import {
 } from "./dto";
 import crypto from "crypto";
 import {
+  AccessStatus,
   OrderStatus,
   OrderType,
   PaymentStatus,
@@ -202,7 +203,7 @@ export class SubscriptionsService {
         `[Subscriptions Service] Subscription ${subscriptionId} renewed → Edition ${nextEdition.number} unlocked.`,
       );
       // 🔀 unlock next edition
-      const isDigitalSubscription = subscriptionPlan.type !== PlanType.PHYSICAL;
+      const shouldEditionExpire = subscriptionPlan.type !== PlanType.PHYSICAL;
       logger.info(
         `[Subscription Service] Updating edition access for user=${existingSubscription.userId} nextEditionId=${nextEdition.id} nextEditionNumber=${nextEdition.number}`,
       );
@@ -212,11 +213,13 @@ export class SubscriptionsService {
             userId: existingSubscription.userId,
             editionId: nextEdition.id,
           },
+          accessType: subscriptionPlan.type,
         },
         update: {},
         create: {
-          status: "SCHEDULED",
-          expiresAt: isDigitalSubscription ? addYears(new Date(), 2) : null,
+          accessType: subscriptionPlan.type,
+          status: AccessStatus.SCHEDULED,
+          expiresAt: shouldEditionExpire ? addYears(new Date(), 2) : null,
           userId: existingSubscription.userId,
           editionId: nextEdition.id,
           subscriptionId: updatedSubscription.id,

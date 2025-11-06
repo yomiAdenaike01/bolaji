@@ -9,6 +9,8 @@ import { Config } from "@/config";
 import { getSubscriptionCancelPage } from "../templates/getSubscriptionCancelledPage";
 import { SubscriptionAlreadyActiveError } from "@/domain/subscriptions/subscriptions.service";
 import { logger } from "@/lib/logger";
+import { isBefore } from "date-fns";
+import { EDITION_01_RELEASE } from "@/constants";
 
 export class SubscriptionsController {
   constructor(
@@ -29,11 +31,16 @@ export class SubscriptionsController {
    * GET - /api/subscriptions/thank-you
    */
   handleThankYouPage = (req: Request, res: Response) => {
-    const html = getSubscriptionThankYouPage(this.config.frontEndUrl);
+    const html = getSubscriptionThankYouPage(
+      this.config.frontEndUrl,
+      isBefore(Date.now(), EDITION_01_RELEASE),
+    );
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   };
   /**
+   * @deprecated Users can now only go to subscriptions if they have a token
+   * TODO: On the 9th this page is free to use
    * GET - /api/subscriptions/can-subscribe
    */
   handleCanSubscribe = async (

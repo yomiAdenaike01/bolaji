@@ -9,20 +9,24 @@ import { SubscriptionsService } from "./subscriptions/subscriptions.service";
 import { UserService } from "./user/users.service";
 import { EditionsService } from "./editions.service";
 import { NotificationService } from "./notifications/notification.service";
+import { PasswordService } from "./password/password.service";
 
 export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   const integrations = new Integrations(db, store, appConfig);
   const userService = new UserService(db, integrations);
 
   const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
+  const passwordService = new PasswordService();
   const preorders = new PreordersService(
     appConfig,
     db,
     userService,
     integrations,
     store,
+    passwordService,
   );
   return {
+    password: passwordService,
     preorders,
     notifications: new NotificationService(
       integrations.email,

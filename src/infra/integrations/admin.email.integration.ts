@@ -10,6 +10,7 @@ import {
 } from "./admin.email.template";
 import { AdminEmailContent, AdminEmailType } from "./email-types";
 import { generateSubscriberReport } from "@/lib/spreadsheets/generateSubscribersReport";
+import { BaseEmailIntegration } from "./base.email.integration";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
@@ -19,16 +20,14 @@ const reportGenerators: Partial<
   [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: generateSubscriberReport, // ✅ NEW
 };
 
-export class AdminEmailIntegration {
-  private readonly integration!: Resend;
-
+export class AdminEmailIntegration extends BaseEmailIntegration {
   constructor(
     apiKey: string,
     private readonly adminEmailAddresses: string[],
     private readonly db: Db,
-    private readonly sentFromEmaillAddress: string,
+    protected readonly sourceEmailAddr: string,
   ) {
-    this.integration = new Resend(apiKey);
+    super(apiKey);
   }
 
   private getAdminAttachmentFilename = (type: AdminEmailType): string => {
@@ -49,6 +48,16 @@ export class AdminEmailIntegration {
     }
   };
 
+  getTemplate = <K extends AdminEmailType>(
+    type: K,
+    content: AdminEmailContent[K],
+  ) => {
+    return {
+      template: adminEmailTemplates[type](content),
+      subject: adminEmailSubjects[type],
+    };
+  };
+
   async send<K extends AdminEmailType>(opts: {
     type: K;
     content: AdminEmailContent[K];
@@ -61,8 +70,7 @@ export class AdminEmailIntegration {
     try {
       const { type, content, attachReport = true, attachmentOverride } = opts;
 
-      const html = adminEmailTemplates[type](content);
-      const subject = adminEmailSubjects[type];
+      const { template, subject } = this.getTemplate(type, content);
 
       let attachments: Attachment[] = [];
 
@@ -87,13 +95,13 @@ export class AdminEmailIntegration {
         logger.info(
           `[AdminEmailIntegration] Sending email to=${address} type=${type} subject=${subject}`,
         );
-        const response = await this.integration.emails.send({
-          from: this.sentFromEmaillAddress,
+        const response = await this.performSend({
           to: address,
           subject,
-          html,
+          html: template,
           attachments,
         });
+
         if (response.error) {
           logger.error(
             response.error,

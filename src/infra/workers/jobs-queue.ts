@@ -47,7 +47,7 @@ export class JobsQueues {
     });
 
     // Initialize scheduled jobs
-    this.addPreorderOpeningJob();
+    this.addPreorderOpeningJob({ waitlist: [] });
     this.addSendPreorderReminderJob();
     this.queueReleaseJobs();
     this.queueAdminDigestJobs();
@@ -125,22 +125,20 @@ export class JobsQueues {
     );
   }
 
-  private async addPreorderOpeningJob() {
+  async addPreorderOpeningJob(data: {
+    waitlist: Array<{ email: string; name: string }>;
+  }) {
     const releaseDate = PREORDER_OPENING_DATETIME;
     const now = new Date();
     const delay = Math.max(differenceInMilliseconds(releaseDate, now), 0);
 
-    await this.emailQueue.add(
-      "email.preorders_open",
-      {},
-      {
-        jobId: `email.preorders_open-${releaseDate.toISOString()}`,
-        delay,
-        removeOnComplete: true,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 60_000 },
-      },
-    );
+    await this.emailQueue.add("email.preorders_open", data, {
+      jobId: `email.preorders_open-${releaseDate.toISOString()}`,
+      delay,
+      removeOnComplete: true,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 60_000 },
+    });
 
     logger.info(
       `[Scheduler] Scheduled preorder opening email for ${releaseDate.toISOString()}`,

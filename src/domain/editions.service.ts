@@ -1,4 +1,10 @@
-import { AccessStatus, EditionStatus, Hub } from "@/generated/prisma/enums";
+import { Edition, EditionAccess } from "@/generated/prisma/client";
+import {
+  AccessStatus,
+  EditionStatus,
+  Hub,
+  PlanType,
+} from "@/generated/prisma/enums";
 import { Db, Store } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
@@ -45,7 +51,10 @@ export class EditionsService {
    * Fetch a user's edition access list.
    * Unlocks due editions in one batch update, then returns updated data.
    */
-  getUserEditionAccess = async (userId: string) => {
+  getUserEditionAccess = async (
+    userId: string,
+    planTypes: PlanType | PlanType[],
+  ) => {
     const cacheKey = `editionAccess:${userId}`;
     const now = new Date();
 
@@ -57,34 +66,46 @@ export class EditionsService {
       } catch {}
     }
 
-    // 2️⃣ Fetch current valid edition access
-    const activeAccess = await this.db.editionAccess.findMany({
-      where: {
-        userId,
-        status: AccessStatus.ACTIVE,
-        expiresAt: { gt: now },
-      },
+    // 2️⃣ Prepare where clause
+    let where: any = {
+      userId,
+      status: AccessStatus.ACTIVE,
+      expiresAt: { gt: now },
+    };
+
+    if (Array.isArray(planTypes)) {
+      // Multiple plan types → use OR
+      where.OR = planTypes.map((type) => ({ accessType: type }));
+    } else {
+      // Single plan type → direct match
+      where.accessType = planTypes;
+    }
+
+    // 3️⃣ Fetch valid edition access
+    const activeAccess = (await this.db.editionAccess.findMany({
+      where,
       include: {
         edition: true,
       },
       orderBy: { edition: { number: "asc" } },
-    });
+    })) as (EditionAccess & { edition: Edition | null })[];
 
-    // 3️⃣ Filter only released editions
+    // 4️⃣ Filter only released editions
     const releasedAccess = activeAccess.filter((a) =>
-      a.edition.releaseDate ? a.edition.releaseDate <= now : true,
+      a.edition?.releaseDate ? a.edition.releaseDate <= now : true,
     );
 
-    // 4️⃣ Cache for 5 minutes
+    // 5️⃣ Cache for 5 minutes
     await this.store.setEx(
       cacheKey,
       this.CACHE_TTL_SECONDS,
       JSON.stringify(releasedAccess),
     );
 
-    // 5️⃣ Return fresh data
+    // 6️⃣ Return fresh data
     return releasedAccess;
   };
+
   releaseEdition = async (editionNumber: number) => {
     const now = new Date();
 

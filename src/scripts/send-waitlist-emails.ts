@@ -1,37 +1,31 @@
-import fs from "fs";
-import { parse } from "csv-parse";
-import dotenv from "dotenv";
-import path from "path";
-import { EmailIntegration } from "../infra/integrations/email.integration";
-import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
-import { Config, initConfig } from "../config";
-import { logger } from "../lib/logger";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
-import jwt from "jsonwebtoken";
-import { Db, initInfra } from "@/infra";
-import bcrypt from "bcrypt";
-import crypto from "crypto";
 import { UserStatus } from "@/generated/prisma/enums";
-import { Job } from "bullmq";
+import { Db } from "@/infra";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { generateWaitlistEmailSummary } from "@/lib/spreadsheets/generateWaitlistEmailSummary";
+import bcrypt from "bcrypt";
+import Bottleneck from "bottleneck";
+import { Job } from "bullmq";
+import crypto from "crypto";
+import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
+import pLimit from "p-limit";
+import { Config } from "../config";
+import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
+import { EmailIntegration } from "../infra/integrations/email.integration";
+import { logger } from "../lib/logger";
+import { success } from "zod";
 
 dotenv.config();
 
-/**
- * Parse waitlist CSV into structured user objects
- */
-async function parseWaitlistCsv(
-  filePath: string,
-): Promise<{ Email: string; Name: string }[]> {
-  return new Promise((resolve, reject) => {
-    const users: { Email: string; Name: string }[] = [];
-    fs.createReadStream(filePath)
-      .pipe(parse({ columns: true, skip_empty_lines: true }))
-      .on("data", (row) => users.push(row))
-      .on("end", () => resolve(users))
-      .on("error", reject);
+const formatList = (arr: any[]): Array<{ Email: string; Name: string }> => {
+  if (!arr) return [];
+  return arr.map((a) => {
+    return {
+      Name: a["First name"],
+      Email: a["Email"],
+    };
   });
-}
+};
 
 /**
  * Send preorder release emails to waitlist users
@@ -49,115 +43,127 @@ export async function sendWaitlistEmails({
   emailIntegration: EmailIntegration;
   adminEmailIntegration: AdminEmailIntegration;
 }) {
-  logger.info(`[Job] Starting preorder email job id=${job.id}`);
-  const csvPath = path.resolve(
-    __dirname,
-    "./BOLAJI_EDITIONS_WAITLIST_SAMPLE.csv",
-  );
-  const users = await parseWaitlistCsv(csvPath);
+  const users = formatList(job.data.waitlist);
+  if (!users?.length) throw new Error("No users found in waitlist");
 
-  logger.info(`📋 Loaded ${users.length} users from waitlist CSV`);
-  logger.info(`🚀 Preparing to send preorder release emails...`);
-
+  logger.info(`📋 Loaded ${users.length} users`);
   const successful: { name: string; email: string }[] = [];
   const failed: { name: string; email: string; error: string }[] = [];
-  logger.info("Creating user passwords...");
 
-  const userEmailByPasswordHash: Record<
-    string,
-    { accountPasswordHash: string; accountPassword: string }
-  > = Object.fromEntries(
+  // --- 1️⃣ Generate passwords concurrently ---
+  logger.info("🔐 Generating passwords...");
+  const passwordLimit = pLimit(20);
+  const userEmailByPasswordHash = Object.fromEntries(
     await Promise.all(
-      users.map(async (user) => {
-        const password = crypto.randomBytes(5).toString("hex");
-        return [
-          user.Email,
-          {
-            accountPasswordHash: await bcrypt.hash(password, 10),
-            accountPassword: password,
+      users.map((user) =>
+        passwordLimit(async () => {
+          const password = crypto.randomBytes(5).toString("hex");
+          return [
+            user.Email,
+            {
+              accountPasswordHash: await bcrypt.hash(password, 10),
+              accountPassword: password,
+            },
+          ];
+        }),
+      ),
+    ),
+  );
+
+  // --- 2️⃣ Upsert users concurrently ---
+  logger.info("👤 Upserting users...");
+  const upsertLimit = pLimit(10);
+  const dbUsers = await Promise.all(
+    users.map((u) =>
+      upsertLimit(() =>
+        db.user.upsert({
+          where: { email: u.Email },
+          update: {
+            name: u.Name,
+            status: UserStatus.PENDING_PREORDER,
+            passwordHash: userEmailByPasswordHash[u.Email].accountPasswordHash,
           },
-        ];
+          create: {
+            email: u.Email,
+            name: u.Name,
+            status: UserStatus.PENDING_PREORDER,
+            passwordHash: userEmailByPasswordHash[u.Email].accountPasswordHash,
+          },
+        }),
+      ),
+    ),
+  );
+  logger.info(`✅ ${dbUsers.length} users upserted`);
+
+  const userIdsByEmail = Object.fromEntries(
+    dbUsers.map((u) => [u.email, u.id]),
+  );
+
+  // --- 3️⃣ Bottleneck rate limiter for emails (2 req/sec) ---
+  logger.info("📧 Sending preorder emails...");
+  const limiter = new Bottleneck({
+    minTime: 500, // 2 emails per second
+    maxConcurrent: 1, // ensures strict rate limit
+  });
+
+  const sessionVersion = 1;
+
+  // --- Retry wrapper for rate-limited sends ---
+
+  await Promise.all(
+    users.map((user) =>
+      limiter.schedule(async () => {
+        try {
+          const token = jwt.sign(
+            {
+              email: user.Email,
+              name: user.Name,
+              userId: userIdsByEmail[user.Email],
+              version: sessionVersion,
+              type: "PREORDER",
+              password: userEmailByPasswordHash[user.Email].accountPassword,
+            },
+            config.jwtSecret,
+            { expiresIn: "7d" },
+          );
+
+          const preorderUrl = new URL(
+            `${config.serverUrl}/preorders/private-access`,
+          );
+          preorderUrl.searchParams.append("token", token);
+
+          await emailIntegration.sendEmail({
+            email: user.Email,
+            type: EmailType.PREORDER_RELEASED,
+            content: {
+              name: user.Name,
+              email: user.Email,
+              preorderLink: preorderUrl.toString(),
+              password: userEmailByPasswordHash[user.Email].accountPassword,
+            },
+          });
+
+          successful.push({ name: user.Name, email: user.Email });
+          logger.info(`✅ Sent email to ${user.Email}`);
+        } catch (err: any) {
+          failed.push({
+            name: user.Name,
+            email: user.Email,
+            error: err.message,
+          });
+          logger.error(`❌ Failed to send ${user.Email}: ${err.message}`);
+        }
       }),
     ),
   );
-  const createdPasswords = Object.values(userEmailByPasswordHash);
 
-  if (
-    !createdPasswords.every(Boolean) ||
-    createdPasswords.length !== users.length
-  ) {
-    return logger.error("Failed to create passwords for users");
-  }
-
-  logger.info("Creating users...");
-  // TODO: HANDLE IF ALREADY EXISTS BUT THEY SHOULDN'T HAVE ANY PENDING ORDERS OR ANYTHING
-  const dbUsers = await db.user.createManyAndReturn({
-    data: users.map((u) => {
-      return {
-        email: u.Email,
-        name: u.Name,
-        status: UserStatus.PENDING_PREORDER,
-        passwordHash: userEmailByPasswordHash[u.Email].accountPasswordHash,
-      };
-    }),
-  });
-  const userIdsByEmail = Object.fromEntries(
-    dbUsers.map((user) => [user.email, user.id]),
-  );
-  logger.info(`✅ Successfully created ${users.length} users`);
-  const sessionVersion = 1;
-  for (const user of users) {
-    try {
-      const token = jwt.sign(
-        {
-          email: user.Email,
-          name: user.Name,
-          userId: userIdsByEmail[user.Email],
-          version: sessionVersion,
-          type: "PREORDER",
-          password: userEmailByPasswordHash[user.Email].accountPassword,
-        },
-        config.jwtSecret,
-        {
-          expiresIn: "7d",
-        },
-      );
-
-      const preorderUrl = new URL(
-        `${config.serverUrl}/preorders/private-access`,
-      );
-      preorderUrl.searchParams.append("token", token);
-
-      await emailIntegration.sendEmail({
-        email: user.Email,
-        type: EmailType.PREORDER_RELEASED,
-        content: {
-          name: user.Name,
-          email: user.Email,
-          preorderLink: preorderUrl.toString(),
-          password: userEmailByPasswordHash[user.Email].accountPassword,
-        },
-      });
-
-      successful.push({ name: user.Name, email: user.Email });
-      logger.info(`✅ Email sent to ${user.Name} (${user.Email})`);
-
-      await new Promise((r) => setTimeout(r, 1000));
-    } catch (err: any) {
-      failed.push({ name: user.Name, email: user.Email, error: err.message });
-      logger.error(`❌ Failed to send to ${user.Email}`, err);
-    }
-
-    logger.info("🎉 All emails processed!");
-  }
-
+  // --- 4️⃣ Report summary to admin ---
   const { buffer, filename } = await generateWaitlistEmailSummary(
     successful,
     failed,
     db,
   );
 
-  logger.info("📨 Sending report email to admins...");
   await adminEmailIntegration.send({
     type: AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY,
     content: {
@@ -170,5 +176,9 @@ export async function sendWaitlistEmails({
       buffer,
     },
   });
-  logger.info(`[Job] Preorder email job complete ✅`);
+
+  logger.info(
+    `🎉 Job complete! ${successful.length} sent, ${failed.length} failed.`,
+  );
+  return { successful, failed, success: true };
 }

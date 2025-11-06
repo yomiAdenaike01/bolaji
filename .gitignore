@@ -9,3 +9,5 @@ out
 *.csv
 *.DS_STORE
 testing.md
+emails_previews
+**/scripts/*.json

@@ -20,8 +20,12 @@ export const initWeb = (
   const app = express();
 
   app.use("/api/images", express.static(path.join(__dirname, "../../assets")));
+  app.use(
+    "/.well-known",
+    express.static(path.join(__dirname, "../../assets/well-known")),
+  );
 
-  makeBullMqRouter(app, domain.jobQueues);
+  makeBullMqRouter(app, config, domain.jobQueues);
 
   makePaymentsRouter(app, ctrls.stripePaymentWebhook);
 

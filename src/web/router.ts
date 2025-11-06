@@ -18,8 +18,13 @@ import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { createBullBoard } from "@bull-board/api";
 import { ExpressAdapter } from "@bull-board/express";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
+import { Config } from "@/config";
 
-export const makeBullMqRouter = (app: Application, jobQueues: JobsQueues) => {
+export const makeBullMqRouter = (
+  app: Application,
+  config: Config,
+  jobQueues: JobsQueues,
+) => {
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath("/admin/queues");
 
@@ -33,8 +38,8 @@ export const makeBullMqRouter = (app: Application, jobQueues: JobsQueues) => {
   });
   const protect = (req: Request, res: Response, next: NextFunction) => {
     const auth = {
-      login: process.env.ADMIN_USER || "admin",
-      password: process.env.ADMIN_PASS || "supersecret",
+      login: "admin",
+      password: config.adminApiKey,
     };
 
     const b64auth = (req.headers.authorization || "").split(" ")[1] || "";
@@ -182,5 +187,9 @@ export const setupRouters = (
   router.use("/auth", authRouter);
   router.use("/preorders", preorderRouter);
   router.use("/users", userRouter);
+  router.post(
+    "/admin/update-preorder-job",
+    controllers.jobs.handleSendWaitlist,
+  );
   app.use("/api", router);
 };

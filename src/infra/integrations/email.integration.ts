@@ -3,16 +3,33 @@ import { Resend } from "resend";
 import z from "zod";
 import { subjects, templates } from "./email.integrations.templates";
 import { EmailType, EmailContentMap } from "./email-types";
+import { BaseEmailIntegration } from "./base.email.integration";
 
-export class EmailIntegration {
-  private readonly integration!: Resend;
+const sendWithRetry = async (fn: () => Promise<void>, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (err.statusCode === 429 && i < retries - 1) {
+        const wait = 2000 * (i + 1);
+        logger.warn(`Rate limit hit. Retrying in ${wait}ms...`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      throw err;
+    }
+  }
+};
+
+export class EmailIntegration extends BaseEmailIntegration {
   constructor(
     apiKey: string,
-    private readonly sourceEmailAddr: string,
+    protected readonly sourceEmailAddr: string,
   ) {
-    this.integration = new Resend(apiKey);
+    super(apiKey);
+    this.sourceEmailAddr = sourceEmailAddr;
   }
-  private getEmailTemplate<K extends EmailType>(
+  getTemplate<K extends EmailType>(
     emailType: K,
     content: EmailContentMap[K],
   ): { template: string; subject: string } {
@@ -40,10 +57,8 @@ export class EmailIntegration {
       logger.info(
         `[EmailIntegration] Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );
-      const emailContent = this.getEmailTemplate(type, input.content);
-
-      const response = await this.integration.emails.send({
-        from: `Bolaji Editions - <${this.sourceEmailAddr}>`,
+      const emailContent = this.getTemplate(type, input.content);
+      const response = await this.performSend({
         to: email,
         html: emailContent.template,
         subject: subject || emailContent.subject,

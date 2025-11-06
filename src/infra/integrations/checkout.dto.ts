@@ -15,13 +15,13 @@ export type PaymentEvent = {
   orderId?: string;
   redirectUrl?: string | null;
   isNewSubscription?: boolean | null;
-  quantity?:number
+  quantity?: number;
 } & (
   | {
       orderType: OrderType;
       plan: PlanType;
       editionId: string | null;
-      addressId: string | null;
+      addressId?: string | null;
       paymentLinkId: string;
     }
   | {
