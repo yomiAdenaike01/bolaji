@@ -15,18 +15,16 @@ const initDb = () => {
 const initStore = (config: Config) => {
   let redisClient = createClient({
     url: config.redisConnectionUrl,
-    socket: {
-      tls: config.env === "production",
-    } as any,
   });
-  redisClient.connect()
-    .then(()=>logger.info('[Infra] Successfully connected to redis'))
+  redisClient
+    .connect()
+    .then(() => logger.info("[Infra] Successfully connected to redis"))
     .catch(logger.error);
-    redisClient.on('pong',()=>{
-      logger.info('[Infra] Received pong from redis!')
-    })
-    redisClient.ping()
-    
+  redisClient.on("pong", () => {
+    logger.info("[Infra] Received pong from redis!");
+  });
+  redisClient.ping();
+
   return redisClient;
 };
 
