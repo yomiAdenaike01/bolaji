@@ -10,9 +10,13 @@ export enum AdminEmailType {
   SUPPORT_TICKET_CREATED = "SUPPORT_TICKET_CREATED",
   WAITLIST_PREORDER_RELEASE_SUMMARY = "WAITLIST_PREORDER_RELEASE_SUMMARY",
   EDITION_PUBLISH_REQUEST = "EDITION_PUBLISH_REQUEST", // 👈 NEW
+  SUBSCRIBER_DAILY_DIGEST = "SUBSCRIBER_DAILY_DIGEST",
 }
 
 export type AdminEmailContent = {
+  [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: {
+    timeOfDay: "morning" | "night";
+  };
   [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]: {
     totalSent: number;
     totalFailed: number;
@@ -30,7 +34,7 @@ export type AdminEmailContent = {
     plan: string;
     editionCode: string;
     amount: string;
-    quantity: number
+    quantity: number;
     address?: ShippingAddress;
   };
 
@@ -105,13 +109,13 @@ export interface EmailContentMap {
     name: string;
     planType: PlanType;
     nextEdition: number;
+    isPrerelease?: boolean;
   };
 
   [EmailType.NEW_EDITION_RELEASED]: {
     name: string;
     editionTitle: string;
     editionCode: string;
-    editionLink: string;
   };
 
   [EmailType.REGISTER]: {
@@ -125,7 +129,7 @@ export interface EmailContentMap {
     email: string;
     editionCode: string;
     plan: PlanType;
-    newPassword: string
+    newPassword: string;
   };
 
   [EmailType.PAYMENT_FAILED]: {

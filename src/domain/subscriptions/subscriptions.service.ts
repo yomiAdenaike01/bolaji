@@ -24,7 +24,7 @@ import { Config } from "@/config";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {
-    super(message)
+    super(message);
   }
 }
 
@@ -105,7 +105,7 @@ export class SubscriptionsService {
       subscriptionPlanId,
       stripeInvoiceId,
       addressId,
-      isNewSubscription = false
+      isNewSubscription = false,
     } = params;
 
     const result = await this.db.$transaction(async (tx) => {
@@ -201,31 +201,27 @@ export class SubscriptionsService {
       logger.info(
         `[Subscriptions Service] Subscription ${subscriptionId} renewed → Edition ${nextEdition.number} unlocked.`,
       );
-      // 🔀 For digital plans: unlock next edition
-      if (subscriptionPlan.type !== PlanType.PHYSICAL) {
-        logger.info(
-          `[Subscription Service] Updating edition access for user=${existingSubscription.userId} nextEditionId=${nextEdition.id} nextEditionNumber=${nextEdition.number}`,
-        );
-        await tx.editionAccess.upsert({
-          where: {
-            userId_editionId: {
-              userId: existingSubscription.userId,
-              editionId: nextEdition.id,
-            },
-          },
-          update: {},
-          create: {
-            status: "SCHEDULED",
-            unlockAt: new Date(),
-            expiresAt: addYears(new Date(), 2),
+      // 🔀 unlock next edition
+      const isDigitalSubscription = subscriptionPlan.type !== PlanType.PHYSICAL;
+      logger.info(
+        `[Subscription Service] Updating edition access for user=${existingSubscription.userId} nextEditionId=${nextEdition.id} nextEditionNumber=${nextEdition.number}`,
+      );
+      await tx.editionAccess.upsert({
+        where: {
+          userId_editionId: {
             userId: existingSubscription.userId,
             editionId: nextEdition.id,
-            unlockedAt: new Date(),
-            subscriptionId: updatedSubscription.id,
           },
-        });
-        return { updatedSubscription, nextEdition };
-      }
+        },
+        update: {},
+        create: {
+          status: "SCHEDULED",
+          expiresAt: isDigitalSubscription ? addYears(new Date(), 2) : null,
+          userId: existingSubscription.userId,
+          editionId: nextEdition.id,
+          subscriptionId: updatedSubscription.id,
+        },
+      });
       if (!addressId) return { updatedSubscription, nextEdition };
       logger.info(
         `[Subscription Service] Creating shipment for userId=${existingSubscription.userId} `,
@@ -244,15 +240,23 @@ export class SubscriptionsService {
       return { updatedSubscription, nextEdition };
     });
     if (isNewSubscription)
-    await this.db.user.update({
-      where: {
-        id: result.updatedSubscription.user.id,
-        status: {not:UserStatus.ACTIVE},
-      },
-      data: {
-        status: UserStatus.ACTIVE,
-      },
-    });
+      try {
+        await this.db.user.update({
+          where: {
+            id: result.updatedSubscription.user.id,
+            status: { not: UserStatus.ACTIVE },
+          },
+          data: {
+            status: UserStatus.ACTIVE,
+          },
+        });
+      } catch (error) {
+        logger.error(
+          error,
+          `[Subscription Service]: Failed to set user - ${result.updatedSubscription.user.id} status to ACTIVE`,
+        );
+      }
+
     return result;
   };
 
@@ -335,7 +339,7 @@ export class SubscriptionsService {
             : {}),
         },
       });
-  
+
       userId = user.id;
     }
     const startTime = Date.now();

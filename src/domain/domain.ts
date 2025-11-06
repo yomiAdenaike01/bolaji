@@ -8,6 +8,7 @@ import { SessionService } from "./session/session";
 import { SubscriptionsService } from "./subscriptions/subscriptions.service";
 import { UserService } from "./user/users.service";
 import { EditionsService } from "./editions.service";
+import { NotificationService } from "./notifications/notification.service";
 
 export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   const integrations = new Integrations(db, store, appConfig);
@@ -23,7 +24,13 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   );
   return {
     preorders,
-    editions: new EditionsService(db, store),
+    notifications: new NotificationService(
+      integrations.email,
+      integrations.adminEmail,
+      jobQueues,
+      db,
+    ),
+    editions: new EditionsService(db, store, jobQueues),
     session: new SessionService(appConfig, db, store),
     user: userService,
     auth: new AuthService(db, userService),

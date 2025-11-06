@@ -106,6 +106,7 @@ enum EditionStatus {
   PENDING
   PREORDER_OPEN
   CLOSED
+  ACTIVE
 }
 
 //////////////////////////////////////////////////////////
@@ -229,11 +230,13 @@ model Device {
 //////////////////////////////////////////////////////////
 
 model Edition {
-  id              String        @id @default(cuid())
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  number          Int           @unique
-  code            String        @unique
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  number          Int      @unique
+  code            String   @unique
+  readyForRelease Boolean  @default(false)
+
   title           String
   releaseDate     DateTime?
   hub             Hub?
@@ -260,12 +263,12 @@ model EditionAccess {
   edition        Edition       @relation(fields: [editionId], references: [id], onDelete: Cascade)
   editionId      String
   unlockedAt     DateTime? // the actual moment it was activated (nullable until unlocked)
-  unlockAt       DateTime // when it *should* become active
+  unlockAt       DateTime? // when it *should* become active
   status         AccessStatus  @default(SCHEDULED)
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
   subscriptionId String?
   grantedAt      DateTime      @default(now())
-  expiresAt      DateTime
+  expiresAt      DateTime?
 
   @@unique([userId, editionId])
   @@index([userId])
@@ -380,7 +383,7 @@ model Order {
   edition               Edition?      @relation(fields: [editionId], references: [id], onDelete: SetNull)
   editionId             String?
   totalCents            Int
-  quantity Int @default(1)
+  quantity              Int           @default(1)
   currency              String        @default("GBP")
   stripePaymentIntentId String?       @unique
   payments              Payment[]
@@ -467,6 +470,7 @@ model Shipment {
   dispatchedAt   DateTime?
   deliveredAt    DateTime?
   shippingMonth  DateTime?
+
   @@index([userId, status])
   @@index([editionId, status])
 }

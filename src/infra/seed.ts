@@ -1,35 +1,22 @@
-import { EditionStatus, Hub, OrderStatus, PlanType } from "@/generated/prisma/client";
+import {
+  EditionStatus,
+  Hub,
+  OrderStatus,
+  PlanType,
+} from "@/generated/prisma/client";
 import { logger } from "@/lib/logger";
 import { Db, Store, TransactionClient } from ".";
 import {
+  DEFAULT_PLANS,
   EDITION_00_REMANING_CACHE_KEY,
+  EDITION_01_RELEASE,
   PREORDER_CLOSING_DATETIME,
   PREORDER_EDITION_MAX_COPIES,
   PREORDER_OPENING_DATETIME,
 } from "@/constants";
-import { log } from "node:console";
+import { padNumber } from "@/utils";
 
 const ensureDefaultPlans = async (db: TransactionClient) => {
-  const DEFAULT_PLANS = [
-    {
-      type: PlanType.FULL,
-      name: "Full Access (Digital + Physical)",
-      priceCents: 2499,
-      currency: "GBP",
-    },
-    {
-      type: PlanType.PHYSICAL,
-      name: "Physical Edition Subscription",
-      priceCents: 1499,
-      currency: "GBP",
-    },
-    {
-      type: PlanType.DIGITAL,
-      name: "Digital Access Subscription",
-      priceCents: 999,
-      currency: "GBP",
-    },
-  ];
   logger.info("🔍 Checking for default subscription plans in database...");
   for (const plan of DEFAULT_PLANS) {
     const existing = await db.subscriptionPlan.findFirst({
@@ -59,12 +46,23 @@ const ensureDefaultPlans = async (db: TransactionClient) => {
 };
 
 const ensureEditions = async (db: TransactionClient) => {
-  logger.info("🌱 Seeding Editions");
+  logger.info("🌱 Ensuring Editions (will overwrite existing where needed)");
 
-  // Edition 00 (Preorder Edition)
-  const edition = await db.edition.upsert({
+  // ───────────────────────────────────────────────
+  // Edition 00 — Preorder Edition
+  // ───────────────────────────────────────────────
+  const edition00 = await db.edition.upsert({
     where: { number: 0 },
-    update: {},
+    update: {
+      title: "Edition 00 — Preorder",
+      status: EditionStatus.PENDING,
+      releaseDate: PREORDER_OPENING_DATETIME,
+      preorderOpenAt: PREORDER_OPENING_DATETIME,
+      preorderCloseAt: PREORDER_CLOSING_DATETIME,
+      maxCopies: PREORDER_EDITION_MAX_COPIES,
+      hub: Hub.HUB1,
+      updatedAt: new Date(),
+    },
     create: {
       number: 0,
       hub: Hub.HUB1,
@@ -78,40 +76,50 @@ const ensureEditions = async (db: TransactionClient) => {
       maxCopies: PREORDER_EDITION_MAX_COPIES,
     },
   });
+
+  // ───────────────────────────────────────────────
+  // Future Editions (01 → 12)
+  // ───────────────────────────────────────────────
   const totalFuture = 12;
 
+  for (let i = 1; i <= totalFuture; i++) {
+    const padded = padNumber(i);
+    const hub = i <= 6 ? Hub.HUB1 : Hub.HUB2;
 
-  const futureSeeds = Array.from({ length: totalFuture }, (_, i) => {
-    const number = i + 1; // starts at 1
-    const padded = String(number).padStart(2, "0"); // "01", "02", ...
-    const hub = number <= 6 ? Hub.HUB1 : Hub.HUB2;
-    logger.info(`🌱 Seeding edition ED${padded}...`);
-    const prom = db.edition.upsert({
-      where: { number },
-      update: {},
-      create: {
-        number,
+    const releaseDate = i === 1 ? EDITION_01_RELEASE : null;
+
+    logger.info(`🔄 Ensuring edition ED${padded} (hub=${hub})...`);
+
+    await db.edition.upsert({
+      where: { number: i },
+      update: {
         hub,
         code: `ED${padded}`,
         title: `Edition ${padded}`,
         status: EditionStatus.PENDING,
+        releaseDate,
+        updatedAt: new Date(),
+      },
+      create: {
+        number: i,
+        hub,
+        code: `ED${padded}`,
+        title: `Edition ${padded}`,
+        status: EditionStatus.PENDING,
+        releaseDate,
         createdAt: new Date(),
       },
     });
-    return prom;
-  });
+  }
 
-  await Promise.all(futureSeeds);
-
-  logger.info(`✅ Seeded Editions complete`);
-  return edition;
+  logger.info("✅ Editions ensured (existing records updated if needed)");
+  return edition00;
 };
 
-
- async function initializeEditionStock(
+async function initializeEditionStock(
   db: Db,
   store: Store,
-  preorderEdition: { id: string; maxCopies: number | null }
+  preorderEdition: { id: string; maxCopies: number | null },
 ) {
   logger.info("[Stock Init] Checking preorder edition stock...");
 
@@ -133,7 +141,6 @@ const ensureEditions = async (db: TransactionClient) => {
     },
   });
 
-
   const totalReserved = (paidOrders._sum as any).quantity ?? 0;
   const remaining = Math.max(maxCopies - totalReserved, 0);
 
@@ -144,7 +151,7 @@ const ensureEditions = async (db: TransactionClient) => {
   if (existingNum !== remaining) {
     await store.set(EDITION_00_REMANING_CACHE_KEY, remaining);
     logger.info(
-      `[Stock Init] 🔄 Updated Redis stock: ${remaining} remaining (Max: ${maxCopies}, Reserved: ${totalReserved})`
+      `[Stock Init] 🔄 Updated Redis stock: ${remaining} remaining (Max: ${maxCopies}, Reserved: ${totalReserved})`,
     );
   } else {
     logger.info("[Stock Init] ✅ Cache already up to date.");
@@ -152,7 +159,6 @@ const ensureEditions = async (db: TransactionClient) => {
 
   return remaining;
 }
-
 
 export const seed = async (db: Db, store: Store) => {
   const preorderEdition = await db.$transaction(async (tx) => {
@@ -162,6 +168,6 @@ export const seed = async (db: Db, store: Store) => {
     ]);
     return edition00;
   });
-   await initializeEditionStock(db,store, preorderEdition)
-  logger.info('[Seed] ✅ Seeding complete')
+  await initializeEditionStock(db, store, preorderEdition);
+  logger.info("[Seed] ✅ Seeding complete");
 };

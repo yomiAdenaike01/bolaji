@@ -2,12 +2,13 @@ import { Db } from "@/infra";
 import { logger } from "@/lib/logger";
 import { Job, Worker } from "bullmq";
 import z from "zod";
-import { EmailType } from "../integrations/email-types";
+import { AdminEmailType, EmailType } from "../integrations/email-types";
 import { EmailIntegration } from "../integrations/email.integration";
 import { Config } from "@/config";
 import { OrderStatus, PlanType, UserStatus } from "@/generated/prisma/enums";
 import { sendWaitlistEmails } from "@/scripts/send-waitlist-emails";
 import { AdminEmailIntegration } from "../integrations/admin.email.integration";
+import { NotificationService } from "@/domain/notifications/notification.service";
 
 export class EmailWorker {
   constructor(
@@ -15,33 +16,106 @@ export class EmailWorker {
     connection: string,
     private readonly emailIntegration: EmailIntegration,
     private readonly adminEmailIntegration: AdminEmailIntegration,
+    private readonly notificationService: NotificationService,
     private readonly config: Config,
   ) {
     const w = new Worker("emails", async (job) => this.process(job), {
       connection: {
         url: connection,
       },
+      concurrency: 5,
     });
-    w.on('failed',(job)=>{
-      logger.warn(`[EmailWorker] Failed to complete job - $${job?.name} ${job?.id}`)
-    })
-    w.on('error',(error)=>{
-      logger.error(error,`[EmailWorker] Error - Processing email job`)
-    })
+    w.on("failed", (job) => {
+      logger.warn(
+        `[EmailWorker] Failed to complete job - $${job?.name} ${job?.id}`,
+      );
+    });
+    w.on("error", (error) => {
+      logger.error(error, `[EmailWorker] Error - Processing email job`);
+    });
   }
 
   process = async (job: Job<any, any, string>) => {
     logger.info(`📬 [EmailWorker] Processing job: ${job.name}`);
 
     switch (job.name) {
+      case "email.admin_subscriber_digest": {
+        const timeOfDay: "morning" | "night" =
+          job.data?.timeOfDay === "night" ? "night" : "morning";
+
+        try {
+          logger.info(
+            `[EmailWorker] Generating ${timeOfDay} subscriber digest report...`,
+          );
+
+          await this.adminEmailIntegration.send({
+            type: AdminEmailType.SUBSCRIBER_DAILY_DIGEST,
+            content: { timeOfDay },
+            attachReport: true, // ✅ triggers report generator internally
+          });
+
+          logger.info(
+            `[EmailWorker] ✅ Sent ${timeOfDay} admin subscriber digest`,
+          );
+        } catch (err) {
+          logger.error(
+            err,
+            "[EmailWorker] Failed to send admin subscriber digest",
+          );
+          throw err;
+        }
+        break;
+      }
+      case "email.release": {
+        const parsed = z
+          .object({
+            editionCode: z.string(),
+            editionTitle: z.string(),
+            recipients: z.array(
+              z.object({
+                email: z.email(),
+                name: z.string().optional(),
+              }),
+            ),
+          })
+          .parse(job.data);
+
+        const { editionCode, editionTitle, recipients } = parsed;
+        logger.info(
+          `📢 Sending release email for Edition ${editionCode} to ${recipients.length} recipients`,
+        );
+
+        for (const recipient of recipients) {
+          try {
+            await this.emailIntegration.sendEmail({
+              email: recipient.email,
+              type: EmailType.NEW_EDITION_RELEASED,
+              content: {
+                name: recipient.name ?? "there",
+                editionTitle,
+                editionCode,
+              },
+            });
+
+            await new Promise((r) => setTimeout(r, 1000)); // small throttle
+          } catch (err) {
+            logger.error(
+              err,
+              `[EmailWorker] Failed to send release email to ${recipient.email}`,
+            );
+          }
+        }
+
+        break;
+      }
       case "email.preorders_open": {
-        // await sendWaitlistEmails({
-        //   job,
-        //   config: this.config,
-        //   db: this.db,
-        //   emailIntegration: this.emailIntegration,
-        //   adminEmailIntegration: this.adminEmailIntegration,
-        // });
+        await sendWaitlistEmails({
+          job,
+          config: this.config,
+          db: this.db,
+          emailIntegration: this.emailIntegration,
+          adminEmailIntegration: this.adminEmailIntegration,
+        });
         break;
       }
       case "email.preorder_reminder": {
@@ -111,8 +185,8 @@ export class EmailWorker {
         const user = await this.db.user.findUnique({ where: { id: userId } });
         if (!user?.email) return;
 
-        await Promise.all([
-          this.emailIntegration.sendEmail({
+        this.emailIntegration
+          .sendEmail({
             type: EmailType.SUBSCRIPTION_RENEWED,
             email: user.email,
             content: {
@@ -120,17 +194,13 @@ export class EmailWorker {
               email: user.email,
               nextEdition: nextEdition?.id,
             },
-          }),
-          this.db.emailLog.create({
-            data: {
-              userId,
-              toEmail: user.email,
-              templateKey: EmailType.SUBSCRIPTION_RENEWED,
-              subject: "Your Bolaji Editions subscription has renewed",
-              deliveredAt: new Date(),
-            },
-          }),
-        ]);
+          })
+          .catch((err) => {
+            logger.error(
+              err,
+              `[Email Worker] Failed to send ${EmailType.SUBSCRIPTION_RENEWED}`,
+            );
+          });
 
         break;
       }

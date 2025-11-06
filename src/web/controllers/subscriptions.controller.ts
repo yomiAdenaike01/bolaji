@@ -7,8 +7,8 @@ import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 import { getSubscriptionThankYouPage } from "../templates/getSubscriptionThankyouPage";
 import { Config } from "@/config";
 import { getSubscriptionCancelPage } from "../templates/getSubscriptionCancelledPage";
-import { SubscriptionAlreadyActiveError } from '@/domain/subscriptions/subscriptions.service';
-import { logger } from '@/lib/logger';
+import { SubscriptionAlreadyActiveError } from "@/domain/subscriptions/subscriptions.service";
+import { logger } from "@/lib/logger";
 
 export class SubscriptionsController {
   constructor(
@@ -29,9 +29,7 @@ export class SubscriptionsController {
    * GET - /api/subscriptions/thank-you
    */
   handleThankYouPage = (req: Request, res: Response) => {
-    const html = getSubscriptionThankYouPage(
-      `${this.config.frontEndUrl}/auth/login`,
-    );
+    const html = getSubscriptionThankYouPage(this.config.frontEndUrl);
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   };
@@ -58,32 +56,41 @@ export class SubscriptionsController {
    */
   handleCreateSubscription = async (req: Request, res: Response) => {
     try {
-    const { error, data: subscriptionsInput } =
-      createSubscriptionInputSchema.safeParse({
-        ...req.body,
-        userId: req.body.userId || await this.domain.session.getUserId(
-          (req as any).sessionId,
-        ),
-      });
+      const sessionId = await this.domain.session.getUserId(
+        (req as any).sessionId,
+      );
+      const { error, data: subscriptionsInput } =
+        createSubscriptionInputSchema.safeParse({
+          ...req.body,
+          userId: req.body.userId || sessionId,
+        });
 
-    if (error) {
-      invalidInputErrorResponse(res, error.issues, "/subscriptions/create");
-      return;
-    }
-
-    const { checkoutUrl } = await this.domain.subscriptions.createSubscription({
-      ...subscriptionsInput,
-      deviceFingerprint: createDeviceFingerprint(req),
-      userAgent: getRequestUserAgent(req),
-    });
-
-    res.status(StatusCodes.OK).json({ url: checkoutUrl });
-    } catch (error) {
-      logger.error(error,'[SubscriptionController] Failed to start subscription')
-      if (error instanceof SubscriptionAlreadyActiveError) {
-       return res.status(StatusCodes.CONFLICT).json({error:"Subscription already active"})
+      if (error) {
+        invalidInputErrorResponse(res, error.issues, "/subscriptions/create");
+        return;
       }
-      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error:"Failed to start subscription"})
+
+      const { checkoutUrl } =
+        await this.domain.subscriptions.createSubscription({
+          ...subscriptionsInput,
+          deviceFingerprint: createDeviceFingerprint(req),
+          userAgent: getRequestUserAgent(req),
+        });
+
+      res.status(StatusCodes.OK).json({ url: checkoutUrl });
+    } catch (error) {
+      logger.error(
+        error,
+        "[SubscriptionController] Failed to start subscription",
+      );
+      if (error instanceof SubscriptionAlreadyActiveError) {
+        return res
+          .status(StatusCodes.CONFLICT)
+          .json({ error: "Subscription already active" });
+      }
+      res
+        .status(StatusCodes.INTERNAL_SERVER_ERROR)
+        .json({ error: "Failed to start subscription" });
     }
   };
 }

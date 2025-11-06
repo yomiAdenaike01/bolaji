@@ -93,10 +93,10 @@ export class PreorderController {
 
       if (!hasClicked) {
         // First-time click → mark it in both store and DB
-        await this.domain.user.markPreorderEmailClicked(decoded.userId);
-
-        // Cache this fact to avoid future DB writes
-        await this.store.set(clickedKey, "true", { EX: 60 * 60 * 24 * 7 }); // 7 days TTL (adjust as you wish)
+        await Promise.all([
+          this.domain.user.markPreorderEmailClicked(decoded.userId),
+          this.store.set(clickedKey, "true", { EX: 60 * 60 * 24 * 7 }),
+        ]);
       }
 
       // ✅ Render preorder password page
@@ -160,7 +160,7 @@ export class PreorderController {
       const redirectUrl = new URL(this.config.privateAccessPageUrl);
       redirectUrl.searchParams.set("token", accessToken);
 
-      return res.redirect(303,redirectUrl.toString());
+      return res.redirect(303, redirectUrl.toString());
     } catch (error: any) {
       logger.error(error, "Preorder password validation failed");
       const html = getPreorderPasswordPage(token, "Invalid or expired link.");
@@ -233,9 +233,9 @@ export class PreorderController {
       userId: user.id,
       email: user.email,
       addressId: user.addressId,
-      quantity: input.quantity
+      quantity: input.quantity,
     });
-    
+
     await this.domain.session.setLoginInfo(sessionId, {
       userId: user.id,
       email: user.email,
@@ -246,7 +246,6 @@ export class PreorderController {
     res.status(StatusCodes.OK).json(preoder);
   };
 
-  // TODO: Add quantities for phyiscal copies
   /**
    * POST /api/preorders
    * Create preorder for authenticated user

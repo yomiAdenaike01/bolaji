@@ -9,12 +9,14 @@ import {
   adminEmailTemplates,
 } from "./admin.email.template";
 import { AdminEmailContent, AdminEmailType } from "./email-types";
+import { generateSubscriberReport } from "@/lib/spreadsheets/generateSubscribersReport";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
 > = {
   [AdminEmailType.NEW_USER]: generateUsersReportSheet,
   [AdminEmailType.NEW_PREORDER]: generatePreorderSummaryReport,
+  [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: generateSubscriberReport, // ✅ NEW
 };
 
 export class AdminEmailIntegration {

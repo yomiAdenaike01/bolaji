@@ -6,7 +6,6 @@ import { EmailIntegration } from "../infra/integrations/email.integration";
 import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
 import { Config, initConfig } from "../config";
 import { logger } from "../lib/logger";
-import { generatePreorderEmailStatusReport } from "../lib/spreadsheets/generatePreorderReport";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import jwt from "jsonwebtoken";
 import { Db, initInfra } from "@/infra";
@@ -14,7 +13,8 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { UserStatus } from "@/generated/prisma/enums";
 import { Job } from "bullmq";
-import { Integrations } from "@/infra/integrations";
+import { generateWaitlistEmailSummary } from "@/lib/spreadsheets/generateWaitlistEmailSummary";
+
 dotenv.config();
 
 /**
@@ -151,9 +151,10 @@ export async function sendWaitlistEmails({
     logger.info("🎉 All emails processed!");
   }
 
-  const { buffer, filename } = await generatePreorderEmailStatusReport(
+  const { buffer, filename } = await generateWaitlistEmailSummary(
     successful,
     failed,
+    db,
   );
 
   logger.info("📨 Sending report email to admins...");

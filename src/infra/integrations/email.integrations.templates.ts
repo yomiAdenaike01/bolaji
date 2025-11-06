@@ -1,7 +1,7 @@
 import { PlanType } from "@/generated/prisma/enums";
 import { EmailType, EmailContentMap } from "./email-types";
-const LOGO_URL =
-  "https://static.wixstatic.com/media/7ec957_cdb075d0cbbe459ebbb49f125106e1fb~mv2.png/v1/fill/w_99,h_66,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/Ade_Logo_Black.png";
+
+const LOGO_URL = `${process.env.SERVER_URL}/images/logo.png`;
 
 const renderPassword = (password: string) => {
   return `<div style="margin-top:24px;background:#f5f5f5;padding:16px;border-radius:8px;text-align:center;">
@@ -158,12 +158,7 @@ export const templates: {
     `,
     ),
 
-  [EmailType.NEW_EDITION_RELEASED]: ({
-    name,
-    editionTitle,
-    editionCode,
-    editionLink,
-  }) =>
+  [EmailType.NEW_EDITION_RELEASED]: ({ name, editionTitle, editionCode }) =>
     wrap(
       ` ${editionTitle} — Now Available`,
       `
@@ -174,15 +169,6 @@ export const templates: {
       This new release continues Bolaji’s mission of celebrating artistry,
       craftsmanship, and culture — available now in both digital and physical formats.
     </p>
-
-    <div style="text-align:center;margin:32px 0;">
-      <a href="${editionLink}" 
-        style="background-color:#6b21a8;color:#ffffff;text-decoration:none;
-               padding:14px 32px;border-radius:8px;font-weight:600;
-               display:inline-block;font-size:15px;">
-        View Edition ${editionCode}
-      </a>
-    </div>
 
     <p style="font-size:15px;line-height:1.6;color:#444;">
       Thank you for being part of the Bolaji Editions journey. We can’t wait
@@ -201,7 +187,7 @@ export const templates: {
   <!-- Hero Image -->
   <div style="text-align:center;margin-bottom:24px;">
     <img 
-      src="https://framerusercontent.com/images/G2p7Ep8Gm07WQuiOpA2frgrrB0.jpg?scale-down-to=400&width=300&height=300"
+      src="https://framerusercontent.com/images/G2p7Ep8Gm07WQuiOpA2frgrrB0.jpg?scale-down-to=600&width=526&height=526"
       alt="Bolaji Editions — Edition 00"
       style="max-width:100%;height:auto;border-radius:8px;"
     />
@@ -231,6 +217,14 @@ export const templates: {
     <strong>Adébayo&nbsp;Bolaji</strong>.
   </p>
 
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
+    <strong>Bolaji&nbsp;Editions</strong> is a <strong>12 part</strong> collectable art experience. Each edition is released monthly, forming a complete set over a year. Edition 00 is the special prelaunch limited edition from <strong>Today</strong>. The full ongoing Bolaji Editions subscription begins with the <strong>first</strong> Edition 01 starting in <strong>December 2025</strong>. 
+  </p>
+
+  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
+      Everyone can subscribe for the ongoing editions from the <strong>9th November - our launch day</strong>.
+    </p>
+
   <!-- List -->
   <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 18px;">
     Each month offers a singular, curated experience of:
@@ -244,14 +238,13 @@ export const templates: {
 
   <!-- Edition Info -->
   <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
-    <strong>Edition&nbsp;00</strong> is a one-time-only print release — limited to just <strong>300&nbsp;physical&nbsp;copies</strong> — 
+    The inaugural <strong>Edition&nbsp;00</strong> is a one-time-only print release limited to just <strong>300&nbsp;physical&nbsp;copies</strong>, also, there is a digital version
     and acts as the gateway into this world. It includes <em>Part&nbsp;One</em> of Bolaji’s new  <strong>“100&nbsp;People”</strong> short film 
    titled <strong>"What we reach for"</strong>, only viewable via this Edition.
   </p>
 
   <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
-    This is early private access before subscriptions open publicly on <strong>November&nbsp;9th</strong>, 
-    when the full monthly digital and physical editions begin with <strong>Edition&nbsp;01</strong>.
+    This is early private access before subscriptions open publicly on <strong>November 9th</strong>. 
   </p>
 
   <!-- Password Block -->
@@ -313,15 +306,15 @@ export const templates: {
     );
   },
 
-[EmailType.PREORDER_CONFIRMATION]: ({
-  name,
-  editionCode,
-  plan,
-  newPassword,
-}) =>
-  wrap(
-    "Your Preorder is Confirmed",
-    `
+  [EmailType.PREORDER_CONFIRMATION]: ({
+    name,
+    editionCode,
+    plan,
+    newPassword,
+  }) =>
+    wrap(
+      "Your Preorder is Confirmed",
+      `
     <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
       Thank you, ${name.split(" ")[0]}!
     </h2>
@@ -346,13 +339,13 @@ export const templates: {
             An account has been created for you to manage your editions and access future releases.
           </p>
           <p style="font-family:Inter,Arial,sans-serif;color:#333;font-size:14px;margin:0;">
-            <strong>Your temporary password:</strong>
+            <strong>Your account password:</strong>
             <span style="display:inline-block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-family:monospace;font-size:14px;margin-left:6px;">
               ${newPassword}
             </span>
           </p>
           <p style="font-family:Inter,Arial,sans-serif;color:#666;font-size:13px;margin-top:8px;">
-            You can change your password anytime from your account settings after logging in.
+            You can change your password anytime from your account settings after logging in. Please note, you will not be able to access your preordered Digital Edition before it's release on <strong>9th Novemeber</strong>.
           </p>
         </div>
         `
@@ -362,9 +355,8 @@ export const templates: {
     <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
       — The Bolaji&nbsp;Editions Team
     </p>
-  `
-  ),
-
+  `,
+    ),
 
   [EmailType.PAYMENT_FAILED]: ({ name, reason }) =>
     wrap(
@@ -408,7 +400,13 @@ export const templates: {
       </p>
     `,
     ),
-  [EmailType.SUBSCRIPTION_STARTED]: ({ name, planType, nextEdition }) =>
+  // TODO: Update if edition 1 isn't out yet, then it should say the subscription will be active from the 1st December
+  [EmailType.SUBSCRIPTION_STARTED]: ({
+    name,
+    planType,
+    nextEdition,
+    isPrerelease = false,
+  }) =>
     wrap(
       "Your Subscription Has Begun",
       `
@@ -417,32 +415,28 @@ export const templates: {
       </h2>
 
       <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 14px;">
-        Your Bolaji Editions <strong>${planType}</strong> subscription is now active.
+        Your Bolaji Editions <strong>${planType}</strong> subscription ${isPrerelease ? "will be active from the 1st December" : "is now active"}. ${
+          isPrerelease
+            ? planType !== PlanType.DIGITAL
+              ? "Edition 01 releases on 1st December"
+              : `You will receive your first edition in <strong>December</strong> along with an email notifying you of it's release.`
+            : ""
+        }
+        Every month, a new edition is released and a notification will appear in your account as soon as they are published. ${`Your full access will begin from the 1st December with Edition ${nextEdition}`}
       </p>
 
       <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
-        You’ll automatically receive each new Edition as it’s released — 
-        starting with <strong>Edition&nbsp;${nextEdition}</strong>.
+        You’ll automatically receive each new Edition as it’s released every month.
         ${
           planType === PlanType.DIGITAL
             ? "Your digital editions will appear in your account as soon as they’re published."
-            : "Your physical editions will be prepared and shipped upon each release."
+            : ""
         }
       </p>
 
-      <div style="text-align:center;margin:32px 0;">
-        <a href="https://bolajieditions.com/account" 
-           style="background:#6C63FF;color:#fff;text-decoration:none;
-                  padding:14px 32px;border-radius:6px;
-                  font-family:Inter,Arial,sans-serif;
-                  font-size:15px;display:inline-block;font-weight:500;">
-           View Your Editions →
-        </a>
-      </div>
-
       <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;">
         We’re thrilled to have you on this journey. Each month, your subscription supports
-        independent artists and creative craftsmanship.
+        independent artists and creative craftsmanship. ${planType === PlanType.DIGITAL ? "Please remmeber to use your username and unique password anytime you want to access your digital subscription." : ""}
       </p>
 
       <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
@@ -526,7 +520,8 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.PASSWORD_RESET]: "Reset your Bolaji Editions password",
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
-  [EmailType.PREORDER_RELEASED]: "Edition 00 — Preorders Now Open",
+  [EmailType.PREORDER_RELEASED]:
+    "Bolaji Editions - You're one of the first, preorders now open. Only 48 hours",
   [EmailType.PREORDER_PAYMENT_FAILED]:
     "Your preorder payment didn’t go through — retry now",
   [EmailType.NEW_EDITION_RELEASED]:

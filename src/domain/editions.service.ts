@@ -1,7 +1,8 @@
 import { AccessStatus, EditionStatus, Hub } from "@/generated/prisma/enums";
 import { Db, Store } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
-import { isBefore } from "date-fns";
+import { logger } from "@/lib/logger";
+import { isBefore, subMonths } from "date-fns";
 
 export type UserEditionAccess = ({
   edition: {
@@ -37,6 +38,7 @@ export class EditionsService {
   constructor(
     private readonly db: Db,
     private readonly store: Store,
+    private readonly jobQueues: JobsQueues,
   ) {}
 
   /**
@@ -59,7 +61,7 @@ export class EditionsService {
     const activeAccess = await this.db.editionAccess.findMany({
       where: {
         userId,
-        status: "ACTIVE",
+        status: AccessStatus.ACTIVE,
         expiresAt: { gt: now },
       },
       include: {
@@ -82,5 +84,85 @@ export class EditionsService {
 
     // 5️⃣ Return fresh data
     return releasedAccess;
+  };
+  releaseEdition = async (editionNumber: number) => {
+    const now = new Date();
+
+    const result = await this.db.$transaction(async (tx) => {
+      const edition = await tx.edition.findUnique({
+        where: { number: editionNumber },
+        select: { id: true, title: true, status: true, number: true },
+      });
+
+      if (!edition) throw new Error(`Edition ${editionNumber} not found`);
+
+      // already finalized → no-op
+      if (
+        ([EditionStatus.ACTIVE, EditionStatus.CLOSED] as any).includes(
+          edition.status,
+        )
+      ) {
+        logger.info(
+          `[Edition Service] Edition ${editionNumber} already ${edition.status}.`,
+        );
+        return null;
+      }
+
+      // ─── Special rule for Edition 00 ───────────────────────────────
+      const nextStatus =
+        edition.number === 0 ? EditionStatus.CLOSED : EditionStatus.ACTIVE;
+
+      const updatedEdition = await tx.edition.update({
+        where: { id: edition.id },
+        data: {
+          status: nextStatus,
+          releasedAt: now,
+          updatedAt: now,
+        },
+      });
+
+      logger.info(
+        `[Edition Service] Edition ${editionNumber} status updated from ${edition.status} to - ${updatedEdition.status}.`,
+      );
+
+      // Unlock all scheduled access for this edition
+      const { count } = await tx.editionAccess.updateMany({
+        where: {
+          editionId: edition.id,
+          status: AccessStatus.SCHEDULED,
+          unlockAt: { lte: now },
+        },
+        data: {
+          status: AccessStatus.ACTIVE,
+          unlockedAt: now,
+        },
+      });
+
+      return { edition: updatedEdition, unlocked: count };
+    });
+
+    if (!result) return;
+    logger.info(
+      `[Edition Service] ✅ Edition ${result.edition.title} → ${result.edition.status} — ${result.unlocked} user accesses unlocked`,
+    );
+  };
+  releaseNextPendingEdition = async () => {
+    const nextEdition = await this.db.edition.findFirst({
+      where: {
+        OR: [
+          { status: EditionStatus.PENDING },
+          { status: EditionStatus.PREORDER_OPEN },
+        ],
+      },
+      orderBy: { number: "asc" },
+    });
+
+    if (!nextEdition) {
+      logger.info("No pending editions left to release.");
+      return;
+    }
+
+    logger.info(`Releasing next edition: ${nextEdition.title}`);
+    await this.releaseEdition(nextEdition.number);
   };
 }

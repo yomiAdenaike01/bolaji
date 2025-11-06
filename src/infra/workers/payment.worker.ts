@@ -20,6 +20,7 @@ import { preorderSchema } from "../integrations/schema";
 import { PaymentEventActions } from "../integrations/stripe.integration";
 import { CompletePreorderStatus } from "@/domain/preorders/preorders.service";
 import { Config } from "@/config";
+import { padNumber } from "@/utils";
 
 const failedPreorderDto = z.object({
   action: z.string(),
@@ -31,7 +32,7 @@ const failedPreorderDto = z.object({
   type: z.enum(OrderType),
   userId: z.string(),
   orderId: z.string(),
-  quantity: z.number().nonnegative()
+  quantity: z.number().nonnegative(),
 });
 
 const failedSubscriptionStartDto = z.object({
@@ -151,7 +152,7 @@ export class PaymentWorker {
           stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
           subscriptionPlanId: paymentEvent.subscriptionPlanId,
           stripeInvoiceId: paymentEvent.stripeInvoiceId,
-          isNewSubscription: paymentEvent.isNewSubscription
+          isNewSubscription: paymentEvent.isNewSubscription,
         });
 
       const { user, plan } = updatedSubscription;
@@ -163,13 +164,15 @@ export class PaymentWorker {
         "[Subscription Service] 🎉 Successfully completed subscription transactions",
       );
       if (paymentEvent.isNewSubscription) {
+        // TODO: change account password
         (this.domain.integrations.email.sendEmail({
           type: EmailType.SUBSCRIPTION_STARTED,
           email: user.email,
           content: {
             name: user.name,
             email: user.email,
-            nextEdition: nextEdition?.number,
+            nextEdition: padNumber(nextEdition?.number || 0),
+            planType: plan.type,
           },
         }),
           this.domain.integrations.adminEmail.send({
@@ -297,7 +300,7 @@ export class PaymentWorker {
       editionId: paymentEvent.editionId,
       preorderId: paymentEvent.orderId,
       addressId: paymentEvent.addressId || null,
-      quantity: paymentEvent.quantity
+      quantity: paymentEvent.quantity,
     });
 
     if (!failedPreorder?.id)

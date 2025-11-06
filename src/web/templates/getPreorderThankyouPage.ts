@@ -1,4 +1,4 @@
-import { PREORDER_OPENING_DATETIME } from "@/constants";
+import { EDITION_00_RELEASE, PREORDER_OPENING_DATETIME } from "@/constants";
 import { PlanType } from "@/generated/prisma/enums";
 
 export const getThankYouPage = ({
@@ -10,7 +10,7 @@ export const getThankYouPage = ({
   plan: PlanType;
   redirectUrl: string;
 }) => {
-  const formattedDate = PREORDER_OPENING_DATETIME.toLocaleDateString("en-GB", {
+  const formattedDate = EDITION_00_RELEASE.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
   });
@@ -182,8 +182,7 @@ export const getThankYouPage = ({
             : "Digital"
       } Edition</strong> preorder has been received.</p>
 
-      <p>Edition 00 officially releases on <strong>${formattedDate}</strong>.  
-      You’ll receive an email when your edition unlocks — it will include your login password and access details.</p>
+      You’ll receive an email when your Edition 00 unlocks on ${formattedDate} it will include your access details, which is your login and password.</p>
 
       <p>Thank you for supporting the beginning of Bolaji Editions.  
       We can’t wait for you to experience it.</p>

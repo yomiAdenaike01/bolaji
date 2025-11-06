@@ -15,14 +15,22 @@ function capitalize(str: string): string {
 
 /**
  * Generates preorder summary + pending shipments
- * Includes edition 0 physical stock remaining (efficient and Prisma-safe)
+ * Includes edition 0 physical stock remaining and paid preorder details
  */
 export async function generatePreorderSummaryReport(db: Db) {
-  logger.info("[Preorder Report] Generating preorder summary (Edition 0 only)...");
+  logger.info(
+    "[Preorder Report] Generating preorder summary (Edition 0 only)...",
+  );
 
   // ⚡️ Run all major queries in one transaction
-const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
-  await db.$transaction(async (tx) => {
+  const [
+    preorderAgg,
+    issues,
+    pendingShipments,
+    paidOrders,
+    editionZero,
+    allPaidPreorders,
+  ] = await db.$transaction(async (tx) => {
     return Promise.all([
       tx.preorder.groupBy({
         by: ["choice", "status"],
@@ -44,7 +52,9 @@ const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
         include: {
           address: true,
           user: { select: { name: true, email: true } },
-          edition: { select: { id: true, code: true, number: true, title: true } },
+          edition: {
+            select: { id: true, code: true, number: true, title: true },
+          },
         },
         orderBy: [{ address: { country: "asc" } }, { createdAt: "asc" }],
       }),
@@ -58,10 +68,18 @@ const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
         where: { number: 0 },
         select: { id: true, maxCopies: true, title: true, code: true },
       }),
+
+      // 🧾 NEW: all paid preorders of all types
+      tx.preorder.findMany({
+        where: { status: OrderStatus.PAID },
+        include: {
+          user: { select: { name: true, email: true } },
+          edition: { select: { number: true, code: true, title: true } },
+        },
+        orderBy: [{ createdAt: "asc" }],
+      }),
     ]);
   });
-
-      // 1️⃣ Aggregate preorder totals;
 
   // ---- 📊 Aggregate preorder totals
   let total = 0;
@@ -110,7 +128,11 @@ const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
   summary.addRow(["Digital", byPlan[PlanType.DIGITAL]]);
   summary.addRow(["Physical", byPlan[PlanType.PHYSICAL]]);
   summary.addRow(["Full", byPlan[PlanType.FULL]]);
-  summary.addRow(["Paid", paid, `${((paid / total) * 100).toFixed(1)}% success`]);
+  summary.addRow([
+    "Paid",
+    paid,
+    `${((paid / total) * 100).toFixed(1)}% success`,
+  ]);
   summary.addRow(["Failed", failed]);
   summary.addRow(["Pending", pending]);
   summary.addRow(["Total Revenue (£)", (revenue / 100).toFixed(2)]);
@@ -153,23 +175,23 @@ const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
     { header: "Created At", key: "createdAt", width: 20 },
   ];
 
-  // Map quantities per edition
   const editionQuantityMap = paidOrders.reduce<Record<string, number>>(
     (acc, o) => {
-      if (o.editionId)
-      acc[o.editionId] = (acc[o.editionId] ?? 0) + o.quantity;
+      if (o.editionId) acc[o.editionId] = (acc[o.editionId] ?? 0) + o.quantity;
       return acc;
     },
     {},
   );
 
-  // Group shipments by country
-  const groupedByCountry = (pendingShipments as any[]).reduce((acc, s) => {
-    const country = (s.address?.country ?? "Unknown").toLowerCase();
-    if (!acc[country]) acc[country] = [];
-    acc[country].push(s);
-    return acc;
-  }, {} as Record<string, typeof pendingShipments>);
+  const groupedByCountry = (pendingShipments as any[]).reduce(
+    (acc, s) => {
+      const country = (s.address?.country ?? "Unknown").toLowerCase();
+      if (!acc[country]) acc[country] = [];
+      acc[country].push(s);
+      return acc;
+    },
+    {} as Record<string, typeof pendingShipments>,
+  );
 
   for (const [country, shipments] of Object.entries(groupedByCountry) as any) {
     const countryLabel = capitalize(country);
@@ -203,8 +225,36 @@ const [preorderAgg, issues, pendingShipments, paidOrders, editionZero] =
 
   shipmentsSheet.getRow(1).font = { bold: true };
 
+  // ---- 💰 Sheet 4: All Paid Preorders
+  const paidSheet = workbook.addWorksheet("All Paid Preorders");
+  paidSheet.columns = [
+    { header: "Name", key: "name", width: 25 },
+    { header: "Email", key: "email", width: 30 },
+    { header: "Plan", key: "plan", width: 15 },
+    { header: "Edition", key: "edition", width: 20 },
+    { header: "Edition Title", key: "editionTitle", width: 35 },
+    { header: "Status", key: "status", width: 15 },
+    { header: "Total (£)", key: "total", width: 15 },
+    { header: "Created At", key: "createdAt", width: 20 },
+  ];
+
+  for (const p of allPaidPreorders as any) {
+    paidSheet.addRow({
+      name: p.user?.name ?? "—",
+      email: p.user?.email ?? "—",
+      plan: p.choice,
+      edition: p.edition?.code ?? `ED${p.edition?.number ?? "?"}`,
+      editionTitle: p.edition?.title ?? "—",
+      status: p.status,
+      total: (p.totalCents ?? 0) / 100,
+      createdAt: p.createdAt.toISOString().split("T")[0],
+    });
+  }
+
+  paidSheet.getRow(1).font = { bold: true };
+
   logger.info(
-    `[Preorder Report] Edition 0: ${physicalRemaining} physical copies remaining out of ${maxCopies} total. Generated report with ${total} preorders (${paid} paid, ${failed} failed, ${pending} pending) and ${pendingShipments.length} pending shipments.`,
+    `[Preorder Report] Edition 0: ${physicalRemaining} remaining out of ${maxCopies} total. Added ${allPaidPreorders.length} paid preorder records.`,
   );
 
   return workbook.xlsx.writeBuffer();

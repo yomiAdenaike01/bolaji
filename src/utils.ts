@@ -33,3 +33,7 @@ export function getEditionExpiry(editionNumber: number) {
   const now = new Date();
   return editionNumber === 0 ? addYears(now, 1) : addYears(now, 2);
 }
+
+export const padNumber = (num: number) => {
+  return String(num).padStart(2, "0");
+};

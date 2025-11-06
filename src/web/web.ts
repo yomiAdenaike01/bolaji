@@ -8,7 +8,8 @@ import {
   setupErrorHandlers,
   setupMiddlewares,
 } from "./middleware";
-import { makePaymentsRouter, setupRouters } from "./router";
+import { makeBullMqRouter, makePaymentsRouter, setupRouters } from "./router";
+import path from "path";
 
 export const initWeb = (
   domain: Domain,
@@ -17,6 +18,10 @@ export const initWeb = (
 ): Application => {
   const ctrls = initControllers(store, config, domain);
   const app = express();
+
+  app.use("/api/images", express.static(path.join(__dirname, "../../assets")));
+
+  makeBullMqRouter(app, domain.jobQueues);
 
   makePaymentsRouter(app, ctrls.stripePaymentWebhook);
 

@@ -1,7 +1,10 @@
 import bodyParser from "body-parser";
 import express, {
   Application,
-  Router
+  Router,
+  NextFunction,
+  Request,
+  Response,
 } from "express";
 import { StatusCodes } from "http-status-codes";
 import { AuthController } from "./controllers/auth.controller";
@@ -11,8 +14,48 @@ import { PreorderController } from "./controllers/preorder.controller";
 import { SubscriptionsController } from "./controllers/subscriptions.controller";
 import { UserController } from "./controllers/user.controller";
 import { AuthGuard } from "./middleware";
+import { JobsQueues } from "@/infra/workers/jobs-queue";
+import { createBullBoard } from "@bull-board/api";
+import { ExpressAdapter } from "@bull-board/express";
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 
+export const makeBullMqRouter = (app: Application, jobQueues: JobsQueues) => {
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath("/admin/queues");
 
+  createBullBoard({
+    queues: [
+      new BullMQAdapter(jobQueues.getEmailQueue()),
+      new BullMQAdapter(jobQueues.getEditionsQueue()),
+      new BullMQAdapter(jobQueues.getPaymentsQueue()),
+    ],
+    serverAdapter: serverAdapter,
+  });
+  const protect = (req: Request, res: Response, next: NextFunction) => {
+    const auth = {
+      login: process.env.ADMIN_USER || "admin",
+      password: process.env.ADMIN_PASS || "supersecret",
+    };
+
+    const b64auth = (req.headers.authorization || "").split(" ")[1] || "";
+    const [login, password] = Buffer.from(b64auth, "base64")
+      .toString()
+      .split(":");
+
+    if (
+      login &&
+      password &&
+      login === auth.login &&
+      password === auth.password
+    ) {
+      return next();
+    }
+
+    res.set("WWW-Authenticate", 'Basic realm="401"');
+    res.status(401).send("Authentication required.");
+  };
+  app.use("/admin/queues", protect, serverAdapter.getRouter());
+};
 
 const makeAuthRouter = (
   authGuard: AuthGuard,
@@ -32,14 +75,8 @@ const makeAuthRouter = (
 const makeUserRouter = (userController: UserController) => {
   const r = express.Router();
   r.post("/create", userController.handleCreateUser);
-  r.get(
-    "/editions/access",
-    userController.handleGetEditionsAccess,
-  );
-  r.get(
-    "/addresses",
-    userController.handleGetUserAddreses,
-  );
+  r.get("/editions/access", userController.handleGetEditionsAccess);
+  r.get("/addresses", userController.handleGetUserAddreses);
 
   return r;
 };
@@ -59,7 +96,7 @@ const makeSubscriptionsRouter = (
   r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
   r.post(
     "/create",
-    // authGuard,
+    authGuard,
     subscriptionsController.handleCreateSubscription,
   );
   r.get(
@@ -111,6 +148,7 @@ export const setupRouters = (
   app: Application,
 ) => {
   const router = express.Router();
+
   router.get("/healthz", (req, res) => {
     res.status(StatusCodes.OK).send("ok");
   });

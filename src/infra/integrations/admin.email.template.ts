@@ -105,7 +105,7 @@ export const adminEmailTemplates: {
       <p><b>Name:</b> ${name}</p>
       <p><b>Email:</b> ${email}</p>
       ${renderAddress(address)}
-      `
+      `,
     ),
 
   [AdminEmailType.NEW_PREORDER]: ({
@@ -115,7 +115,7 @@ export const adminEmailTemplates: {
     editionCode,
     amount,
     address,
-    quantity = 1
+    quantity = 1,
   }) =>
     wrapAdmin(
       "🧾 New Preorder Placed",
@@ -126,7 +126,7 @@ export const adminEmailTemplates: {
       <p><b>Amount:</b> ${amount}</p>
       <p><b>Quantity:</b> ${quantity}</p>
       ${renderAddress(address)}
-      `
+      `,
     ),
 
   [AdminEmailType.SUBSCRIPTION_STARTED]: ({
@@ -143,7 +143,6 @@ export const adminEmailTemplates: {
       <p><b>Plan:</b> ${plan}</p>
       <p><b>Period:</b> ${formatDate(periodStart)} → ${formatDate(periodEnd)}</p>
       `,
-      
     ),
 
   // 🆕 Subscription Renewed
@@ -162,7 +161,7 @@ export const adminEmailTemplates: {
       <p><b>Renewed At:</b> ${formatDate(renewedAt)}</p>
       <p><b>Next Period Ends:</b> ${formatDate(nextPeriodEnd)}</p>
       <p>The user's subscription has been renewed successfully and billing is complete.</p>
-      `
+      `,
     ),
 
   [AdminEmailType.SUBSCRIPTION_CANCELED]: ({ name, email, plan, canceledAt }) =>
@@ -172,7 +171,7 @@ export const adminEmailTemplates: {
       <p><b>User:</b> ${name} (${email})</p>
       <p><b>Plan:</b> ${plan}</p>
       <p><b>Canceled At:</b> ${formatDate(canceledAt)}</p>
-      `
+      `,
     ),
 
   [AdminEmailType.SUPPORT_TICKET_CREATED]: ({
@@ -189,7 +188,7 @@ export const adminEmailTemplates: {
       <p><b>Subject:</b> ${subject}</p>
       <p><b>Category:</b> ${category}</p>
       <p><b>Ticket ID:</b> ${ticketId}</p>
-      `
+      `,
     ),
 
   // 🆕 Publish / Add Edition
@@ -205,7 +204,15 @@ export const adminEmailTemplates: {
       <p><b>Edition:</b> ${editionTitle} (${editionCode})</p>
       <p><b>Total Preorders:</b> ${totalPreorders}</p>
       <p>This edition is ready to be published. You can either publish it to make it available for subscribers, or add a new edition to continue the cycle.</p>
+      `,
+    ),
+  [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: ({ timeOfDay }) =>
+    wrapAdmin(
+      `📊 ${timeOfDay === "night" ? "Evening" : "Morning"} Subscriber Digest`,
       `
+      <p>This is your ${timeOfDay} subscriber digest for <b>${new Date().toDateString()}</b>.</p>
+      <p>The attached report includes active subscriptions, edition coverage, and expiration periods.</p>
+    `,
     ),
 };
 
@@ -216,6 +223,7 @@ export const adminEmailSubjects: Record<AdminEmailType, string> = {
   [AdminEmailType.SUBSCRIPTION_RENEWED]: "🔁 Subscription Renewed", // 👈 NEW
   [AdminEmailType.SUBSCRIPTION_CANCELED]: "⛔ Subscription Canceled",
   [AdminEmailType.SUPPORT_TICKET_CREATED]: "💬 New Support Ticket Created",
+  [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: "Daily Subscriber Report",
   [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]:
     "Bolaji Editions — Waitlist Preorder Release Summary",
   [AdminEmailType.EDITION_PUBLISH_REQUEST]: "📖 Edition Ready for Publishing",
