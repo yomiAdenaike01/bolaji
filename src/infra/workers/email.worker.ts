@@ -121,28 +121,27 @@ export class EmailWorker {
         });
       }
       case "email.preorder_reminder": {
-        const users = await this.db.user.findMany({
-          where: {
-            preorderLinkClickedAt: null,
-            preorderEmailSentAt: { not: null },
-            status: UserStatus.PENDING_PREORDER,
-          },
-        });
-        for (const user of users) {
-          if (!user?.email || !user.name) continue;
-          await this.emailIntegration.sendEmail({
-            email: user.email,
-            type: EmailType.EDITION_00_DIGITAL_RELEASE,
-            content: {
-              name: user.name,
-              accessLink: `${this.config.frontEndUrl}/auth/login`,
-              subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
-            },
-          });
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-
-        break;
+        // const users = await this.db.user.findMany({
+        //   where: {
+        //     preorderLinkClickedAt: null,
+        //     preorderEmailSentAt: { not: null },
+        //     status: UserStatus.PENDING_PREORDER,
+        //   },
+        // });
+        // for (const user of users) {
+        //   if (!user?.email || !user.name) continue;
+        //   await this.emailIntegration.sendEmail({
+        //     email: user.email,
+        //     type: EmailType.EDITION_00_DIGITAL_RELEASE,
+        //     content: {
+        //       name: user.name,
+        //       accessLink: `${this.config.frontEndUrl}/auth/login`,
+        //       subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
+        //     },
+        //   });
+        //   await new Promise((resolve) => setTimeout(resolve, 1000));
+        // }
+        return;
       }
       case "email.edition00_release": {
         const users = await this.db.preorder.findMany({
