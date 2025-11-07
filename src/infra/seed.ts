@@ -47,7 +47,8 @@ const ensureDefaultPlans = async (db: TransactionClient) => {
 };
 
 const ensureEditions = async (db: TransactionClient) => {
-  logger.info("🌱 Ensuring Editions (will overwrite existing where needed)");
+  const isProd = process.env.NODE_ENV === "production";
+  logger.info("🌱 Ensuring Editions");
 
   // ───────────────────────────────────────────────
   // Edition 00 — Preorder Edition
@@ -55,14 +56,16 @@ const ensureEditions = async (db: TransactionClient) => {
   const edition00 = await db.edition.upsert({
     where: { number: 0 },
     update: {
-      title: "Edition 00 — Preorder",
-      status: EditionStatus.PENDING,
-      releaseDate: EDITION_00_RELEASE,
-      preorderOpenAt: PREORDER_OPENING_DATETIME,
-      preorderCloseAt: PREORDER_CLOSING_DATETIME,
-      maxCopies: PREORDER_EDITION_MAX_COPIES,
-      hub: Hub.HUB1,
-      updatedAt: new Date(),
+      ...(process.env.NODE_ENV !== "production" && {
+        title: "Edition 00 — Preorder",
+        status: EditionStatus.PENDING,
+        releaseDate: EDITION_00_RELEASE,
+        preorderOpenAt: PREORDER_OPENING_DATETIME,
+        preorderCloseAt: PREORDER_CLOSING_DATETIME,
+        maxCopies: PREORDER_EDITION_MAX_COPIES,
+        hub: Hub.HUB1,
+        updatedAt: new Date(),
+      }),
     },
     create: {
       number: 0,
@@ -86,34 +89,60 @@ const ensureEditions = async (db: TransactionClient) => {
   for (let i = 1; i <= totalFuture; i++) {
     const padded = padNumber(i);
     const hub = i <= 6 ? Hub.HUB1 : Hub.HUB2;
-
     const releaseDate = i === 1 ? EDITION_01_RELEASE : null;
 
-    logger.info(`🔄 Ensuring edition ED${padded} (hub=${hub})...`);
+    const existing = await db.edition.findUnique({ where: { number: i } });
 
-    await db.edition.upsert({
-      where: { number: i },
-      update: {
-        hub,
-        code: `ED${padded}`,
-        title: `Edition ${padded}`,
-        status: EditionStatus.PENDING,
-        releaseDate,
-        updatedAt: new Date(),
-      },
-      create: {
-        number: i,
-        hub,
-        code: `ED${padded}`,
-        title: `Edition ${padded}`,
-        status: EditionStatus.PENDING,
-        releaseDate,
-        createdAt: new Date(),
-      },
-    });
+    // 🚫 Skip if edition exists and is finalized in prod
+    if (
+      isProd &&
+      existing &&
+      ([EditionStatus.ACTIVE, EditionStatus.CLOSED] as any).includes(
+        existing.status,
+      )
+    ) {
+      logger.info(
+        `⏭️ Skipping Edition ${i} — already finalized (${existing.status})`,
+      );
+      continue;
+    }
+
+    if (existing) {
+      if (isProd) {
+        logger.info(`✅ Edition ${i} already exists — no overwrite`);
+        continue;
+      }
+
+      // dev-safe update
+      await db.edition.update({
+        where: { number: i },
+        data: {
+          hub,
+          code: `ED${padded}`,
+          title: `Edition ${padded}`,
+          status: EditionStatus.PENDING,
+          releaseDate,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await db.edition.create({
+        data: {
+          number: i,
+          hub,
+          code: `ED${padded}`,
+          title: `Edition ${padded}`,
+          status: EditionStatus.PENDING,
+          releaseDate,
+          createdAt: new Date(),
+        },
+      });
+    }
+
+    logger.info(`✅ Ensured Edition ${i} (${isProd ? "safe" : "updated"})`);
   }
 
-  logger.info("✅ Editions ensured (existing records updated if needed)");
+  logger.info("✅ Editions ensured safely");
   return edition00;
 };
 

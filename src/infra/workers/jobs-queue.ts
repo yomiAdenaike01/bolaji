@@ -5,12 +5,11 @@ import {
 } from "@/constants";
 import { logger } from "@/lib/logger";
 import { JobsOptions, Queue } from "bullmq";
-import { randomUUID } from "crypto";
-import { add, addHours, differenceInMilliseconds, sub } from "date-fns";
+import { differenceInMilliseconds, addHours } from "date-fns";
 
 /**
  * Centralized BullMQ queue manager
- * Handles email, payment, and edition jobs with production-safe settings.
+ * Handles email, payment, and edition jobs with production-safe scheduling.
  */
 export class JobsQueues {
   private emailQueue: Queue;
@@ -46,118 +45,128 @@ export class JobsQueues {
       },
     });
 
-    // Initialize scheduled jobs
-    this.addPreorderOpeningJob({ waitlist: [] });
-    this.addSendPreorderReminderJob();
-    this.queueReleaseJobs();
-    this.queueAdminDigestJobs();
+    void this.init();
   }
 
-  // ----------------------------
-  // Public queue getters
-  // ----------------------------
+  private async init() {
+    await this.addPreorderOpeningJob({ waitlist: [] });
+    await this.addSendPreorderReminderJob();
+    await this.queueReleaseJobs();
+    await this.queueAdminDigestJobs();
+  }
+
   public readonly getEmailQueue = () => this.emailQueue;
   public readonly getPaymentsQueue = () => this.stripePaymentsQueue;
   public readonly getEditionsQueue = () => this.editionReleasesQueue;
 
-  // ----------------------------
-  // Scheduled Jobs
-  // ----------------------------
+  private async addIfFuture(
+    queue: Queue,
+    jobName: string,
+    date: Date,
+    data: any = {},
+    options?: JobsOptions,
+  ) {
+    const now = new Date();
+
+    if (now >= date) {
+      logger.info(
+        `[Scheduler] ⏭️ Skipping ${jobName} — scheduled date (${date.toISOString()}) has already passed.`,
+      );
+      return;
+    }
+
+    const jobId = `${jobName}-${date.toISOString()}`;
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      logger.info(
+        `[Scheduler] ${jobName} already exists (id=${jobId}) — skipping.`,
+      );
+      return;
+    }
+
+    const delay = Math.max(differenceInMilliseconds(date, now), 0);
+
+    await queue.add(jobName, data, {
+      jobId,
+      delay,
+      removeOnComplete: true,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 60_000 },
+      ...options,
+    });
+
+    logger.info(`[Scheduler] ✅ Queued ${jobName} for ${date.toISOString()}`);
+  }
+
+  private async addPreorderOpeningJob(data: {
+    waitlist: Array<{ email: string; name: string }>;
+  }) {
+    const releaseDate = PREORDER_OPENING_DATETIME;
+    await this.addIfFuture(
+      this.emailQueue,
+      "email.preorders_open",
+      releaseDate,
+      data,
+    );
+  }
+
+  private async addSendPreorderReminderJob() {
+    const reminder = new Date("2025-11-08T09:00:00Z"); // 9 AM UTC (10 AM UK)
+    await this.addIfFuture(
+      this.emailQueue,
+      "email.preorder_reminder",
+      reminder,
+    );
+  }
+
   private async queueReleaseJobs() {
-    logger.info("[Scheduler] Scheduling edition release jobs...");
+    logger.info("[Scheduler] Checking edition release jobs...");
 
     const now = new Date();
 
-    // Edition 00 release (preorder / limited)
-    await this.editionReleasesQueue.add(
+    // Edition 00 release (preorder/limited)
+    await this.addIfFuture(
+      this.editionReleasesQueue,
       "edition-00",
-      { edition: "00" },
+      EDITION_00_RELEASE,
       {
-        jobId: "edition-00",
-        removeOnComplete: true,
-        delay: Math.max(differenceInMilliseconds(EDITION_00_RELEASE, now), 0),
+        edition: "00",
       },
     );
 
     // Edition 01 release
-    await this.editionReleasesQueue.add(
+    await this.addIfFuture(
+      this.editionReleasesQueue,
       "edition-01",
-      { edition: "01" },
+      EDITION_01_RELEASE,
       {
-        jobId: "edition-01",
-        removeOnComplete: true,
-        delay: Math.max(differenceInMilliseconds(EDITION_01_RELEASE, now), 0),
+        edition: "01",
       },
     );
 
-    // All future monthly editions
+    // Monthly repeating edition auto-release
     await this.editionReleasesQueue.add(
       "edition-monthly",
       { task: "auto-release-next-edition" },
       {
         repeat: { pattern: "0 9 1 * *" }, // every 1st of month at 9:00 UTC
         jobId: "monthly-edition-release",
-      },
-    );
-
-    logger.info("[Scheduler] Edition release jobs scheduled ✅");
-  }
-
-  private async addSendPreorderReminderJob() {
-    const reminder = add(PREORDER_OPENING_DATETIME, { days: 3 });
-    const now = new Date();
-    const delay = Math.max(differenceInMilliseconds(reminder, now), 0);
-
-    await this.emailQueue.add(
-      "email.preorder_reminder",
-      {},
-      {
-        jobId: `email.preorder_reminder-${reminder.toISOString()}`,
-        delay,
         removeOnComplete: true,
-        attempts: 3,
-        backoff: { type: "exponential", delay: 60_000 },
       },
     );
 
-    logger.info(
-      `[Scheduler] Scheduled preorder reminder emails for ${reminder.toISOString()}`,
-    );
+    logger.info("[Scheduler] Edition release jobs check complete ✅");
   }
-
-  async addPreorderOpeningJob(data: {
-    waitlist: Array<{ email: string; name: string }>;
-  }) {
-    const releaseDate = PREORDER_OPENING_DATETIME;
-    const now = new Date();
-    const delay = Math.max(differenceInMilliseconds(releaseDate, now), 0);
-
-    await this.emailQueue.add("email.preorders_open", data, {
-      jobId: `email.preorders_open-${releaseDate.toISOString()}`,
-      delay,
-      removeOnComplete: true,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 60_000 },
-    });
-
-    logger.info(
-      `[Scheduler] Scheduled preorder opening email for ${releaseDate.toISOString()}`,
-    );
-  }
-
-  /**
-   * Admin digest: send subscriber + edition report twice daily
-   */
 
   private async queueAdminDigestJobs() {
     logger.info("[Scheduler] Scheduling admin subscriber digest emails...");
 
-    // Gate: do not allow any digest to run before this moment.
-    const startGate = addHours(PREORDER_OPENING_DATETIME, 5); // after preorder kick-off
+    const startGate = addHours(PREORDER_OPENING_DATETIME, 5); // 5h after preorder open
     const now = new Date();
+
     const delay = Math.max(differenceInMilliseconds(startGate, now), 0);
 
-    // Morning digest — first fire will be the first 08:00 AFTER the gate
+    // Morning digest
     await this.emailQueue.add(
       "email.admin_subscriber_digest",
       { timeOfDay: "morning" },
@@ -165,11 +174,11 @@ export class JobsQueues {
         jobId: "admin-subscriber-digest-morning",
         repeat: { pattern: "0 8 * * *" }, // 08:00 UTC daily
         removeOnComplete: true,
-        delay, // ensures no run before 2025-11-07T09:00Z
+        delay,
       },
     );
 
-    // Night digest — will run 2025-11-07 at 20:00 UTC (same day) and then daily
+    // Night digest
     await this.emailQueue.add(
       "email.admin_subscriber_digest",
       { timeOfDay: "night" },
@@ -177,17 +186,17 @@ export class JobsQueues {
         jobId: "admin-subscriber-digest-night",
         repeat: { pattern: "0 20 * * *" }, // 20:00 UTC daily
         removeOnComplete: true,
-        delay, // same gate
+        delay,
       },
     );
 
     logger.info(
-      `[Scheduler] Admin digests gated until ${startGate.toISOString()} — night run will begin today at 20:00 UTC; morning starts tomorrow at 08:00 UTC.`,
+      `[Scheduler] Admin digests gated until ${startGate.toISOString()} — will begin after gate time.`,
     );
   }
 
   // ----------------------------
-  // Utility adder
+  // Generic job adder
   // ----------------------------
   public readonly add = async (
     jobName: string,
@@ -205,7 +214,7 @@ export class JobsQueues {
             : null;
 
     if (!targetQueue) {
-      logger.error(`[JobsQueues] No matching queue for job=${jobName}`);
+      logger.warn(`[JobsQueues] ❌ No matching queue for job=${jobName}`);
       return;
     }
 
