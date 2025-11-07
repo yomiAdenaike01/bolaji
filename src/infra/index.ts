@@ -15,9 +15,6 @@ const initDb = () => {
 const initStore = (config: Config) => {
   let redisClient = createClient({
     url: config.redisConnectionUrl,
-    socket: {
-      tls: config.env === "production",
-    } as any,
   });
   redisClient
     .connect()
