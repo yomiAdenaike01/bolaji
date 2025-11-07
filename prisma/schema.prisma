@@ -271,7 +271,7 @@ model EditionAccess {
   expiresAt      DateTime?
   accessType     PlanType      @default(DIGITAL)
 
-  @@unique([userId, editionId])
+  @@unique([userId, editionId, accessType])
   @@index([userId])
   @@index([editionId])
 }

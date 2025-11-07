@@ -211,11 +211,11 @@ export class SubscriptionsService {
       );
       await tx.editionAccess.upsert({
         where: {
-          userId_editionId: {
+          userId_editionId_accessType: {
             userId: existingSubscription.userId,
             editionId: nextEdition.id,
+            accessType: subscriptionPlan.type,
           },
-          accessType: subscriptionPlan.type,
         },
         update: {},
         create: {

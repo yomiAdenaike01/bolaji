@@ -14,7 +14,7 @@ export const FAQS = [
       },
       {
         q: "Can I preorder multiple copies?",
-        a: "You can only order one physical copy while stock lasts (300 copies total).",
+        a: "Yes. You can only order one digital or full edition while stock lasts (300 copies total).",
       },
       {
         q: "What happens after I preorder?",

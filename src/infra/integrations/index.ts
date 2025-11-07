@@ -69,12 +69,23 @@ export class Integrations {
           where: { id: eventId, type: eventType },
         });
         if (existing?.status === "HANDLED") {
-          logger.info(`Event ${eventId} already handled.`);
+          logger.info(`[Stripe] Event ${eventId} already handled.`);
           return null;
         }
         if (existing?.status === "PROCESSING") {
-          logger.warn(`Event ${eventId} is already processing.`);
+          logger.warn(`[Stripe] Event ${eventId} is already processing.`);
           return null;
+        }
+        if (existing?.status === "FAILED") {
+          logger.warn(
+            `[Stripe] Event ${eventId} previously failed — retrying.`,
+          );
+          // Optionally update it to PROCESSING again
+          await this.db.stripeEvent.update({
+            where: { id: eventId },
+            data: { status: "PROCESSING" },
+          });
+          return existing;
         }
       }
       throw error;
