@@ -4,12 +4,13 @@ import { initConfig } from "@/config";
 import { EmailIntegration } from "@/infra/integrations/email.integration";
 import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
 import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
-import { initInfra } from "../../infra";
+import { initInfra, initStore } from "../../infra";
 import { getMockPayloadFor } from "../../tests/integrations/email/email.integration.mock";
 
 async function testEmails() {
   const config = initConfig();
-  const { db } = initInfra(config);
+  const store = await initStore(config);
+  const { db } = initInfra(config, store);
 
   // Initialise integrations
   const userEmailIntegration = new EmailIntegration(
