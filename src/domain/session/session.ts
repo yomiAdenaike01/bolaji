@@ -31,20 +31,19 @@ interface JwtPair {
 }
 
 export class SessionService {
-  
   constructor(
     private readonly config: Config,
     private readonly db: Db,
     private readonly store: Store,
   ) {}
-  getUserId = async (sessionId: string)=> {
+  getUserId = async (sessionId: string) => {
     try {
-      const uid = await this.getUserIdOrThrow(sessionId) 
-      return uid
+      const uid = await this.getUserIdOrThrow(sessionId);
+      return uid;
     } catch (error) {
-      return null
+      return null;
     }
-  }
+  };
   setUserId = (sessionId: any, userId: string): any => {
     return this.updateSessionProperty(sessionId, { userId });
   };
@@ -99,7 +98,7 @@ export class SessionService {
       },
       this.config.jwtSecret,
       {
-        expiresIn: this.config.accessTokenTtl as any, // e.g. "15m"
+        expiresIn: "45m",
         audience: "bolajieditions-frontend",
       },
     );
@@ -123,8 +122,8 @@ export class SessionService {
 
     const key = `auth:refresh:${userId}:${sessionId}`;
     const ttlSeconds = 7 * 24 * 60 * 60;
-    this.store.setEx(key, ttlSeconds, refreshToken).catch(err=>{
-      logger.error(err,'[Session] Failed to save refresh token')
+    this.store.setEx(key, ttlSeconds, refreshToken).catch((err) => {
+      logger.error(err, "[Session] Failed to save refresh token");
     });
 
     logger.info(`[Session] Issued JWT pair for userId - ${userId}`);
@@ -227,8 +226,7 @@ export class SessionService {
 
   async deleteSession(sessionId: string, userId?: string) {
     await this.store.del(`session:${sessionId}`);
-    if (userId)
-      await this.store.del(`auth:refresh:${hash(userId)}:${sessionId}`);
+    if (userId) await this.store.del(`auth:refresh:${userId}:${sessionId}`);
     logger.info(`[Session] Deleted session ${sessionId}`);
   }
 
@@ -292,10 +290,7 @@ export class SessionService {
   // ─────────────────────────────────────────────
   // 🕒 AUTO REFRESH CHECK
   // ─────────────────────────────────────────────
-  async checkAndRefreshAccessToken(
-    accessToken: string,
-    thresholdSeconds = 120,
-  ) {
+  async checkAndRefreshAccessToken(accessToken: string, thresholdSeconds = 30) {
     const decoded = jwt.decode(accessToken) as any;
     if (!decoded?.exp) throw createHttpError.BadRequest("Invalid access token");
 

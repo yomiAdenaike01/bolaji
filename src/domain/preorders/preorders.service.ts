@@ -31,6 +31,7 @@ import {
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { PasswordService } from "../password/password.service";
+import { PricingService } from "../pricing.service";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
@@ -51,6 +52,7 @@ export class PreordersService {
     private readonly integrations: Integrations,
     private readonly store: Store,
     private readonly passwordService: PasswordService,
+    private readonly pricingService: PricingService,
   ) {}
 
   canSubscribe = async (userId: string) => {
@@ -217,6 +219,8 @@ export class PreordersService {
     redirectUrl,
     preorderId,
     quantity,
+    shippingCents,
+    shippingZone,
   }: {
     quantity?: number;
     stripePaymentLinkId?: string | null;
@@ -227,6 +231,8 @@ export class PreordersService {
     addressId: string | null;
     redirectUrl: string;
     preorderId: string;
+    shippingCents?: number;
+    shippingZone?: string;
   }) => {
     try {
       // ✅ 1️⃣ If a Stripe link exists, check if it’s still valid
@@ -257,6 +263,8 @@ export class PreordersService {
           redirectUrl,
           preorderId,
           quantity,
+          shippingCents,
+          shippingZone,
         });
 
       // ✅ 3️⃣ Save in DB atomically
@@ -454,30 +462,47 @@ export class PreordersService {
       email,
       addressId,
       quantity = 1,
+      country,
     }: {
       quantity?: number;
       addressId: string | null;
       userId: string;
       choice: PlanType;
       email: string;
+      country?: string;
     },
     tx?: TransactionClient,
   ) => {
     const parsed = createPreorderSchema
       .omit({ name: true })
-      .safeExtend(z.object({ addressId: z.string().min(1).nullable() }).shape)
-      .parse({ userId, choice, email, addressId, quantity });
+      .safeExtend(
+        z.object({
+          addressId: z.string().min(1).nullable(),
+          country: z.string().optional(),
+        }).shape,
+      )
+      .parse({ userId, choice, email, addressId, quantity, country });
 
     let reservedPhysicalCopy = false;
 
     try {
-      const totalCents = this.getPrice(parsed.choice);
+      const totalCents = this.pricingService.getPreorderProductPrice(
+        parsed.choice,
+      );
       const totalIncQuantity = totalCents * quantity; // used for db records
+      let shippingCost = 0;
+      let shippingZone: string | undefined = undefined;
 
       reservedPhysicalCopy = await this.reservePhysicalStock(
         parsed.choice,
         quantity,
       );
+      let shouldAddShippingCost = reservedPhysicalCopy && parsed.country;
+
+      if (shouldAddShippingCost) {
+        shippingCost = this.pricingService.getShippingPrice(parsed.country!);
+        shippingZone = this.pricingService.getShippingZone(parsed.country!);
+      }
 
       // 1️⃣ Atomic DB step — ensure edition and preorder consistency
       const { preorder, edition00 } = await this.db.$transaction(async (tx) => {
@@ -537,6 +562,8 @@ export class PreordersService {
         preorderId: preorder.id,
         userId: parsed.userId,
         quantity: parsed.quantity,
+        shippingCents: shippingCost,
+        shippingZone,
         redirectUrl: `${this.config.serverUrl}/preorders/thank-you?preorder_id=${preorder.id}`,
       });
 
@@ -702,13 +729,15 @@ export class PreordersService {
         },
       });
     }
-
+    const shippingPrice = result.address?.country
+      ? this.pricingService.getShippingPrice(result.address?.country)
+      : 0;
     const formattedAmount = new Intl.NumberFormat("en-GB", {
       currency: "gbp",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       style: "currency",
-    }).format(amount / 100);
+    }).format((amount + shippingPrice) / 100);
 
     const sendCommsDto = z
       .object({
@@ -1005,18 +1034,4 @@ export class PreordersService {
       }
     });
   };
-
-  // TODO: Update preorder prices DIGITAL=800 FULL=2000 ALL_ACCESS=2000
-  // Subscription prices DIGITAL=500 PHYSICAL=1000 ALL_ACCESS=1000
-  private getPrice(choice: PlanType) {
-    switch (choice) {
-      case "DIGITAL":
-        return 500;
-      case "PHYSICAL":
-      case "FULL":
-        return 2000;
-      default:
-        throw new Error("Invalid plan type");
-    }
-  }
 }

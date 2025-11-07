@@ -56,6 +56,7 @@ export const setupMiddlewares = (
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
       allowedHeaders: ["Content-Type", "x-hub-id", "Authorization"],
+      exposedHeaders: ["x-new-access-token"],
     }),
   );
 
@@ -136,6 +137,7 @@ export const initTokenAuthGuard = (session: SessionService) => {
         await session.checkAndRefreshAccessToken(token);
       const tkn = session.parseOrThrow(accessToken, "access");
       (req as any).sessionId = tkn.sessionId;
+      if (refreshed) res.setHeader("x-new-access-token", accessToken);
       next();
     } catch (error) {
       next(error);

@@ -9,7 +9,7 @@ import z from "zod";
 import { preorderSchema } from "./schema";
 import { PaymentEvent } from "./checkout.dto";
 import { Db } from "..";
-import { log } from "console";
+import { StripeShippingService } from "./stripeShipping.integration";
 
 export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
@@ -24,9 +24,11 @@ export class StripeIntegration {
     apiKey: string,
     private readonly webhookSecret: string,
     private readonly paymentRedirectUrl: string,
+    private readonly shippingPrice: StripeShippingService,
   ) {
     try {
       this.stripe = new Stripe(apiKey, { apiVersion: "2025-10-29.clover" });
+      this.shippingPrice.ensure(this.stripe);
     } catch (error) {
       logger.error(error, "Failed to initlaise stripe");
     }
@@ -349,6 +351,8 @@ export class StripeIntegration {
     redirectUrl: string;
     preorderId: string;
     quantity?: number;
+    shippingCents?: number;
+    shippingZone?: string;
   }) => {
     logger.info(
       `[StripeIntegration] Creating preorder payment link for userId=${opts.userId}, editionId=${opts.editionId}, plan=${opts.choice}`,
@@ -363,6 +367,8 @@ export class StripeIntegration {
         redirectUrl: z.string().min(1),
         preorderId: z.string().min(1),
         quantity: z.number().nonnegative(),
+        shippingCents: z.number().optional(),
+        shippingZone: z.string().optional(),
       })
       .parse(opts);
 
@@ -372,36 +378,55 @@ export class StripeIntegration {
       userId: parsed.userId,
       editionId: parsed.editionId,
       plan: parsed.choice,
-      type: "PREORDER",
+      type: OrderType.PREORDER,
       addressId: parsed.addressId,
       preorderId: parsed.preorderId,
       redirectUrl: parsed.redirectUrl,
       quantity: parsed.quantity,
     };
 
-    const params: Stripe.PaymentLinkCreateParams = {
-      line_items: [
-        {
-          price_data: {
-            currency: "gbp",
-            product_data: {
-              name: `Bolaji Edition 00 – ${parsed.choice}`,
-            },
-            unit_amount: priceInCents,
+    const lineItems: Stripe.PaymentLinkCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: `Bolaji Edition 00 — ${parsed.choice}`,
           },
-          quantity: Math.max(1, opts.quantity || 1),
+          unit_amount: Math.round(parsed.amount),
         },
-      ],
-      metadata,
-      payment_intent_data: {
-        metadata,
+        quantity: Math.max(1, opts.quantity || 1),
       },
+    ];
+
+    // ✅ Add shipping as its own line if applicable
+    if (
+      parsed.shippingCents &&
+      parsed.shippingCents > 0 &&
+      parsed.shippingZone
+    ) {
+      lineItems.push({
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: `Shipping (${parsed.shippingZone || "International"})`,
+          },
+          unit_amount: parsed.shippingCents,
+        },
+        quantity: 1,
+      });
+    }
+
+    const params: Stripe.PaymentLinkCreateParams = {
+      line_items: lineItems,
+      metadata,
+      payment_intent_data: { metadata },
       after_completion: {
         type: "redirect",
         redirect: { url: parsed.redirectUrl || this.paymentRedirectUrl },
       },
     };
-    // 🧱 Create a hosted payment link
+
+    // ✅ Create hosted payment link
     const paymentLink = await this.stripe.paymentLinks.create(params);
     logger.info(
       `[StripeIntegration] ✅ Created Stripe preorder link id=${paymentLink.id}`,
@@ -448,6 +473,8 @@ export class StripeIntegration {
       subscriptionId: string;
       addressId?: string;
       isNewSubscription: boolean | null;
+      shippingCents?: number;
+      shippingZone?: string;
     },
     idempotencyKey?: string,
   ) => {
@@ -463,20 +490,38 @@ export class StripeIntegration {
       isNewSubscription: String(params.isNewSubscription),
     };
 
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: params.priceId, quantity: 1 },
+    ];
+
+    // ✅ Add shipping as a one-time setup fee
+    if (
+      params.shippingCents &&
+      params.shippingCents > 0 &&
+      params.shippingZone
+    ) {
+      const shippingPrice = await this.shippingPrice.findExistingPrice(
+        params.shippingZone,
+        params.shippingCents,
+      );
+      if (shippingPrice?.id)
+        lineItems.push({
+          price: shippingPrice?.id,
+          quantity: 1,
+        });
+    }
+
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: "subscription",
+        customer: params.stripeCustomerId,
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
-        customer: params.stripeCustomerId,
-        client_reference_id: `${params.userId}:${params.planId}`,
         allow_promotion_codes: true,
-        line_items: [{ price: params.priceId, quantity: 1 }],
+        client_reference_id: `${params.userId}:${params.planId}`,
+        line_items: lineItems,
         metadata,
-        subscription_data: {
-          trial_period_days: undefined,
-          metadata,
-        },
+        subscription_data: { metadata },
       },
       idempotencyKey ? { idempotencyKey } : undefined,
     );

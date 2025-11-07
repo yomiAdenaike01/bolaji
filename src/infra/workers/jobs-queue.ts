@@ -6,7 +6,7 @@ import {
 import { logger } from "@/lib/logger";
 import { JobsOptions, Queue } from "bullmq";
 import { randomUUID } from "crypto";
-import { add, addHours, differenceInMilliseconds } from "date-fns";
+import { add, addHours, differenceInMilliseconds, sub } from "date-fns";
 
 /**
  * Centralized BullMQ queue manager

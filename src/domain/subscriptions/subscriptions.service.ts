@@ -22,6 +22,7 @@ import { JobsQueues } from "../../infra/workers/jobs-queue";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
 import { Config } from "@/config";
+import { PricingService } from "../pricing.service";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {
@@ -35,6 +36,7 @@ export class SubscriptionsService {
     private readonly integrations: Integrations,
     private readonly config: Config,
     private readonly queues: JobsQueues,
+    private readonly pricingService: PricingService,
   ) {}
 
   private getNextAvaliableEditionForSubscription = async (
@@ -313,7 +315,8 @@ export class SubscriptionsService {
     },
   ): Promise<CreateSubscriptionResult> => {
     let userId = input.userId;
-
+    let shippingCents: number | undefined = undefined;
+    let shippingZone: string | undefined = undefined;
     if (!input.userId) {
       const password = crypto.randomBytes(4).toString("hex");
       const passwordHash = await bcrypt.hash(password, 10);
@@ -366,9 +369,14 @@ export class SubscriptionsService {
         logger.info(
           `[Subscription Service] Validating address id=${input.addressId} for userId=${userId}`,
         );
-        await this.db.address.findUniqueOrThrow({
+        const { country } = await this.db.address.findUniqueOrThrow({
           where: { id: input.addressId, userId },
         });
+        shippingZone = this.pricingService.getShippingZone(country);
+        shippingCents = this.pricingService.getShippingPrice(country);
+        logger.info(
+          `[Subscription Service] Calculated shippingCents=${shippingCents} (${shippingZone}) for userId=${userId}`,
+        );
       }
 
       // 3️⃣ Find existing subscription (if any)
@@ -399,7 +407,7 @@ export class SubscriptionsService {
         logger.info(
           `[Subscription Service] Creating new address for userId=${userId}`,
         );
-        const { id } = await this.db.address.create({
+        const { id, country } = await this.db.address.create({
           data: {
             isDefault: true,
             line1: input.address.line1,
@@ -411,9 +419,14 @@ export class SubscriptionsService {
             phone: input.address.phone,
             user: { connect: { id: user.id } },
           },
-          select: { id: true },
+          select: { id: true, country: true },
         });
         addressId = id;
+        shippingZone = this.pricingService.getShippingZone(country);
+        shippingCents = this.pricingService.getShippingPrice(country);
+        logger.info(
+          `[Subscription Service] Calculated shippingCents=${shippingCents} (${shippingZone}) for userId=${userId}`,
+        );
         logger.info(
           `[Subscription Service] ✅ Address created with id=${addressId}`,
         );
@@ -551,6 +564,7 @@ export class SubscriptionsService {
       logger.info(
         `[Subscription Service] Creating Stripe checkout session for userId=${user.id}, planId=${plan.id}, customerId=${customerId}`,
       );
+
       const metadata = {
         userId: user.id,
         planId: plan.id,
@@ -562,6 +576,8 @@ export class SubscriptionsService {
         addressId,
         isNewSubscription: true,
         type: OrderType.SUBSCRIPTION_RENEWAL,
+        shippingCents,
+        shippingZone,
       };
       const {
         checkoutUrl,

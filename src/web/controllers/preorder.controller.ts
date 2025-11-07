@@ -234,6 +234,7 @@ export class PreorderController {
       email: user.email,
       addressId: user.addressId,
       quantity: input.quantity,
+      country: input.shippingAddress?.country,
     });
 
     await this.domain.session.setLoginInfo(sessionId, {
@@ -316,6 +317,7 @@ export class PreorderController {
         email,
         addressId,
         quantity,
+        country: shippingAddress?.country,
       });
       const sessionPreorderKey = (req.session as any).preorderKey;
       if (sessionPreorderKey) {

@@ -10,9 +10,13 @@ import { UserService } from "./user/users.service";
 import { EditionsService } from "./editions.service";
 import { NotificationService } from "./notifications/notification.service";
 import { PasswordService } from "./password/password.service";
+import { PricingService } from "./pricing.service";
+import { StripeShippingService } from "@/infra/integrations/stripeShipping.integration";
 
 export const initDomain = (appConfig: Config, store: Store, db: Db) => {
-  const integrations = new Integrations(db, store, appConfig);
+  const pricingService = new PricingService();
+  const shippingHelper = new StripeShippingService(pricingService);
+  const integrations = new Integrations(db, store, appConfig, shippingHelper);
   const userService = new UserService(db, integrations);
 
   const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
@@ -24,8 +28,11 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
     integrations,
     store,
     passwordService,
+    pricingService,
   );
+
   return {
+    pricing: pricingService,
     password: passwordService,
     preorders,
     notifications: new NotificationService(
@@ -45,6 +52,7 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
       integrations,
       appConfig,
       jobQueues,
+      pricingService,
     ),
   };
 };

@@ -208,7 +208,7 @@ export const templates: {
 
   <!-- Intro -->
   <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
-    Hi ${name.split(" ")[0]},<br><br>
+    Hi ${name.split(" ")[0]},
     We’re excited to invite you to reserve <strong>Bolaji&nbsp;Edition&nbsp;00</strong> — the inaugural release
     in <strong>Bolaji’s ongoing exploration of art, form, and design.</strong><br><br>
     You’re receiving this as part of our <strong>waitlist community</strong>, meaning you’re one of the first to know:
@@ -261,7 +261,6 @@ export const templates: {
       ${password}
     </div>
   </div>
-
   <!-- CTA -->
   <div style="text-align:center;margin:32px 0;">
     <a href="${preorderLink}" 
@@ -271,14 +270,6 @@ export const templates: {
        Enter Private Access Page →
     </a>
   </div>
-
-  <!-- Outro -->
-  <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin:0 0 20px;">
-    This is not just a magazine. It’s a living archive — an artist’s internal studio shared through paper, 
-    performance, and poetic thought.<br><br>
-    <strong>Secure your copy today.</strong> Only 300 available.
-  </p>
-
   <!-- Signature -->
   <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin:20px 0 0;">
     With gratitude,<br><strong>The Bolaji&nbsp;Editions Team</strong>

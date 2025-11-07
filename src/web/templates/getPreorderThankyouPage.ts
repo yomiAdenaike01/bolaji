@@ -182,7 +182,7 @@ export const getThankYouPage = ({
             : "Digital"
       } Edition</strong> preorder has been received.</p>
 
-      You’ll receive an email when your Edition 00 unlocks on ${formattedDate} it will include your access details, which is your login and password.</p>
+      <p>You’ll receive an email when your Edition 00 unlocks on ${formattedDate} it will include your access details, which is your login and password.</p>
 
       <p>Thank you for supporting the beginning of Bolaji Editions.  
       We can’t wait for you to experience it.</p>

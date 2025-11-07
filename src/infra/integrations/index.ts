@@ -4,6 +4,7 @@ import { EmailIntegration } from "./email.integration";
 import { Db, Store } from "@/infra";
 import { AdminEmailIntegration } from "./admin.email.integration";
 import { logger } from "@/lib/logger";
+import { StripeShippingService } from "./stripeShipping.integration";
 
 export class Integrations {
   public readonly payments: StripeIntegration;
@@ -14,6 +15,7 @@ export class Integrations {
     private readonly db: Db,
     private readonly cache: Store,
     private readonly appConfig: Config,
+    private readonly shippingPriceHelper: StripeShippingService,
   ) {
     const {
       stripeApiKey,
@@ -41,6 +43,7 @@ export class Integrations {
       stripeApiKey,
       stripeWebhookSecret,
       stripePaymentRedirectUrl,
+      shippingPriceHelper,
     );
 
     this.email = emailIntegration;
