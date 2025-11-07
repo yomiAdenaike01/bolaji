@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { Db, Store, TransactionClient } from ".";
 import {
   DEFAULT_PLANS,
+  EDITION_00_RELEASE,
   EDITION_00_REMANING_CACHE_KEY,
   EDITION_01_RELEASE,
   PREORDER_CLOSING_DATETIME,
@@ -69,7 +70,7 @@ const ensureEditions = async (db: TransactionClient) => {
       code: "ED00",
       title: "Edition 00 — Preorder",
       status: EditionStatus.PENDING,
-      releaseDate: PREORDER_OPENING_DATETIME,
+      releaseDate: EDITION_00_RELEASE,
       preorderOpenAt: PREORDER_OPENING_DATETIME,
       preorderCloseAt: PREORDER_CLOSING_DATETIME,
       createdAt: new Date(),
