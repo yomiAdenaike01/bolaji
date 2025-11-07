@@ -526,7 +526,7 @@ export const subjects: Record<EmailType, string> = {
   [EmailType.SUBSCRIPTION_RENEWED]:
     "Your Bolaji Editions subscription has renewed",
   [EmailType.PREORDER_RELEASED]:
-    "Bolaji Editions - You're one of the first, preorders now open. Only 48 hours",
+    "Bolaji Editions - You're one of the first, preorders now open. Only 48 hours to preorder",
   [EmailType.PREORDER_PAYMENT_FAILED]:
     "Your preorder payment didn’t go through — retry now",
   [EmailType.NEW_EDITION_RELEASED]:

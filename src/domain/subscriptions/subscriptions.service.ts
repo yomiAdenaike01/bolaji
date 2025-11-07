@@ -256,7 +256,7 @@ export class SubscriptionsService {
           },
         });
       } catch (error) {
-        logger.error(
+        logger.warn(
           error,
           `[Subscription Service]: Failed to set user - ${result.updatedSubscription.user.id} status to ACTIVE`,
         );

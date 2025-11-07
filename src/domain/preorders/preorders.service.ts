@@ -797,6 +797,22 @@ export class PreordersService {
         },
       });
 
+      logger.info(
+        {
+          editionId,
+          userId,
+          accessType: plan,
+          unlockAt: (
+            edition?.releaseDate ||
+            edition?.preorderOpenAt ||
+            new Date()
+          ).toISOString(),
+          status: AccessStatus.SCHEDULED,
+          expiresAt: addYears(Date.now(), 1).toISOString(),
+        },
+        `[PreorderService-grantEditionAccess] Creating edition acces editionId - ${editionId} userId - ${userId} planType - ${plan} status-${AccessStatus.SCHEDULED}`,
+      );
+
       await tx.editionAccess.create({
         data: {
           editionId,
