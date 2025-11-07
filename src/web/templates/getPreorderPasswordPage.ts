@@ -72,6 +72,7 @@ export const getPreorderPasswordPage = (
         font-size: 14px;
         margin-bottom: 14px;
         outline: none;
+        box-sizing: border-box;
         transition: border-color 0.2s ease;
       }
 

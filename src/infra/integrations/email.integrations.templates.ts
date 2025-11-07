@@ -1,7 +1,27 @@
 import { PlanType } from "@/generated/prisma/enums";
 import { EmailType, EmailContentMap } from "./email-types";
+import { format } from "date-fns";
+import { EDITION_00_RELEASE } from "@/constants";
 
 const LOGO_URL = `${process.env.SERVER_URL}/images/logo.png`;
+
+const formatDate = (date: Date | string | number) => {
+  const day = format(date, "d"); // day number without leading zero
+  const month = format(date, "MMMM"); // full month name
+
+  // Compute ordinal suffix
+  const dayNum = parseInt(day, 10);
+  const suffix =
+    dayNum % 10 === 1 && dayNum !== 11
+      ? "st"
+      : dayNum % 10 === 2 && dayNum !== 12
+        ? "nd"
+        : dayNum % 10 === 3 && dayNum !== 13
+          ? "rd"
+          : "th";
+
+  return `${day}${suffix} ${month}`;
+};
 
 const defaultPasswordSubtitle =
   "You can change this password anytime from your account settings after signing in.";
@@ -325,7 +345,7 @@ export const templates: {
       }
     </p>
 
-    ${newPassword ? renderPassword(newPassword) : ""}
+    ${newPassword ? renderPassword(newPassword, `You'll be able to login from <strong>${formatDate(EDITION_00_RELEASE)}</strong>. ${defaultPasswordSubtitle}`) : ""}
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:16px;">
       — The Bolaji&nbsp;Editions Team

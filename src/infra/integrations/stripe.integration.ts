@@ -374,6 +374,7 @@ export class StripeIntegration {
 
     // 🧮 Ensure correct pricing from your own logic if you don’t trust `amount`
     const priceInCents = Math.round(parsed.amount);
+
     const metadata = {
       userId: parsed.userId,
       editionId: parsed.editionId,
