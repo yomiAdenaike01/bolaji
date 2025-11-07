@@ -57,7 +57,7 @@ const ensureEditions = async (db: TransactionClient) => {
     update: {
       title: "Edition 00 — Preorder",
       status: EditionStatus.PENDING,
-      releaseDate: PREORDER_OPENING_DATETIME,
+      releaseDate: EDITION_00_RELEASE,
       preorderOpenAt: PREORDER_OPENING_DATETIME,
       preorderCloseAt: PREORDER_CLOSING_DATETIME,
       maxCopies: PREORDER_EDITION_MAX_COPIES,
