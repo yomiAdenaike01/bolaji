@@ -1,6 +1,6 @@
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { PrismaClient } from "@/generated/prisma/client";
-import { createClient } from "redis";
+import { createClient, RedisClientType } from "redis";
 import { Config } from "@/config";
 import { logger } from "@/lib/logger";
 import { seed } from "./seed";
@@ -12,29 +12,52 @@ const initDb = () => {
   return db;
 };
 
-const initStore = (config: Config) => {
-  let redisClient = createClient({
+export const initStore = async (config: Config) => {
+  const redisClient = createClient({
     url: config.redisConnectionUrl,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 5) {
+          logger.error("[Infra] Too many Redis reconnect attempts");
+          return new Error("Redis connection failed");
+        }
+        logger.warn(`[Infra] Redis reconnect attempt #${retries}`);
+        return Math.min(retries * 100, 3000); // backoff
+      },
+    },
   });
-  redisClient
-    .connect()
-    .then(() => logger.info("[Infra] Successfully connected to redis"))
-    .catch(logger.error);
-  redisClient.on("pong", () => {
-    logger.info("[Infra] Received pong from redis!");
+
+  redisClient.on("error", (err) => {
+    logger.error(err, "[Infra] Redis client error");
   });
-  redisClient.ping();
+
+  redisClient.on("connect", () => {
+    logger.info("[Infra] Redis client connecting...");
+  });
+
+  redisClient.on("ready", () => {
+    logger.info("[Infra] ✅ Redis connection ready");
+  });
+
+  // ✅ Await the connection
+  await redisClient.connect();
+
+  // Optional: Verify connection
+  try {
+    await redisClient.ping();
+    logger.info("[Infra] 🟢 Redis ping successful");
+  } catch (pingErr) {
+    logger.error(pingErr, "[Infra] Redis ping failed");
+  }
 
   return redisClient;
 };
-
 const initWorkers = (config: Config, db: Db) => (domain: Domain) => {
   return new JobWorkers(config, db, domain);
 };
 
-export const initInfra = (config: Config) => {
+export const initInfra = (config: Config, store: Store) => {
   const db = initDb();
-  const store = initStore(config);
   seed(db, store).catch((err) => {
     logger.error(err, "Failed to seed db");
   });
@@ -51,4 +74,4 @@ export type TransactionClient = Parameters<
   Parameters<Db["$transaction"]>[0]
 >[0];
 
-export type Store = ReturnType<typeof initStore>;
+export type Store = Awaited<ReturnType<typeof initStore>>;

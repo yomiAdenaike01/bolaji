@@ -1,9 +1,9 @@
-import { Config } from "../../config";
-import { StripeIntegration } from "./stripe.integration";
-import { EmailIntegration } from "./email.integration";
-import { Db, Store } from "@/infra";
-import { AdminEmailIntegration } from "./admin.email.integration";
+import { Db } from "@/infra";
 import { logger } from "@/lib/logger";
+import { Config } from "../../config";
+import { AdminEmailIntegration } from "./admin.email.integration";
+import { EmailIntegration } from "./email.integration";
+import { StripeIntegration } from "./stripe.integration";
 import { StripeShippingService } from "./stripeShipping.integration";
 
 export class Integrations {
@@ -13,9 +13,8 @@ export class Integrations {
 
   constructor(
     private readonly db: Db,
-    private readonly cache: Store,
     private readonly appConfig: Config,
-    private readonly shippingPriceHelper: StripeShippingService,
+    shippingPriceHelper: StripeShippingService,
   ) {
     const {
       stripeApiKey,
@@ -49,6 +48,10 @@ export class Integrations {
     this.email = emailIntegration;
     this.adminEmail = adminEmailIntegration;
   }
+
+  init = async () => {
+    await this.payments.init();
+  };
 
   beginEvent = async (eventId: string, eventType: string, rawPayload?: any) => {
     try {

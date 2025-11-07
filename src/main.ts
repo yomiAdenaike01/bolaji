@@ -1,23 +1,31 @@
 import dotenv from "dotenv";
 import { initConfig } from "./config";
 import { initDomain } from "./domain/domain";
-import { initInfra } from "./infra";
+import { initInfra, initStore } from "./infra";
 import { logger } from "./lib/logger";
 import { initWeb } from "./web/web";
 dotenv.config();
 
-const boostrap = () => {
+const bootstrap = async () => {
   const config = initConfig();
-  const { db, store, initWorkers } = initInfra(config);
-  const domain = initDomain(config, store, db);
 
-  initWorkers(domain);
+  // 1️⃣ Await store initialization
+  const store = await initStore(config);
+  const { db, initWorkers } = initInfra(config, store); // adjust as needed\
 
+  // 2️⃣ Await domain init after Redis ready
+  const domain = await initDomain(config, store, db);
+
+  // 3️⃣ Start workers and web
+  await initWorkers(domain);
   const web = initWeb(domain, store, config);
 
   web.listen(config.port, () => {
-    logger.info(`Starting server on port:${config.port}`);
+    logger.info(`🚀 Server started on port ${config.port}`);
   });
 };
 
-void boostrap();
+void bootstrap().catch((err) => {
+  logger.error(err, "❌ Fatal error during bootstrap");
+  process.exit(1);
+});

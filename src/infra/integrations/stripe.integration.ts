@@ -28,12 +28,13 @@ export class StripeIntegration {
   ) {
     try {
       this.stripe = new Stripe(apiKey, { apiVersion: "2025-10-29.clover" });
-      this.shippingPrice.ensure(this.stripe);
     } catch (error) {
       logger.error(error, "Failed to initlaise stripe");
     }
   }
-
+  init = async () => {
+    await this.shippingPrice.ensure(this.stripe);
+  };
   invalidatePaymentLink = async (linkId: string) => {
     try {
       await this.stripe.paymentLinks.update(linkId, {

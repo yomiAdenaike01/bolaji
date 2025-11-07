@@ -13,10 +13,11 @@ import { PasswordService } from "./password/password.service";
 import { PricingService } from "./pricing.service";
 import { StripeShippingService } from "@/infra/integrations/stripeShipping.integration";
 
-export const initDomain = (appConfig: Config, store: Store, db: Db) => {
+export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
   const pricingService = new PricingService();
   const shippingHelper = new StripeShippingService(pricingService);
-  const integrations = new Integrations(db, store, appConfig, shippingHelper);
+  const integrations = new Integrations(db, appConfig, shippingHelper);
+  await integrations.init();
   const userService = new UserService(db, integrations);
 
   const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
@@ -57,4 +58,4 @@ export const initDomain = (appConfig: Config, store: Store, db: Db) => {
   };
 };
 
-export type Domain = ReturnType<typeof initDomain>;
+export type Domain = Awaited<ReturnType<typeof initDomain>>;

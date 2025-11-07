@@ -57,6 +57,8 @@ export class PricingService {
   getShippingZone = (countryNameOrCode: string): ShippingZone => {
     if (!countryNameOrCode) return "ROW";
 
+    if (countryNameOrCode === "EUROPE") return countryNameOrCode;
+
     // Try to get ISO code from full name
     const isoCode =
       countries.getAlpha2Code(countryNameOrCode, "en") ||

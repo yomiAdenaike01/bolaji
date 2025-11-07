@@ -482,25 +482,29 @@ export class SubscriptionsService {
       logger.info(
         `[Subscription Service] Creating subscription placeholder for userId=${user.id}, planId=${plan.id}`,
       );
-      const placeholder = await this.db.$transaction((tx) =>
-        tx.subscription.upsert({
-          where: {
-            userId_planId_status: {
-              userId: userId,
-              planId,
-              status: SubscriptionStatus.PENDING,
-            },
-          },
-          create: {
-            userId: userId,
-            planId,
-            status: SubscriptionStatus.PENDING,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          },
-          update: {},
-        }),
-      );
+      const placeholder = existingSub
+        ? existingSub
+        : await this.db.$transaction((tx) =>
+            tx.subscription.upsert({
+              where: {
+                userId_planId_status: {
+                  userId: userId,
+                  planId,
+                  status: SubscriptionStatus.PENDING,
+                },
+              },
+              create: {
+                userId: userId,
+                planId,
+                status: SubscriptionStatus.PENDING,
+                currentPeriodStart: new Date(),
+                currentPeriodEnd: new Date(
+                  Date.now() + 30 * 24 * 60 * 60 * 1000,
+                ),
+              },
+              update: {},
+            }),
+          );
       logger.info(
         `[Subscription Service] ✅ Placeholder subscription created id=${placeholder.id}`,
       );
