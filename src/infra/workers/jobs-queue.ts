@@ -98,7 +98,7 @@ export class JobsQueues {
     logger.info(`[Scheduler] ✅ Queued ${jobName} for ${date.toISOString()}`);
   }
 
-  private async addPreorderOpeningJob(data: {
+  async addPreorderOpeningJob(data: {
     waitlist: Array<{ email: string; name: string }>;
   }) {
     const releaseDate = PREORDER_OPENING_DATETIME;
