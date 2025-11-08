@@ -1,3 +1,5 @@
+import { loadEnv } from "@/config/env";
+loadEnv();
 import fs from "fs";
 import path from "path";
 import { initConfig } from "@/config";

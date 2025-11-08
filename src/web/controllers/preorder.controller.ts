@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Config } from "@/config";
 import { Domain } from "@/domain/domain";
 import {
@@ -64,6 +65,29 @@ export class PreorderController {
     return res.status(StatusCodes.OK).send(html);
   };
 
+  handleGenerateToken = async (req: Request, res: Response) => {
+    const { email, name, userId } = req.body;
+    const password = crypto.randomBytes(5).toString("hex");
+    const accessToken = jwt.sign(
+      {
+        email,
+        name,
+        userId,
+        version: 1,
+        type: "PREORDER",
+        password: password,
+      },
+      this.config.jwtSecret,
+      { expiresIn: "7d" },
+    );
+    const user = await this.domain.user.findUserById(userId);
+    if (!user)
+      return res.status(StatusCodes.UNAUTHORIZED).json({ error: true });
+    res.status(StatusCodes.OK).json({
+      token: accessToken,
+    });
+  };
+
   /**
    * GET /api/preorders/private-access
    * Renders the password entry page
@@ -118,6 +142,9 @@ export class PreorderController {
    */
   handlePrivateAccessPassword = async (req: Request, res: Response) => {
     const { password, token } = req.body;
+    logger.info(
+      `[Private access] Logging in with token=${token} and password=${password}`,
+    );
 
     if (!token || !password) {
       const html = getPreorderPasswordPage("", "Missing password or token.");
@@ -135,6 +162,7 @@ export class PreorderController {
         sessionKey: string;
         type: string;
       };
+      logger.info(`[Private access] Token = ${JSON.stringify(decoded)}`);
       if (decoded?.type !== "PREORDER") throw createHttpError.Unauthorized();
 
       const user = await this.domain.auth.authenticateUser({

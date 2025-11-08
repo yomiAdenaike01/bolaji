@@ -121,6 +121,8 @@ const makePreorderRouter = (
   r.post("/auth-exchange", preorderController.handlePreorderAuthExchange);
   r.get("/verify", authGuard, preorderController.handleCanAccessPreorder);
   r.get("/private-access", preorderController.renderPrivateAccessPage);
+  r.post("/token", preorderController.handleGenerateToken);
+
   r.post("/private-access", preorderController.handlePrivateAccessPassword);
   r.post("/", preorderController.handleCreatePreorder);
   r.get("/thank-you", preorderController.handlePreorderThankYou);

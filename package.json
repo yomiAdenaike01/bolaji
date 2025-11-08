@@ -8,7 +8,7 @@
     "build:prod": "yarn install --frozen-lockfile && yarn prisma generate && yarn tsc --skipLibCheck --noEmitOnError false && yarn tsc-alias",
     "migrate:prod": "sudo yarn prisma migrate deploy",
     "exec:waitlist-release": "yarn ts-node -r tsconfig-paths/register src/scripts/send-waitlist-emails.ts",
-    "test:emails": "yarn ts-node -r tsconfig-paths/register src/scripts/tests/email.integration.test.ts",
+    "test:emails": "NODE_ENV=development yarn ts-node -r tsconfig-paths/register src/scripts/tests/email.integration.test.ts",
     "migrate:dev": "sudo yarn prisma migrate dev",
     "proxy": "ngrok http --region=us --hostname=bolaji-api-playground.ngrok.io --host-header=rewrite 3400",
     "dev:local": "NODE_ENV=development nodemon",
