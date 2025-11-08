@@ -1,11 +1,10 @@
 import { initConfig } from "@/config";
 import { initInfra, initStore } from "@/infra";
-import { waitlist } from "./data";
 /**
  * @description Only firstnames are stored in the db right now if want to update then do this
  * @deprecated
  */
-const updateNames = async () => {
+const updateNames = async (waitlist: Array<any>) => {
   const config = initConfig();
   const store = await initStore(config);
   const { db } = initInfra(config, store);
