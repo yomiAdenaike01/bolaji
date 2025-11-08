@@ -1,10 +1,10 @@
-import dotenv from "dotenv";
+import { loadEnv } from "./config/env";
+loadEnv();
 import { initConfig } from "./config";
 import { initDomain } from "./domain/domain";
 import { initInfra, initStore } from "./infra";
 import { logger } from "./lib/logger";
 import { initWeb } from "./web/web";
-dotenv.config();
 
 const bootstrap = async () => {
   const config = initConfig();

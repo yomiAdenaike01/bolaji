@@ -118,29 +118,43 @@ export class EmailWorker {
           db: this.db,
           emailIntegration: this.emailIntegration,
           adminEmailIntegration: this.adminEmailIntegration,
+          emailType: EmailType.PREORDER_RELEASED_REMINDER,
         });
       }
       case "email.preorder_reminder": {
-        // const users = await this.db.user.findMany({
-        //   where: {
-        //     preorderLinkClickedAt: null,
-        //     preorderEmailSentAt: { not: null },
-        //     status: UserStatus.PENDING_PREORDER,
-        //   },
-        // });
-        // for (const user of users) {
-        //   if (!user?.email || !user.name) continue;
-        //   await this.emailIntegration.sendEmail({
-        //     email: user.email,
-        //     type: EmailType.EDITION_00_DIGITAL_RELEASE,
-        //     content: {
-        //       name: user.name,
-        //       accessLink: `${this.config.frontEndUrl}/auth/login`,
-        //       subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
-        //     },
-        //   });
-        //   await new Promise((resolve) => setTimeout(resolve, 1000));
-        // }
+        const users = await this.db.user.findMany({
+          where: {
+            preorderLinkClickedAt: null,
+            status: UserStatus.PENDING_PREORDER,
+          },
+        });
+
+        if (!users[0]) return;
+
+        const { successful } = await sendWaitlistEmails({
+          job: {
+            data: {
+              waitlist: users.map((u) => ({
+                Email: u.email,
+                ["First name"]: u.name,
+              })),
+            },
+          } as any,
+          config: this.config,
+          db: this.db,
+          emailIntegration: this.emailIntegration,
+          adminEmailIntegration: this.adminEmailIntegration,
+        });
+        await this.db.user.updateMany({
+          where: {
+            email: {
+              in: successful.map((s) => s.email),
+            },
+          },
+          data: {
+            reminderEmailSentAt: new Date(),
+          },
+        });
         return;
       }
       case "email.edition00_release": {
@@ -165,7 +179,6 @@ export class EmailWorker {
               subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
             },
           });
-          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         break;
       }

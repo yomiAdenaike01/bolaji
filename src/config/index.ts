@@ -1,5 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config();
 export const initConfig = () => {
   return {
     port: +(process.env.PORT || 3400),
@@ -19,12 +17,6 @@ export const initConfig = () => {
     preorderPassword: process.env.PREORDER_PASSWORD || "",
     serverUrl: process.env.SERVER_URL || "",
     adminApiKey: process.env.ADMIN_API_KEY || "",
-    redisConfig: {
-      host: process.env.REDIS_HOST || "",
-      port: process.env.REDIS_PORT || "",
-      username: process.env.REDIS_USERNAME || "",
-      password: process.env.REDIS_PASSWORD || "",
-    },
     jwtRefreshSecret: process.env.JWT_REFRESH_TOKEN_SECRET || "",
     accessTokenTtl: process.env.JWT_ACCESS_TOKEN_TTL || "30m",
     refreshTokenTtl: process.env.JWT_REFRESH_TTL || "7d",

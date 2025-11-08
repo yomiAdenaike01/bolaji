@@ -1,6 +1,13 @@
 import { ShippingAddress } from "@/domain/schemas/users";
 import { PlanType } from "@/generated/prisma/enums";
 
+export type PreorderReleaseContent = {
+  name: string;
+  preorderLink: string;
+  password: string;
+  accountPassword: string;
+};
+
 export enum AdminEmailType {
   NEW_USER = "NEW_USER",
   NEW_PREORDER = "NEW_PREORDER",
@@ -88,6 +95,8 @@ export enum EmailType {
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   PREORDER_RELEASED = "PREORDER_RELEASED",
+  PREORDER_RELEASED_REMINDER = "PREORDER_RELEASED_REMINDER",
+
   NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED",
   PREORDER_PAYMENT_FAILED = "PREORDER_PAYMENT_FAILED", // 👈 NEW
 }
@@ -151,12 +160,8 @@ export interface EmailContentMap {
     nextEdition: string;
   };
 
-  [EmailType.PREORDER_RELEASED]: {
-    name: string;
-    preorderLink: string;
-    password: string;
-    accountPassword: string;
-  };
+  [EmailType.PREORDER_RELEASED]: PreorderReleaseContent;
+  [EmailType.PREORDER_RELEASED_REMINDER]: PreorderReleaseContent;
 
   // 🆕 Preorder Payment Failed
   [EmailType.PREORDER_PAYMENT_FAILED]: {

@@ -6,22 +6,18 @@ import bcrypt from "bcrypt";
 import Bottleneck from "bottleneck";
 import { Job } from "bullmq";
 import crypto from "crypto";
-import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import pLimit from "p-limit";
 import { Config } from "../config";
 import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
 import { EmailIntegration } from "../infra/integrations/email.integration";
 import { logger } from "../lib/logger";
-import { success } from "zod";
-
-dotenv.config();
 
 const formatList = (arr: any[]): Array<{ Email: string; Name: string }> => {
   if (!arr) return [];
   return arr.map((a) => {
     return {
-      Name: a["First name"],
+      Name: `${a["First name"]} ${a["Last name"]}`,
       Email: a["Email"],
     };
   });
@@ -36,12 +32,14 @@ export async function sendWaitlistEmails({
   db,
   emailIntegration,
   adminEmailIntegration,
+  emailType = EmailType.PREORDER_RELEASED,
 }: {
   job: Job<any, any, string>;
   config: Config;
   db: Db;
   emailIntegration: EmailIntegration;
   adminEmailIntegration: AdminEmailIntegration;
+  emailType?: EmailType;
 }) {
   const users = formatList(job.data.waitlist);
   if (!users?.length) throw new Error("No users found in waitlist");
@@ -134,7 +132,7 @@ export async function sendWaitlistEmails({
 
           await emailIntegration.sendEmail({
             email: user.Email,
-            type: EmailType.PREORDER_RELEASED,
+            type: emailType,
             content: {
               name: user.Name,
               email: user.Email,

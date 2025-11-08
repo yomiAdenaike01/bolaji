@@ -611,7 +611,7 @@ export class StripeIntegration {
       logger.error(
         `Failed to handle stripe event type=${(reqBody as any)?.type || "no type found"}`,
       );
-      return null;
+      throw error;
     }
     if (!event) throw new Error("Event is not defined");
     switch (event.type) {

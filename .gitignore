@@ -11,3 +11,4 @@ out
 testing.md
 emails_previews
 **/scripts/*.json
+src/scripts/data.ts
