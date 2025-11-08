@@ -111,7 +111,7 @@ export class JobsQueues {
   }
 
   private async addSendPreorderReminderJob() {
-    const reminder = new Date("2025-11-08T09:00:00Z"); // 9 AM UTC (10 AM UK)
+    const reminder = new Date("2025-11-08T12:00:00Z"); // 9 AM UTC (10 AM UK)
     await this.addIfFuture(
       this.emailQueue,
       "email.preorder_reminder",
