@@ -216,17 +216,21 @@ export class AuthController {
 
   handleAuthenticateUser = async (req: Request, res: Response) => {
     try {
-      const input = {
+      const { context, ...input } = {
         principal: req.body.principal,
         password: req.body.password,
-        deviceFingerprint: createDeviceFingerprint(req),
-        userAgent: getRequestUserAgent(req),
+
         context: req.body.context || "portal",
       };
 
       const authenticateUserInput = authenticateUserSchema
         .safeExtend(deviceIdentifierSchema.shape)
-        .safeParse(input);
+        .safeParse({
+          principal: req.body.principal,
+          password: req.body.password,
+          deviceFingerprint: createDeviceFingerprint(req),
+          userAgent: getRequestUserAgent(req),
+        });
 
       if (authenticateUserInput.error) {
         return invalidInputErrorResponse(
@@ -242,7 +246,7 @@ export class AuthController {
         id: user.id,
         email: user.email,
         deviceId: user.deviceId,
-        context: input.context,
+        context: context,
       });
 
       res.status(200).json({ user, accessToken: jwtPair.accessToken });
