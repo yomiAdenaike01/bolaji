@@ -5,7 +5,7 @@ import createHttpError from "http-errors";
 import jwt from "jsonwebtoken";
 import { Db } from "@/infra";
 import { Store } from "@/infra";
-import { hash } from "@/utils";
+import { Request } from "express";
 
 export type DecodedJwt = {
   sub: string;
@@ -60,6 +60,22 @@ export class SessionService {
     },
   ) => {
     await this.store.hSet(sessionId, sess as Record<string, string>);
+  };
+  getUserFromRequest = (req: Request) => {
+    const userId = (req as any).userId || null;
+    const email = (req as any).email || null;
+    const sessionId = (req as any).sessionId || null;
+
+    if (!userId) {
+      return null;
+    }
+
+    return { userId, email, sessionId };
+  };
+  getUserFromRequestOrThrow = (req: Request) => {
+    const user = this.getUserFromRequest(req);
+    if (!user) throw createHttpError.Unauthorized("User not authenticated");
+    return user;
   };
   getEmailOrThrow = async (sessionId: string): Promise<string> => {
     const email = await this.getSessionPropertyOrThrow(sessionId, "email");

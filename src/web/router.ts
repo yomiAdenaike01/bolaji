@@ -13,7 +13,7 @@ import { FaqController } from "./controllers/faq.controller";
 import { PreorderController } from "./controllers/preorder.controller";
 import { SubscriptionsController } from "./controllers/subscriptions.controller";
 import { UserController } from "./controllers/user.controller";
-import { AuthGuard } from "./middleware";
+import { AuthGuard, OptionalAuthGuard } from "./middleware";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { createBullBoard } from "@bull-board/api";
 import { ExpressAdapter } from "@bull-board/express";
@@ -94,6 +94,7 @@ const makeFaqsRouter = (faqController: FaqController) => {
 
 const makeSubscriptionsRouter = (
   authGuard: AuthGuard,
+  optionalAuthGuard: OptionalAuthGuard,
   subscriptionsController: SubscriptionsController,
 ) => {
   const r = Router();
@@ -101,7 +102,7 @@ const makeSubscriptionsRouter = (
   r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
   r.post(
     "/create",
-    authGuard,
+    optionalAuthGuard,
     subscriptionsController.handleCreateSubscription,
   );
   r.get(
@@ -151,6 +152,7 @@ export const makePaymentsRouter = (
 
 export const setupRouters = (
   authGuard: AuthGuard,
+  optionalAuthGuard: OptionalAuthGuard,
   controllers: Controllers,
   app: Application,
 ) => {
@@ -178,6 +180,7 @@ export const setupRouters = (
   //#region subscriptions router
   const subscriptionsRouter = makeSubscriptionsRouter(
     authGuard,
+    optionalAuthGuard,
     controllers.subscriptions,
   );
   //#endregion

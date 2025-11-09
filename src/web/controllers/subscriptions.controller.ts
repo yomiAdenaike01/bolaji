@@ -49,9 +49,7 @@ export class SubscriptionsController {
     next: NextFunction,
   ) => {
     try {
-      const userId = await this.domain.session.getUserIdOrThrow(
-        (req as any).sessionId,
-      );
+      const { userId } = this.domain.session.getUserFromRequestOrThrow(req);
       const canSubscribe = await this.domain.preorders.canSubscribe(userId);
       res.status(StatusCodes.OK).json({ granted: canSubscribe });
     } catch (error) {
@@ -63,13 +61,12 @@ export class SubscriptionsController {
    */
   handleCreateSubscription = async (req: Request, res: Response) => {
     try {
-      const sessionId = await this.domain.session.getUserId(
-        (req as any).sessionId,
-      );
+      const userId =
+        this.domain.session.getUserFromRequest(req)?.userId || req.body.userId;
       const { error, data: subscriptionsInput } =
         createSubscriptionInputSchema.safeParse({
           ...req.body,
-          userId: req.body.userId || sessionId,
+          userId,
         });
 
       if (error) {

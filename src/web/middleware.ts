@@ -138,6 +138,7 @@ export const initTokenAuthGuard = (session: SessionService) => {
         exp?: number;
         sub?: string;
         sessionId?: string;
+        email?: string;
       } | null;
       if (!decoded?.exp || !decoded?.sub || !decoded?.sessionId)
         throw createHttpError.Unauthorized("Invalid token");
@@ -160,6 +161,8 @@ export const initTokenAuthGuard = (session: SessionService) => {
 
       const tkn = session.parseOrThrow(accessToken, "access");
       (req as any).sessionId = tkn.sessionId;
+      (req as any).userId = decoded.sub;
+      (req as any).email = decoded.email;
 
       if (refreshed) res.setHeader("x-new-access-token", accessToken);
 
@@ -169,4 +172,26 @@ export const initTokenAuthGuard = (session: SessionService) => {
     }
   };
 };
+
+export const initOptionalAuth = (session: SessionService) => {
+  return async (req, _res, next) => {
+    const authHeader = req.headers.authorization?.split("Bearer ")[1];
+    if (!authHeader) {
+      // no token, continue anonymously
+      return next();
+    }
+
+    try {
+      const decoded = session.parseOrThrow(authHeader, "access");
+      (req as any).sessionId = decoded.sessionId;
+      (req as any).userId = decoded.sub;
+      next();
+    } catch {
+      // invalid token, ignore and continue (do NOT throw)
+      next();
+    }
+  };
+};
+
 export type AuthGuard = ReturnType<typeof initTokenAuthGuard>;
+export type OptionalAuthGuard = ReturnType<typeof initOptionalAuth>;

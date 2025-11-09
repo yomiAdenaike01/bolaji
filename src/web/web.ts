@@ -4,6 +4,7 @@ import express, { type Application } from "express";
 import { Config } from "../config";
 import { initControllers } from "./controllers/controllers";
 import {
+  initOptionalAuth,
   initTokenAuthGuard,
   setupErrorHandlers,
   setupMiddlewares,
@@ -32,8 +33,9 @@ export const initWeb = (
   setupMiddlewares(app, store, config);
 
   const authGuard = initTokenAuthGuard(domain.session);
+  const optionalAuthGuard = initOptionalAuth(domain.session);
 
-  setupRouters(authGuard, ctrls, app);
+  setupRouters(authGuard, optionalAuthGuard, ctrls, app);
 
   setupErrorHandlers(app);
   return app;
