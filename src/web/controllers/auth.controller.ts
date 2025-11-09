@@ -221,6 +221,7 @@ export class AuthController {
         password: req.body.password,
         deviceFingerprint: createDeviceFingerprint(req),
         userAgent: getRequestUserAgent(req),
+        context: req.body.context || "portal",
       };
 
       const authenticateUserInput = authenticateUserSchema
@@ -241,6 +242,7 @@ export class AuthController {
         id: user.id,
         email: user.email,
         deviceId: user.deviceId,
+        context: input.context,
       });
 
       res.status(200).json({ user, accessToken: jwtPair.accessToken });
