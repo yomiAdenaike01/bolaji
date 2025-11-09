@@ -8,6 +8,7 @@ const mockUserEmails = (config: Config) => ({
   [EmailType.EDITION_00_DIGITAL_RELEASE]: {
     name: "Ade",
     planType: PlanType.DIGITAL,
+    resetPasswordLink: `${config.frontEndUrl}/auth/reset-password`,
     accessLink: `${config.frontEndUrl}/auth/login`,
     subscribeLink: `${config.frontEndUrl}/subscription/dashboard-subscription`,
   },
