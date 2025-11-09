@@ -1,16 +1,62 @@
 import { Db } from "@/infra";
 import { logger } from "@/lib/logger";
 import { Job, Worker } from "bullmq";
-import z from "zod";
-import { AdminEmailType, EmailType } from "../integrations/email-types";
+import z, { promise, ZodType } from "zod";
+import {
+  AdminEmailType,
+  EmailContentMap,
+  EmailType,
+} from "../integrations/email-types";
 import { EmailIntegration } from "../integrations/email.integration";
 import { Config } from "@/config";
-import { OrderStatus, PlanType, UserStatus } from "@/generated/prisma/enums";
+import { PlanType, UserStatus } from "@/generated/prisma/enums";
 import { sendWaitlistEmails } from "@/scripts/send-waitlist-emails";
 import { AdminEmailIntegration } from "../integrations/admin.email.integration";
 import { NotificationService } from "@/domain/notifications/notification.service";
+import Bottleneck from "bottleneck";
+
+export type EmailRecipient = {
+  name: string;
+  email: string;
+  planType: PlanType;
+};
+
+const emailReleaseSchema = z.object({
+  emailType: z.enum(EmailType),
+  editionCode: z.string(),
+  editionTitle: z.string(),
+  recipients: z.array(
+    z.object({
+      planType: z.enum(PlanType),
+      email: z.email(),
+      name: z.string(),
+    }),
+  ),
+});
 
 export class EmailWorker {
+  private readonly schemaMap = {
+    [EmailType.EDITION_00_DIGITAL_RELEASE]: {
+      schema: z.object({
+        name: z.string(),
+        planType: z.enum(PlanType),
+        subscribeLink: z.url(),
+      }),
+      build: (user) => ({
+        name: user.name,
+        planType: user.planType,
+        subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
+      }),
+    },
+  } as any as Record<
+    keyof EmailContentMap,
+    {
+      schema: ZodType<any>;
+      build: (
+        emailRecipient: EmailRecipient,
+      ) => EmailContentMap[keyof EmailContentMap];
+    }
+  >;
   constructor(
     private readonly db: Db,
     connection: string,
@@ -37,6 +83,20 @@ export class EmailWorker {
       logger.error(error, `[EmailWorker] Error - Processing email job`);
     });
   }
+
+  private getReleaseEmailContent = <T extends EmailType>(
+    emailType: T,
+    recipient: EmailRecipient,
+  ): EmailContentMap[T] => {
+    const entry = this.schemaMap[emailType];
+    if (!entry) {
+      throw new Error(`[EmailWorker] Unknown emailType: ${emailType}`);
+    }
+
+    const content = entry.build(recipient);
+    entry.schema.parse(content); // ✅ runtime validation
+    return content as EmailContentMap[T];
+  };
 
   process = async (job: Job<any, any, string>) => {
     logger.info(`📬 [EmailWorker] Processing job: ${job.name}`);
@@ -69,44 +129,46 @@ export class EmailWorker {
         }
         break;
       }
+
       case "email.release": {
-        const parsed = z
-          .object({
-            editionCode: z.string(),
-            editionTitle: z.string(),
-            recipients: z.array(
-              z.object({
-                email: z.email(),
-                name: z.string().optional(),
-              }),
-            ),
-          })
-          .parse(job.data);
+        const parsed = emailReleaseSchema.parse(job.data);
 
-        const { editionCode, editionTitle, recipients } = parsed;
+        const { editionCode, editionTitle, recipients, emailType } = parsed;
         logger.info(
-          `📢 Sending release email for Edition ${editionCode} to ${recipients.length} recipients`,
+          `📢 Sending release email ${emailType} for Edition ${editionCode} to ${recipients.length} recipients`,
         );
-
-        for (const recipient of recipients) {
-          try {
-            await this.emailIntegration.sendEmail({
-              email: recipient.email,
-              type: EmailType.NEW_EDITION_RELEASED,
-              content: {
-                name: recipient.name ?? "there",
-                editionTitle,
-                editionCode,
-              },
-            });
-
-            await new Promise((r) => setTimeout(r, 1000)); // small throttle
-          } catch (err) {
-            logger.error(
-              err,
-              `[EmailWorker] Failed to send release email to ${recipient.email}`,
-            );
-          }
+        const limiter = new Bottleneck({
+          minTime: 500,
+          maxConcurrent: 1,
+        });
+        try {
+          await Promise.all(
+            recipients.map((recipient) => {
+              limiter.schedule(async () => {
+                try {
+                  const emailContent = this.getReleaseEmailContent(
+                    emailType,
+                    recipient,
+                  );
+                  await this.emailIntegration.sendEmail({
+                    email: recipient.email,
+                    type: emailType,
+                    content: emailContent,
+                  });
+                } catch (error) {
+                  logger.error(
+                    error,
+                    `[EmailWorker] Failed to send email to user=${recipient.email} `,
+                  );
+                }
+              });
+            }),
+          );
+        } catch (err) {
+          logger.error(
+            err,
+            `[EmailWorker] Failed to send release emails to ${recipients.map((r) => r.email)}`,
+          );
         }
 
         break;
@@ -157,31 +219,7 @@ export class EmailWorker {
         });
         return;
       }
-      case "email.edition00_release": {
-        const users = await this.db.preorder.findMany({
-          where: {
-            choice: {
-              not: PlanType.PHYSICAL,
-            },
-            status: OrderStatus.PAID,
-          },
-          include: { user: true },
-        });
 
-        for (const preorder of users) {
-          if (!preorder.user?.email || !preorder.user.name) continue;
-          await this.emailIntegration.sendEmail({
-            email: preorder.user.email,
-            type: EmailType.EDITION_00_DIGITAL_RELEASE,
-            content: {
-              name: preorder.user.name,
-              accessLink: `${this.config.frontEndUrl}/auth/login`,
-              subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
-            },
-          });
-        }
-        break;
-      }
       case "email.subscription_renewed": {
         const parsedData = z
           .object({

@@ -1,5 +1,7 @@
+import { logger } from "@/lib/logger";
+
 export const initConfig = () => {
-  return {
+  const config = {
     port: +(process.env.PORT || 3400),
     secret: String(process.env.SESSION_SECRET),
     jwtSecret: process.env.JWT_SECRET || "",
@@ -26,6 +28,8 @@ export const initConfig = () => {
       | RegExp
     )[],
   };
+  logger.info(`[Config] Loaded config for env - ${config.env}`);
+  return config;
 };
 
 export type Config = ReturnType<typeof initConfig>;

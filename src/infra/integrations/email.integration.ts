@@ -5,22 +5,6 @@ import { subjects, templates } from "./email.integrations.templates";
 import { EmailType, EmailContentMap } from "./email-types";
 import { BaseEmailIntegration } from "./base.email.integration";
 
-const sendWithRetry = async (fn: () => Promise<void>, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      if (err.statusCode === 429 && i < retries - 1) {
-        const wait = 2000 * (i + 1);
-        logger.warn(`Rate limit hit. Retrying in ${wait}ms...`);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
-      throw err;
-    }
-  }
-};
-
 export class EmailIntegration extends BaseEmailIntegration {
   constructor(
     apiKey: string,
@@ -38,6 +22,7 @@ export class EmailIntegration extends BaseEmailIntegration {
       subject: subjects[emailType],
     };
   }
+
   async sendEmail<T extends EmailType>(input: {
     content: EmailContentMap[T];
     email: string;

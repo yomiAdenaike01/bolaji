@@ -336,16 +336,12 @@ export const templates: {
       </p>
     `,
     ),
-  [EmailType.EDITION_00_DIGITAL_RELEASE]: ({
-    name,
-    accessLink,
-    subscribeLink,
-  }) =>
+  [EmailType.EDITION_00_DIGITAL_RELEASE]: ({ name, subscribeLink, planType }) =>
     wrap(
-      "Your Access to Bolaji Editions 0.0 Is Now Live",
+      `${planType !== PlanType.PHYSICAL ? "Your Access to" : ""} Bolaji Editions 0.0 Is Now Live`,
       `
     <h1 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;font-size:28px;margin-bottom:18px;color:#111;text-align:center;">
-      Welcome — Your Digital Experience Begins Now
+      Welcome — Your ${planType !== PlanType.PHYSICAL ? "Digital" : ""} Experience Begins Now
     </h1>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
@@ -353,7 +349,7 @@ export const templates: {
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
-      We’re delighted to let you know that your access to <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now live and ready to explore.
+      ${planType !== PlanType.PHYSICAL ? "We’re delighted to let you know that your access to <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now live and ready to explore." : "We’re delighted to let you know that <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now released, you will be notified when your edition has been shipped."}
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
@@ -371,7 +367,7 @@ export const templates: {
     <div style="text-align:center;margin-top:36px;">
       ${
         subscribeLink
-          ? `<a href="${subscribeLink}" style="display:inline-block;background:#F1F0FF;color:#111 !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:'Courier New',Courier,monospace;margin-left:8px;">
+          ? `<a href="${subscribeLink}" style="display:inline-block;background:#F1F0FF;color:#111 !important;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:500;font-family:Inter,Arial,sans-serif;margin-left:8px;">
               Subscribe for Ongoing Editions
             </a>`
           : ""

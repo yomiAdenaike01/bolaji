@@ -17,7 +17,7 @@ const formatList = (arr: any[]): Array<{ Email: string; Name: string }> => {
   if (!arr) return [];
   return arr.map((a) => {
     return {
-      Name: `${a["First name"]} ${a["Last name"]}`,
+      Name: `${a["First name"]} ${a["Last name"] || ""}`,
       Email: a["Email"],
     };
   });

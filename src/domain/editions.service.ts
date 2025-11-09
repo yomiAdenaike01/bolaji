@@ -5,10 +5,9 @@ import {
   Hub,
   PlanType,
 } from "@/generated/prisma/enums";
-import { Db, Store } from "@/infra";
+import { Db, Store, TransactionClient } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
-import { isBefore, subMonths } from "date-fns";
 
 export type UserEditionAccess = ({
   edition: {
@@ -40,7 +39,7 @@ export type UserEditionAccess = ({
 })[];
 
 export class EditionsService {
-  private readonly CACHE_TTL_SECONDS = 600;
+  private readonly EDITIONS_ACCESS_TTL = 60 * 60 * 24;
   constructor(
     private readonly db: Db,
     private readonly store: Store,
@@ -92,13 +91,15 @@ export class EditionsService {
 
     // 4️⃣ Filter only released editions
     const releasedAccess = activeAccess.filter((a) =>
-      a.edition?.releaseDate ? a.edition.releaseDate <= now : true,
+      a.edition?.releaseDate
+        ? a.edition.releaseDate <= now || a.edition.readyForRelease
+        : true,
     );
 
     // 5️⃣ Cache for 5 minutes
     await this.store.setEx(
       cacheKey,
-      this.CACHE_TTL_SECONDS,
+      this.EDITIONS_ACCESS_TTL,
       JSON.stringify(releasedAccess),
     );
 
@@ -106,66 +107,174 @@ export class EditionsService {
     return releasedAccess;
   };
 
-  releaseEdition = async (editionNumber: number) => {
+  private getReleaseEditionTransaction = async (
+    tx: TransactionClient,
+    editionNumber: number,
+  ) => {
     const now = new Date();
-
-    const result = await this.db.$transaction(async (tx) => {
-      const edition = await tx.edition.findUnique({
-        where: { number: editionNumber },
-        select: { id: true, title: true, status: true, number: true },
-      });
-
-      if (!edition) throw new Error(`Edition ${editionNumber} not found`);
-
-      // already finalized → no-op
-      if (
-        ([EditionStatus.ACTIVE, EditionStatus.CLOSED] as any).includes(
-          edition.status,
-        )
-      ) {
-        logger.info(
-          `[Edition Service] Edition ${editionNumber} already ${edition.status}.`,
-        );
-        return null;
-      }
-
-      // ─── Special rule for Edition 00 ───────────────────────────────
-      const nextStatus =
-        edition.number === 0 ? EditionStatus.CLOSED : EditionStatus.ACTIVE;
-
-      const updatedEdition = await tx.edition.update({
-        where: { id: edition.id },
-        data: {
-          status: nextStatus,
-          releasedAt: now,
-          updatedAt: now,
+    const edition = await tx.edition.update({
+      where: {
+        number: editionNumber,
+        status: {
+          notIn: [EditionStatus.ACTIVE, EditionStatus.CLOSED],
         },
-      });
-
-      logger.info(
-        `[Edition Service] Edition ${editionNumber} status updated from ${edition.status} to - ${updatedEdition.status}.`,
-      );
-
-      // Unlock all scheduled access for this edition
-      const { count } = await tx.editionAccess.updateMany({
-        where: {
-          editionId: edition.id,
-          status: AccessStatus.SCHEDULED,
-          unlockAt: { lte: now },
-        },
-        data: {
-          status: AccessStatus.ACTIVE,
-          unlockedAt: now,
-        },
-      });
-
-      return { edition: updatedEdition, unlocked: count };
+      },
+      data: {
+        status: EditionStatus.ACTIVE,
+        releasedAt: now,
+        updatedAt: now,
+      },
     });
 
-    if (!result) return;
+    if (!edition) throw new Error(`Edition ${editionNumber} not found`);
+
     logger.info(
-      `[Edition Service] ✅ Edition ${result.edition.title} → ${result.edition.status} — ${result.unlocked} user accesses unlocked`,
+      `[Edition Service] Edition ${editionNumber} status updated ${edition.code} to - ${edition.status}.`,
     );
+
+    // Unlock all scheduled access for this edition
+    const userAccess = await tx.editionAccess.updateManyAndReturn({
+      where: {
+        editionId: edition.id,
+        status: AccessStatus.SCHEDULED,
+        unlockAt: { lte: now },
+      },
+      data: {
+        status: AccessStatus.ACTIVE,
+        unlockedAt: now,
+      },
+      select: {
+        accessType: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (userAccess.length === 0) {
+      return {
+        edition,
+        unlocked: userAccess.length,
+        affectedUsers: [],
+        userAccessData: null,
+      };
+    }
+
+    const affectedUsers = userAccess.filter(
+      (u) => u.user && Object.values(u.user).every(Boolean),
+    );
+
+    const affectedUsersPromise = tx.editionAccess.findMany({
+      where: {
+        userId: { in: affectedUsers.map((a) => a.user.id) },
+        status: AccessStatus.ACTIVE,
+        expiresAt: { gt: now },
+      },
+      include: { edition: true },
+      orderBy: { edition: { number: "asc" } },
+    });
+
+    const accesses = await affectedUsersPromise;
+
+    const userAccessData = new Map<string, EditionAccess[]>();
+
+    for (const a of accesses) {
+      if (!userAccessData.has(a.userId)) {
+        userAccessData.set(a.userId, []);
+      }
+      userAccessData.get(a.userId)!.push(a);
+    }
+
+    return {
+      edition,
+      unlocked: affectedUsers.length,
+      affectedUsers,
+      userAccessData,
+    };
+  };
+
+  releaseEdition = async (editionNumber: number) => {
+    const result = await this.db.$transaction((tx) =>
+      this.getReleaseEditionTransaction(tx, editionNumber),
+    );
+
+    if (!result) {
+      logger.info(
+        {
+          editionNumber,
+          reason: "Edition already ACTIVE or CLOSED — no unlocks performed",
+        },
+        "[EditionService] 💤 No-op: edition release skipped",
+      );
+      return;
+    }
+
+    const { edition, unlocked, affectedUsers, userAccessData } = result;
+
+    logger.info(
+      `[Edition Service] ✅ Edition ${edition.title} → ${edition.status} — ${unlocked} user accesses unlocked`,
+    );
+
+    // ─── Cache invalidation ───────────────────────────────
+    if (
+      affectedUsers.length === 0 ||
+      !userAccessData ||
+      userAccessData?.size === 0
+    ) {
+      logger.info(
+        { editionNumber },
+        "[EditionService] No users had updated access — skipping cache invalidation",
+      );
+      return affectedUsers;
+    }
+
+    logger.info(
+      {
+        editionNumber,
+        affectedUsers: affectedUsers.length,
+      },
+      "[EditionService] 🧹 Clearing editionAccess cache for affected users",
+    );
+
+    const batchSize = 100;
+    const cachedAccessIds = affectedUsers.filter(
+      (user) => user.accessType !== PlanType.PHYSICAL,
+    );
+    for (let i = 0; i < cachedAccessIds.length; i += batchSize) {
+      const batch = cachedAccessIds.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async ({ user }) => {
+          const { id } = user;
+          const userAccess = userAccessData?.get(id);
+          if (!userAccess) return;
+          try {
+            await this.store.setEx(
+              `editionAccess:${id}`,
+              this.EDITIONS_ACCESS_TTL,
+              JSON.stringify(userAccess),
+            );
+          } catch (err) {
+            logger.error(
+              err,
+              `[EditionService] Failed to refresh cache for user=${id}`,
+            );
+          }
+        }),
+      );
+    }
+
+    logger.info(
+      {
+        editionNumber,
+        clearedUsers: affectedUsers.length,
+      },
+      "[EditionService] ✅ Cache invalidation complete",
+    );
+    return affectedUsers;
   };
   releaseNextPendingEdition = async () => {
     const nextEdition = await this.db.edition.findFirst({

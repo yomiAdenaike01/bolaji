@@ -357,22 +357,7 @@ export class PreorderController {
       throw error;
     }
   };
-  handlePreorderIntroScreen = async (req: Request, res: Response) => {
-    try {
-      const userId = await this.domain.session.getUserIdOrThrow(
-        (req as any).sessionId,
-      );
-      const canAccess =
-        await this.domain.preorders.canAccessPreorderEdition(userId);
-      if (!canAccess)
-        throw createHttpError.Unauthorized(
-          "Failed to find access to preorder edition",
-        );
-      res.status(StatusCodes.OK).json({ granted: canAccess });
-    } catch (error) {
-      return createHttpError.Unauthorized("User is not authenticated");
-    }
-  };
+
   handleCanAccessPreorder = async (
     req: Request,
     res: Response,
@@ -382,11 +367,8 @@ export class PreorderController {
       const userId = await this.domain.session.getUserIdOrThrow(
         (req as any).sessionId,
       );
-      const accessRegister = await this.domain.editions.getUserEditionAccess(
-        userId,
-        [PlanType.FULL, PlanType.DIGITAL],
-      );
-      const canAccess = accessRegister.some((r) => r.edition.code === "ED00");
+      const canAccess =
+        await this.domain.preorders.canAccessPreorderEdition(userId);
       res.status(200).json({ granted: canAccess });
     } catch (error) {
       next(error);

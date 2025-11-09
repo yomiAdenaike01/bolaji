@@ -104,8 +104,8 @@ export enum EmailType {
 export interface EmailContentMap {
   [EmailType.EDITION_00_DIGITAL_RELEASE]: {
     name: string;
-    accessLink: string;
     subscribeLink: string;
+    planType: PlanType;
   };
   [EmailType.SUBSCRIPTION_FAILED_TO_START]: {
     name: string;
@@ -126,6 +126,7 @@ export interface EmailContentMap {
     name: string;
     editionTitle: string;
     editionCode: string;
+    planType: PlanType;
   };
 
   [EmailType.REGISTER]: {
@@ -173,3 +174,9 @@ export interface EmailContentMap {
     retryLink?: string; // optional link to retry checkout
   };
 }
+
+// at 2pm subscriptions + people with editionsAccess get the email that it's released
+// home page enter button goes to subscriptions + guard is removed
+// full editions purchase button gets disabled and set to No longer avaliable
+// subscriptions OPEN
+//

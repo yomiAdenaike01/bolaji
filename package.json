@@ -11,9 +11,9 @@
     "test:emails": "NODE_ENV=development yarn ts-node -r tsconfig-paths/register src/scripts/tests/email.integration.test.ts",
     "migrate:dev": "sudo yarn prisma migrate dev",
     "proxy": "ngrok http --region=us --hostname=bolaji-api-playground.ngrok.io --host-header=rewrite 3400",
-    "dev:local": "NODE_ENV=development nodemon",
+    "dev": "NODE_ENV=development nodemon",
     "dev:staging": "NODE_ENV=development nodemon",
-    "dev:production": "NODE_ENV=development nodemon",
+    "dev:production": "NODE_ENV=production nodemon",
     "start": "node dist/main.js",
     "start:prod": "NODE_ENV=production node -r tsconfig-paths/register ./dist/main.js"
   },

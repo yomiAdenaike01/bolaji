@@ -3,6 +3,7 @@ import { Domain } from "@/domain/domain";
 import { Db } from "..";
 import { Job, Worker } from "bullmq";
 import { logger } from "@/lib/logger";
+import { EmailType } from "../integrations/email-types";
 export class ReleaseWorker {
   constructor(
     private readonly config: Config,
@@ -15,20 +16,42 @@ export class ReleaseWorker {
       },
     });
   }
+
   private async process(job: Job) {
     switch (job.name) {
       case "edition-00":
       case "edition-01": {
         const editionNumber = Number(job.data.edition);
-        logger.info(`[release] Releasing edition ${editionNumber}`);
-        await this.domain.editions.releaseEdition(editionNumber);
-        this.domain.notifications
-          .sendEditionReleaseEmails(editionNumber)
-          .catch((err) => {
-            logger.error(
-              `[EmailWorker] Failed to send edition release emails for edition=${editionNumber}`,
+        try {
+          logger.info(
+            `[release] Starting release for edition ${editionNumber}`,
+          );
+
+          const affectedUsers =
+            await this.domain.editions.releaseEdition(editionNumber);
+
+          if (!affectedUsers?.[0]) {
+            logger.info(
+              "[EditionsWorker] No affected users found, notifications are not required",
             );
+            return;
+          }
+
+          await this.domain.notifications.sendEditionReleaseEmails({
+            editionNumber,
+            users: affectedUsers,
+            emailType: EmailType.EDITION_00_DIGITAL_RELEASE, // Handle 01 release
           });
+          logger.info(
+            `[release] Edition ${editionNumber} emails sent successfully.`,
+          );
+        } catch (err) {
+          logger.error(
+            err,
+            `[EditionsWorker] Failed to release edition=${editionNumber}`,
+          );
+        }
+
         break;
       }
 

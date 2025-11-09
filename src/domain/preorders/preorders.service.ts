@@ -1,4 +1,8 @@
 import { Config } from "@/config";
+import {
+  EDITION_00_REMANING_CACHE_KEY,
+  PREORDER_EDITION_MAX_COPIES,
+} from "@/constants";
 import { Address } from "@/generated/prisma/client";
 import {
   AccessStatus,
@@ -10,7 +14,7 @@ import {
   ShipmentStatus,
   UserStatus,
 } from "@/generated/prisma/enums";
-import { Db, TransactionClient } from "@/infra";
+import { Db, Store, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import {
@@ -18,20 +22,14 @@ import {
   preorderSchema,
 } from "@/infra/integrations/schema";
 import { logger } from "@/lib/logger";
+import { addYears, isAfter } from "date-fns";
 import z from "zod";
+import { EditionsService } from "../editions.service";
+import { PasswordService } from "../password/password.service";
+import { PricingService } from "../pricing.service";
 import { createPreorderSchema } from "../schemas/preorder";
 import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
-import { addYears, isAfter } from "date-fns";
-import { Store } from "@/infra";
-import {
-  EDITION_00_REMANING_CACHE_KEY,
-  PREORDER_EDITION_MAX_COPIES,
-} from "@/constants";
-import crypto from "crypto";
-import bcrypt from "bcrypt";
-import { PasswordService } from "../password/password.service";
-import { PricingService } from "../pricing.service";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
@@ -53,6 +51,7 @@ export class PreordersService {
     private readonly store: Store,
     private readonly passwordService: PasswordService,
     private readonly pricingService: PricingService,
+    private readonly editionsService: EditionsService,
   ) {}
 
   canSubscribe = async (userId: string) => {
@@ -110,49 +109,11 @@ export class PreordersService {
       `[PreorderService] Checking Edition 00 access for userId=${userId}`,
     );
 
-    // 1️⃣ Find the user's paid preorder for Edition 00
-    const edtionAccess = await this.db.editionAccess.findFirst({
-      where: {
-        userId,
-        edition: {
-          number: 0, // safer than code hard-string,
-          // releaseDate: {
-          //   lte: new Date(),
-          // },
-        },
-      },
-      include: {
-        user: true,
-      },
-    });
-
-    if (!edtionAccess) {
-      logger.warn(
-        `[Preorder Service] No edition access record for user ${userId}`,
-      );
-      return false;
-    }
-
-    // 2️⃣ Enforce expiry (Edition 00 → 1 year)
-    const now = new Date();
-    if (edtionAccess.expiresAt && isAfter(now, edtionAccess.expiresAt)) {
-      logger.warn(`[Preorder Service] Access expired for user ${userId}`);
-      return false;
-    }
-
-    // 3️⃣ Optionally check status
-    if (edtionAccess.status !== AccessStatus.ACTIVE) {
-      logger.warn(
-        `[Preorder Service] Access not active (status=${edtionAccess.status}) for user ${userId}`,
-      );
-      return false;
-    }
-
-    logger.info(
-      `[Preorder Service] Valid Edition 00 access found: accessId=${edtionAccess.id}, expiresAt=${edtionAccess?.expiresAt?.toISOString()}`,
+    const accessRegister = await this.editionsService.getUserEditionAccess(
+      userId,
+      [PlanType.FULL, PlanType.DIGITAL],
     );
-
-    return true;
+    return accessRegister.some((r) => r?.edition?.code === "ED00");
   };
 
   markAsFailed = async ({

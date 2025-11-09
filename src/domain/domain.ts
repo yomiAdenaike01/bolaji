@@ -22,6 +22,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
 
   const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
   const passwordService = new PasswordService();
+  const editionsService = new EditionsService(db, store, jobQueues);
   const preorders = new PreordersService(
     appConfig,
     db,
@@ -30,6 +31,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
     store,
     passwordService,
     pricingService,
+    editionsService,
   );
 
   return {
@@ -42,7 +44,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
       jobQueues,
       db,
     ),
-    editions: new EditionsService(db, store, jobQueues),
+    editions: editionsService,
     session: new SessionService(appConfig, db, store),
     user: userService,
     auth: new AuthService(db, userService),

@@ -1,9 +1,11 @@
-import { AccessStatus } from "@/generated/prisma/enums";
+import { AccessStatus, PlanType } from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
+import { EmailType } from "@/infra/integrations/email-types";
 import { EmailIntegration } from "@/infra/integrations/email.integration";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
+import { ZodType } from "zod";
 
 export class NotificationService {
   constructor(
@@ -13,62 +15,73 @@ export class NotificationService {
     private readonly db: Db,
   ) {}
 
-  sendEditionReleaseEmails = async (editionNumber: number) => {
-    const { access, edition } = await this.db.$transaction(async (tx) => {
-      const edition = await tx.edition.findUnique({
-        where: { number: editionNumber },
-        select: { id: true, title: true, code: true },
-      });
-      if (!edition)
-        return {
-          edition: null,
-          access: [],
-        };
-
-      // Fetch all users with ACTIVE access
-      const access = await tx.editionAccess.findMany({
-        where: {
-          editionId: edition.id,
-          status: AccessStatus.ACTIVE,
-        },
-        select: { userId: true, user: { select: { email: true, name: true } } },
-      });
-      return {
-        access,
-        edition,
-      };
-    });
-
-    if (!access.length) {
+  sendEditionReleaseEmails = async ({
+    editionNumber,
+    users,
+    emailType,
+  }: {
+    editionNumber: number;
+    users: {
+      accessType: PlanType;
+      user: { id: string; email: string; name: string | null };
+    }[];
+    emailType: EmailType;
+  }) => {
+    if (users?.length === 0) {
       logger.info(
-        `[Notification Service] No active users for Edition ${editionNumber}`,
+        `[Notification Service] No users to email for Edition ${editionNumber}`,
       );
       return;
     }
 
+    const edition = await this.db.edition.findFirstOrThrow({
+      where: { number: editionNumber },
+      select: { code: true, number: true, title: true },
+    });
+
     logger.info(
-      `[Notification Service] Queuing ${access.length} release emails for Edition ${editionNumber}`,
+      `[Notification Service] Preparing to queue emails for Edition ${editionNumber}`,
     );
 
-    // Batch emails (e.g. 500 per job)
-    const batchSize = 500;
-    for (let i = 0; i < access.length; i += batchSize) {
-      const batch = access.slice(i, i + batchSize);
+    if (!users.length) {
+      logger.info(`[Notification Service] Skipping  — no recipients.`);
+      return;
+    }
+
+    const batchSize = 100;
+    const totalBatches = Math.ceil(users.length / batchSize);
+
+    logger.info(
+      `[Notification Service] Queuing ${users.length} emails. Edition ${editionNumber}`,
+    );
+
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+
       await this.jobQueues.add(
         "email.release",
         {
-          editionCode: edition?.code,
-          editionTitle: edition?.title,
-          recipients: batch.map((a) => ({
-            email: a.user.email,
-            name: a.user.name,
+          emailType,
+          editionCode: edition.code,
+          editionNumber: edition.number,
+          editionTitle: edition.title,
+          recipients: batch.map(({ user, accessType }) => ({
+            email: user.email,
+            name: user.name,
+            planType: accessType,
           })),
         },
-        {
-          removeOnComplete: true,
-          attempts: 3,
-        },
+        { removeOnComplete: true, attempts: 3 },
+      );
+
+      logger.info(
+        `[Notification Service] 📨 Queued email.release batch ${batchNumber}/${totalBatches} (${batch.length} emails) for Edition ${editionNumber}`,
       );
     }
+
+    logger.info(
+      `[Notification Service] ✅ All ${users.length} email batches queued for Edition ${editionNumber}`,
+    );
   };
 }
