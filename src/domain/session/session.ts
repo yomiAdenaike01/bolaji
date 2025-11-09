@@ -23,6 +23,7 @@ export interface JwtPayload {
   userId: string;
   email: string;
   sessionId: string;
+  context?: string;
 }
 
 interface JwtPair {
@@ -97,7 +98,7 @@ export class SessionService {
   // 🔐 JWT CREATION
   // ─────────────────────────────────────────────
   generateJwtPair = (payload: JwtPayload): JwtPair => {
-    const { userId, email, sessionId } = payload;
+    const { userId, email, sessionId, context } = payload;
     if (!userId || !email || !sessionId)
       throw new Error("Missing required JWT fields");
 
@@ -111,6 +112,7 @@ export class SessionService {
         jti,
         type: "access",
         version: 1,
+        context,
       },
       this.config.jwtSecret,
       {
@@ -156,7 +158,9 @@ export class SessionService {
           ? this.config.jwtRefreshSecret
           : this.config.jwtSecret;
 
-      const decoded = jwt.verify(token, secret) as any;
+      const decoded = jwt.verify(token, secret, {
+        ignoreExpiration: this.config.ignoreJwtExpiry,
+      }) as any;
 
       if (decoded.type !== type)
         throw createHttpError.Unauthorized("Invalid token type");
@@ -171,6 +175,7 @@ export class SessionService {
         jti: number;
         type: string;
         version: number;
+        context: string;
       };
     } catch (err: any) {
       logger.error(`[JWT] ${type} token error: ${err.message}`);
@@ -212,14 +217,42 @@ export class SessionService {
   // ─────────────────────────────────────────────
   // 🧱 REDIS SESSION HANDLING
   // ─────────────────────────────────────────────
-  async createSession(userId: string, email: string, deviceId?: string) {
+  async createSession(
+    userId: string,
+    email: string,
+    deviceId?: string,
+    context = "portal",
+  ) {
     if (!userId || !email) throw new Error("User id or email is undefined");
+
+    const userSessionKey = `user:session:${userId}`;
+    const existingSessionId = await this.store.get(userSessionKey);
+
+    // ✅ If user already has a linked session, reuse it instead of creating new
+    if (existingSessionId) {
+      const redisKey = `session:${existingSessionId}`;
+      const exists = await this.store.exists(redisKey);
+
+      if (exists) {
+        logger.info(
+          `[Session] Reusing existing session ${existingSessionId} for userId=${userId}`,
+        );
+        // optional: extend TTL on reuse
+        await this.store.expire(redisKey, 7 * 24 * 60 * 60);
+        return existingSessionId;
+      } else {
+        // pointer exists but hash missing -> cleanup pointer
+        await this.store.del(userSessionKey);
+      }
+    }
+
+    // 🆕 Otherwise, create new session and pointer
     const sessionId = randomUUID();
     const redisKey = `session:${sessionId}`;
-
     const data = {
       userId,
       email,
+      context,
       ...(deviceId ? { deviceId } : {}),
       createdAt: new Date().toISOString(),
       lastAction: new Date().toISOString(),
@@ -227,17 +260,10 @@ export class SessionService {
 
     await this.store.hSet(redisKey, data as Record<string, string>);
     await this.store.expire(redisKey, 7 * 24 * 60 * 60);
+    await this.store.set(userSessionKey, sessionId);
 
-    logger.info(`[Session] Created session ${sessionId} for ${email}`);
+    logger.info(`[Session] Created new session ${sessionId} for ${email}`);
     return sessionId;
-  }
-
-  async getSession(sessionId: string) {
-    const redisKey = `session:${sessionId}`;
-    const session = await this.store.hGetAll(redisKey);
-    if (!session || !Object.keys(session).length)
-      throw createHttpError.Unauthorized("Session not found");
-    return session;
   }
 
   async deleteSession(sessionId: string, userId?: string) {
@@ -285,16 +311,24 @@ export class SessionService {
     userId,
     email,
     deviceId,
+    context = "portal",
   }: {
     userId: string;
     email: string;
     deviceId?: string;
+    context?: string;
   }) => {
-    const sessionId = await this.createSession(userId, email, deviceId);
+    const sessionId = await this.createSession(
+      userId,
+      email,
+      deviceId,
+      context,
+    );
     const { accessToken, refreshToken } = this.generateJwtPair({
       email: email,
       userId: userId,
       sessionId,
+      context,
     });
     return {
       refreshToken,

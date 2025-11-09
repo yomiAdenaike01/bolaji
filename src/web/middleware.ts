@@ -139,6 +139,7 @@ export const initTokenAuthGuard = (session: SessionService) => {
         sub?: string;
         sessionId?: string;
         email?: string;
+        context?: string;
       } | null;
       if (!decoded?.exp || !decoded?.sub || !decoded?.sessionId)
         throw createHttpError.Unauthorized("Invalid token");
@@ -163,6 +164,7 @@ export const initTokenAuthGuard = (session: SessionService) => {
       (req as any).sessionId = tkn.sessionId;
       (req as any).userId = decoded.sub;
       (req as any).email = decoded.email;
+      (req as any).context = decoded.context;
 
       if (refreshed) res.setHeader("x-new-access-token", accessToken);
 
@@ -185,6 +187,8 @@ export const initOptionalAuth = (session: SessionService) => {
       const decoded = session.parseOrThrow(authHeader, "access");
       (req as any).sessionId = decoded.sessionId;
       (req as any).userId = decoded.sub;
+      (req as any).email = decoded.email;
+      (req as any).context = decoded.context;
       next();
     } catch {
       // invalid token, ignore and continue (do NOT throw)

@@ -182,6 +182,7 @@ export class PreorderController {
         userId: user.id,
         email: user.email,
         deviceId: user.deviceId,
+        context: "preorder",
       });
       // TODO: AFTER EVERY 10 PEOPLE HAVE COMPLETED SEND AN EMAIL TO THE TEAM TO SEE WHO HAS GOTTEN ACCESS
       // 6. Redirect to Framer preorder site
@@ -369,7 +370,7 @@ export class PreorderController {
       );
       const canAccess =
         await this.domain.preorders.canAccessPreorderEdition(userId);
-      res.status(200).json({ granted: canAccess });
+      res.status(StatusCodes.OK).json({ granted: canAccess });
     } catch (error) {
       next(error);
     }

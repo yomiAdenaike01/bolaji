@@ -336,12 +336,17 @@ export const templates: {
       </p>
     `,
     ),
-  [EmailType.EDITION_00_DIGITAL_RELEASE]: ({ name, subscribeLink, planType }) =>
+  [EmailType.EDITION_00_DIGITAL_RELEASE]: ({
+    name,
+    subscribeLink,
+    resetPasswordLink,
+    planType,
+  }) =>
     wrap(
-      `${planType !== PlanType.PHYSICAL ? "Your Access to" : ""} Bolaji Editions 0.0 Is Now Live`,
+      `${planType !== PlanType.PHYSICAL ? "Bolaji Editions 0.0 Is Now Live" : "Bolaji Editions is now launched"} `,
       `
     <h1 style="font-family:'Georgia','Times New Roman',serif;font-weight:400;font-size:28px;margin-bottom:18px;color:#111;text-align:center;">
-      Welcome — Your ${planType !== PlanType.PHYSICAL ? "Digital" : ""} Experience Begins Now
+      ${planType === PlanType.PHYSICAL ? "Bolaji Editions has officially launched" : "Welcome, Your Digital Experience Begins Now"} 
     </h1>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
@@ -349,11 +354,11 @@ export const templates: {
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
-      ${planType !== PlanType.PHYSICAL ? "We’re delighted to let you know that your access to <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now live and ready to explore." : "We’re delighted to let you know that <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now released, you will be notified when your edition has been shipped."}
+      ${planType !== PlanType.PHYSICAL ? `We’re delighted to let you know that your access to <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now live and ready to explore. You will need to go <a href='${resetPasswordLink}'>here</a> to reset your password. ${planType === PlanType.FULL ? "You will also be notified when your edition is on it's way." : ""}` : "We’re delighted to let you know that <strong>Bolaji&nbsp;Editions&nbsp;0.0</strong> is now released, you will be notified when your edition is on it's way."}
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
-      This inaugural edition marks the beginning of something entirely new — a monthly art publication blending physical and digital form, straight from the studio of multidisciplinary artist <strong>Adébayo&nbsp;Bolaji</strong>.
+      This inaugural edition marks the beginning of something entirely new a monthly art publication blending physical and digital form, straight from the studio of multidisciplinary artist <strong>Adébayo&nbsp;Bolaji</strong>.
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:18px;">
@@ -361,7 +366,7 @@ export const templates: {
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:24px;">
-      If you haven’t subscribed yet, we’d love for you to continue the journey. Discover what’s next in this first-of-its-kind monthly publication — rich with artwork, writings, film, music, interviews and more.
+      If you haven’t subscribed yet, we’d love for you to continue the journey. Discover what’s next in this first-of-its-kind monthly publication rich with artwork, writings, film, music, interviews and more.
     </p>
 
     <div style="text-align:center;margin-top:36px;">

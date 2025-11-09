@@ -68,10 +68,22 @@ const makeAuthRouter = (
 ) => {
   const r = express.Router();
   r.post("/authenticate", authController.handleAuthenticateUser);
+  r.post("/login", authController.handlePortalLogin);
+
   r.get("/dev/authenticate", authController.handleDevAuth);
   r.post("/reset-password", authController.handleResetPassword);
   r.get("/is-valid", authGuard, (req, res) => {
-    res.status(200).json({ isValid: true });
+    const tknContext = (req as any)?.context; // returned from parseOrThrow()
+
+    if (!tknContext || tknContext === "preorder") {
+      return res.status(200).json({ isValid: true, context: "preorder" });
+    }
+
+    // Otherwise block
+    return res.status(403).json({
+      isValid: false,
+      reason: "not preorder user",
+    });
   });
 
   return r;

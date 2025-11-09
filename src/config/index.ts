@@ -3,6 +3,7 @@ import { logger } from "@/lib/logger";
 export const initConfig = () => {
   const config = {
     port: +(process.env.PORT || 3400),
+    ignoreJwtExpiry: Boolean(process.env.IGNORE_JWT_EXPIRY) || false,
     secret: String(process.env.SESSION_SECRET),
     jwtSecret: process.env.JWT_SECRET || "",
     maxAge: +(process.env.MAX_AGE || 0),

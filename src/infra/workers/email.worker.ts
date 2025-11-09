@@ -41,10 +41,12 @@ export class EmailWorker {
         name: z.string(),
         planType: z.enum(PlanType),
         subscribeLink: z.url(),
+        resetPasswordLink: z.url(),
       }),
       build: (user) => ({
         name: user.name,
         planType: user.planType,
+        resetPasswordLink: `${this.config.frontEndUrl}/auth/reset-password`,
         subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
       }),
     },
@@ -94,7 +96,7 @@ export class EmailWorker {
     }
 
     const content = entry.build(recipient);
-    entry.schema.parse(content); // ✅ runtime validation
+    entry.schema.parse(content);
     return content as EmailContentMap[T];
   };
 

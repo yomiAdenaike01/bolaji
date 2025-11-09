@@ -106,6 +106,7 @@ export interface EmailContentMap {
     name: string;
     subscribeLink: string;
     planType: PlanType;
+    resetPasswordLink: string;
   };
   [EmailType.SUBSCRIPTION_FAILED_TO_START]: {
     name: string;

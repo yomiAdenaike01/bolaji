@@ -61,7 +61,20 @@ export class EditionsService {
     const cached = await this.store.get(cacheKey);
     if (cached) {
       try {
-        return JSON.parse(cached) as UserEditionAccess;
+        return JSON.parse(cached) as ({
+          id: string;
+          userId: string;
+          editionId: string;
+          unlockedAt: Date | null;
+          unlockAt: Date | null;
+          status: AccessStatus;
+          subscriptionId: string | null;
+          grantedAt: Date;
+          expiresAt: Date | null;
+          accessType: PlanType;
+        } & {
+          edition: Edition | null;
+        })[];
       } catch {}
     }
 
@@ -112,6 +125,7 @@ export class EditionsService {
     editionNumber: number,
   ) => {
     const now = new Date();
+
     const edition = await tx.edition.update({
       where: {
         number: editionNumber,
@@ -276,6 +290,35 @@ export class EditionsService {
     );
     return affectedUsers;
   };
+
+  getUserScheduledEditionAccess = async (
+    userId: string,
+    planTypes: PlanType | PlanType[],
+  ) => {
+    const now = new Date();
+
+    const where: any = {
+      userId,
+      status: AccessStatus.SCHEDULED,
+      expiresAt: { gt: now },
+    };
+
+    if (Array.isArray(planTypes)) {
+      where.OR = planTypes.map((type) => ({ accessType: type }));
+    } else {
+      where.accessType = planTypes;
+    }
+
+    // Only future / not-yet-released editions
+    const scheduledAccess = (await this.db.editionAccess.findMany({
+      where,
+      include: { edition: true },
+      orderBy: { edition: { releaseDate: "asc" } },
+    })) as (EditionAccess & { edition: Edition | null })[];
+
+    return scheduledAccess;
+  };
+
   releaseNextPendingEdition = async () => {
     const nextEdition = await this.db.edition.findFirst({
       where: {
