@@ -85,6 +85,7 @@ export class AuthController {
       jwtPair,
     };
   };
+
   handleAuthenticateUser = async (req: Request, res: Response) => {
     try {
       const input = {

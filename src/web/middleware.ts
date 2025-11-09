@@ -8,9 +8,8 @@ import { logger } from "@/lib/logger";
 import { Store } from "@/infra";
 import { Config } from "@/config";
 import createHttpError, { HttpError } from "http-errors";
-
+import jwt from "jsonwebtoken";
 import compression from "compression";
-import { AuthController } from "./controllers/auth.controller";
 import { SessionService } from "@/domain/session/session";
 
 function shouldCompress(req: any, res: any) {
@@ -133,16 +132,41 @@ export const initTokenAuthGuard = (session: SessionService) => {
       const authHeader = req.headers.authorization?.split("Bearer ") || [];
       const token = authHeader?.[1] || null;
       if (!token) return next(createHttpError.Unauthorized());
-      const { accessToken, refreshed } =
-        await session.checkAndRefreshAccessToken(token);
+
+      // Decode just to inspect expiry
+      const decoded = jwt.decode(token) as {
+        exp?: number;
+        sub?: string;
+        sessionId?: string;
+      } | null;
+      if (!decoded?.exp || !decoded?.sub || !decoded?.sessionId)
+        throw createHttpError.Unauthorized("Invalid token");
+
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = decoded.exp - now;
+
+      let accessToken = token;
+      let refreshed = false;
+
+      if (remaining <= 10 && remaining > -60) {
+        try {
+          const refreshedPair = await session.refreshAccessToken(token);
+          accessToken = refreshedPair.accessToken;
+          refreshed = true;
+        } catch {
+          return next(createHttpError.Unauthorized("Session expired"));
+        }
+      }
+
       const tkn = session.parseOrThrow(accessToken, "access");
       (req as any).sessionId = tkn.sessionId;
+
       if (refreshed) res.setHeader("x-new-access-token", accessToken);
+
       next();
     } catch (error) {
       next(error);
     }
   };
 };
-
 export type AuthGuard = ReturnType<typeof initTokenAuthGuard>;
