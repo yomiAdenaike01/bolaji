@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
 
 export const initConfig = () => {
   const config = {
@@ -28,6 +28,10 @@ export const initConfig = () => {
       | string
       | RegExp
     )[],
+    workspace: {
+      allowedEmails: process.env.ADMIN_EMAIL?.split(" ") || [],
+      password: process.env.ADMIN_PASSWORD || "",
+    },
   };
   logger.info(`[Config] Loaded config for env - ${config.env}`);
   return config;

@@ -3,9 +3,9 @@ import {
   Hub,
   OrderStatus,
   PlanType,
-} from "@/generated/prisma/client";
-import { logger } from "@/lib/logger";
-import { Db, Store, TransactionClient } from ".";
+} from "@/generated/prisma/index.js";
+import { logger } from "@/lib/logger.js";
+import { Db, Store, TransactionClient } from "./index.js";
 import {
   DEFAULT_PLANS,
   EDITION_00_RELEASE,
@@ -14,8 +14,8 @@ import {
   PREORDER_CLOSING_DATETIME,
   PREORDER_EDITION_MAX_COPIES,
   PREORDER_OPENING_DATETIME,
-} from "@/constants";
-import { padNumber } from "@/utils";
+} from "@/constants/index.js";
+import { padNumber } from "@/utils.js";
 
 const ensureDefaultPlans = async (db: TransactionClient) => {
   logger.info("🔍 Checking for default subscription plans in database...");

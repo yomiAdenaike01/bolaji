@@ -1,17 +1,17 @@
-import { UserStatus } from "@/generated/prisma/enums";
-import { Db } from "@/infra";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
-import { generateWaitlistEmailSummary } from "@/lib/spreadsheets/generateWaitlistEmailSummary";
+import { UserStatus } from "@/generated/prisma/index.js";
+import { Db } from "@/infra/index.js";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types.js";
+import { generateWaitlistEmailSummary } from "@/lib/spreadsheets/generateWaitlistEmailSummary.js";
 import bcrypt from "bcrypt";
 import Bottleneck from "bottleneck";
 import { Job } from "bullmq";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import pLimit from "p-limit";
-import { Config } from "../config";
-import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration";
-import { EmailIntegration } from "../infra/integrations/email.integration";
-import { logger } from "../lib/logger";
+import { Config } from "../config/index.js";
+import { AdminEmailIntegration } from "../infra/integrations/admin.email.integration.js";
+import { EmailIntegration } from "../infra/integrations/email.integration.js";
+import { logger } from "../lib/logger.js";
 
 const formatList = (arr: any[]): Array<{ Email: string; Name: string }> => {
   if (!arr) return [];

@@ -4,7 +4,7 @@ import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
 import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { Hub } from "@/generated/prisma/enums";
+import { Hub } from "@/generated/prisma/index.js";
 import createHttpError from "http-errors";
 import { randomUUID } from "crypto";
 

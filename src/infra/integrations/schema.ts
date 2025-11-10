@@ -1,4 +1,4 @@
-import { PlanType, OrderType } from "@/generated/prisma/enums";
+import { PlanType, OrderType } from "@/generated/prisma/index.js";
 import z from "zod";
 
 export const preorderSchema = z.object({
@@ -11,7 +11,6 @@ export const preorderSchema = z.object({
   eventId: z.string().min(1),
   paymentLinkId: z.string().min(1),
   quantity: z.number().nonnegative(),
-
 });
 
 export type CompletedPreoderEventDto = z.infer<typeof preorderSchema>;

@@ -1,22 +1,26 @@
-import { Db } from "@/infra";
-import { UserService } from "../user/users.service";
+import { Db } from "@/infra/index.js";
+import { UserService } from "../user/users.service.js";
 import bcrypt from "bcrypt";
-import { Prisma } from "@/generated/prisma/client";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
+import { Config } from "@/config/index.js";
 
 export class AuthService {
-  loginAsDev = async () => {
-    const user = await this.db.user.findFirst({
-      where: {
-        email: "adenaikeyomi@gmail.com",
-      },
-    });
-    return user;
-  };
   constructor(
     private readonly db: Db,
+    private readonly config: Config,
     private readonly userService: UserService,
   ) {}
+  authenticateWorkspaceUser(
+    email: string,
+    workspacePassword: string,
+  ): { email: string } | null {
+    const { allowedEmails, password } = this.config.workspace;
+
+    if (allowedEmails.includes(email) && workspacePassword === password)
+      return { email };
+    return null;
+  }
+
   updatePasswordByEmail = async ({
     email,
     password,

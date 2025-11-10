@@ -1,18 +1,18 @@
-import { Db } from "@/infra";
-import { logger } from "@/lib/logger";
+import { Db } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
 import { Job, Worker } from "bullmq";
 import z, { promise, ZodType } from "zod";
 import {
   AdminEmailType,
   EmailContentMap,
   EmailType,
-} from "../integrations/email-types";
-import { EmailIntegration } from "../integrations/email.integration";
-import { Config } from "@/config";
-import { PlanType, UserStatus } from "@/generated/prisma/enums";
-import { sendWaitlistEmails } from "@/scripts/send-waitlist-emails";
-import { AdminEmailIntegration } from "../integrations/admin.email.integration";
-import { NotificationService } from "@/domain/notifications/notification.service";
+} from "../integrations/email-types.js";
+import { EmailIntegration } from "../integrations/email.integration.js";
+import { Config } from "@/config/index.js";
+import { PlanType, UserStatus } from "@/generated/prisma/index.js";
+import { sendWaitlistEmails } from "@/scripts/send-waitlist-emails.js";
+import { AdminEmailIntegration } from "../integrations/admin.email.integration.js";
+import { NotificationService } from "@/domain/notifications/notification.service.js";
 import Bottleneck from "bottleneck";
 
 export type EmailRecipient = {

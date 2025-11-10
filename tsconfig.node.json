@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* === Output === */
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    /* === Interop === */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    /* === Paths & aliases === */
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    /* === Type safety === */
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".render"
+  ]
+}

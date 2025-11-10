@@ -1,13 +1,13 @@
-import { Edition, EditionAccess } from "@/generated/prisma/client";
+import { Edition, EditionAccess } from "@/generated/prisma/client.js";
 import {
   AccessStatus,
   EditionStatus,
   Hub,
   PlanType,
-} from "@/generated/prisma/enums";
-import { Db, Store, TransactionClient } from "@/infra";
-import { JobsQueues } from "@/infra/workers/jobs-queue";
-import { logger } from "@/lib/logger";
+} from "@/generated/prisma/index.js";
+import { Db, Store, TransactionClient } from "@/infra/index.js";
+import { JobsQueues } from "@/infra/workers/jobs-queue.js";
+import { logger } from "@/lib/logger.js";
 
 export type UserEditionAccess = ({
   edition: {

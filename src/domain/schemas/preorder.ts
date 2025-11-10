@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PlanType } from "@/generated/prisma/enums";
+import { PlanType } from "@/generated/prisma/index.js";
 import { createUserSchema } from "./users";
 
 export const shoudlValidateShippingAddress = (data: any, ctx: any) => {
@@ -41,7 +41,6 @@ export const createUserPreorderInputSchema = createUserSchema
     }).shape,
   })
   .superRefine(shoudlValidateShippingAddress);
-
 
 export type CreatePreorderInput = z.infer<typeof createPreorderSchema>;
 export type CreateUserPreorderInput = z.infer<

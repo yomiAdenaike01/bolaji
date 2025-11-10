@@ -1,16 +1,16 @@
-import { Domain } from "@/domain/domain";
-import { createSubscriptionInputSchema } from "@/domain/subscriptions/dto";
+import { Domain } from "@/domain/domain.js";
+import { createSubscriptionInputSchema } from "@/domain/subscriptions/dto.js";
 import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { invalidInputErrorResponse } from "./utils";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
-import { getSubscriptionThankYouPage } from "../templates/getSubscriptionThankyouPage";
-import { Config } from "@/config";
-import { getSubscriptionCancelPage } from "../templates/getSubscriptionCancelledPage";
-import { SubscriptionAlreadyActiveError } from "@/domain/subscriptions/subscriptions.service";
-import { logger } from "@/lib/logger";
+import { invalidInputErrorResponse } from "./utils.js";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils.js";
+import { getSubscriptionThankYouPage } from "../templates/getSubscriptionThankyouPage.js";
+import { Config } from "@/config/index.js";
+import { getSubscriptionCancelPage } from "../templates/getSubscriptionCancelledPage.js";
+import { SubscriptionAlreadyActiveError } from "@/domain/subscriptions/subscriptions.service.js";
+import { logger } from "@/lib/logger.js";
 import { isBefore } from "date-fns";
-import { EDITION_01_RELEASE } from "@/constants";
+import { EDITION_01_RELEASE } from "@/constants/index.js";
 
 export class SubscriptionsController {
   constructor(

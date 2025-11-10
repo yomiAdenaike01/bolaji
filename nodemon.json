@@ -2,5 +2,6 @@
   "watch": ["src"],
   "ext": "ts,js,json",
   "ignore": ["dist"],
-  "exec": "node --inspect=5431 -r ts-node/register -r tsconfig-paths/register src/main.ts"
+"exec": "tsx watch --inspect=5431 ./src/main.ts"
+
 }

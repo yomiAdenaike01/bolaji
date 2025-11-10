@@ -1,18 +1,24 @@
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { PrismaClient } from "@/generated/prisma/client";
-import { createClient, RedisClientType } from "redis";
-import { Config } from "@/config";
-import { logger } from "@/lib/logger";
-import { seed } from "./seed";
-import { JobWorkers } from "./workers/workers";
-import { Domain } from "@/domain/domain";
+import { PrismaClient } from "@/generated/prisma/index.js";
+import { createClient } from "redis";
+import { Config } from "@/config/index.js";
+import { logger } from "@/lib/logger.js";
+import { seed } from "./seed.js";
+import { JobWorkers } from "./workers/workers.js";
+import { Domain } from "@/domain/domain.js";
+import AdminJS from "adminjs";
+import { Database, Resource, getModelByName } from "@adminjs/prisma";
+import { PrismaClient as DbClient } from "@prisma/client";
+
+AdminJS.registerAdapter({ Database, Resource });
 
 const initDb = () => {
-  const db = new PrismaClient().$extends(withAccelerate());
+  const db = new PrismaClient();
+  db.$extends(withAccelerate());
   return db;
 };
 
-export const initStore = async (config: Config) => {
+const initStore = async (config: Config) => {
   const redisClient = createClient({
     url: config.redisConnectionUrl,
     socket: {
@@ -56,13 +62,35 @@ const initWorkers = (config: Config, db: Db) => (domain: Domain) => {
   return new JobWorkers(config, db, domain);
 };
 
-export const initInfra = (config: Config, store: Store) => {
+const registerWorkspace = () => {
+  const db = new DbClient();
+
+  // console.log(Database.isAdapterFor({ model: db.user, client: db }));
+
+  const workspace = new AdminJS({
+    resources: [
+      {
+        resource: { model: getModelByName("User"), client: db },
+      },
+    ],
+    rootPath: "/workspace",
+    branding: {
+      companyName: "Bolaji Editions",
+    },
+  });
+  return workspace;
+};
+
+export const initInfra = async (config: Config) => {
+  const store = await initStore(config);
   const db = initDb();
+  const workspace = registerWorkspace();
   seed(db, store).catch((err) => {
     logger.error(err, "Failed to seed db");
   });
   return {
     db,
+    workspace,
     store,
     initWorkers: initWorkers(config, db),
   };
@@ -75,3 +103,4 @@ export type TransactionClient = Parameters<
 >[0];
 
 export type Store = Awaited<ReturnType<typeof initStore>>;
+export type Workspace = ReturnType<typeof registerWorkspace>;

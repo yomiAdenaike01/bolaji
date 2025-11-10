@@ -1,9 +1,9 @@
-import { Config } from "@/config";
-import { Domain } from "@/domain/domain";
-import { Db } from "..";
+import { Config } from "@/config/index.js";
+import { Domain } from "@/domain/domain.js";
+import { Db } from "../index.js";
 import { Job, Worker } from "bullmq";
-import { logger } from "@/lib/logger";
-import { EmailType } from "../integrations/email-types";
+import { logger } from "@/lib/logger.js";
+import { EmailType } from "../integrations/email-types.js";
 export class ReleaseWorker {
   constructor(
     private readonly config: Config,

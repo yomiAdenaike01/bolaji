@@ -4,13 +4,14 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 import bodyParser from "body-parser";
 import { RedisStore } from "connect-redis";
-import { logger } from "@/lib/logger";
-import { Store } from "@/infra";
-import { Config } from "@/config";
+import { logger } from "@/lib/logger.js";
+import { Store } from "@/infra/index.js";
+import { Config } from "@/config/index.js";
 import createHttpError, { HttpError } from "http-errors";
 import jwt from "jsonwebtoken";
 import compression from "compression";
-import { SessionService } from "@/domain/session/session";
+import { SessionService } from "@/domain/session/session.js";
+import { Domain } from "@/domain/domain.js";
 
 function shouldCompress(req: any, res: any) {
   if (req.headers["x-no-compression"]) {
@@ -27,11 +28,17 @@ const logRequest = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-export const setupMiddlewares = (
-  app: Application,
-  store: Store,
-  config: Config,
-) => {
+export const setupMiddlewares = ({
+  app,
+  store,
+  config,
+  domain,
+}: {
+  app: Application;
+  store: Store;
+  config: Config;
+  domain: Domain;
+}) => {
   // 🟢 Allow Express to trust ngrok/reverse proxies
   app.set("trust proxy", 1);
   app.use(compression({ filter: shouldCompress }));
@@ -89,6 +96,10 @@ export const setupMiddlewares = (
       },
     }),
   );
+  return {
+    authGuard: initTokenAuthGuard(domain.session),
+    optionalAuthGuard: initOptionalAuth(domain.session),
+  };
 };
 
 export const setupErrorHandlers = (app: Application) => {
@@ -126,7 +137,7 @@ export const setupErrorHandlers = (app: Application) => {
   });
 };
 
-export const initTokenAuthGuard = (session: SessionService) => {
+const initTokenAuthGuard = (session: SessionService) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authHeader = req.headers.authorization?.split("Bearer ") || [];
@@ -175,8 +186,8 @@ export const initTokenAuthGuard = (session: SessionService) => {
   };
 };
 
-export const initOptionalAuth = (session: SessionService) => {
-  return async (req, _res, next) => {
+const initOptionalAuth = (session: SessionService) => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization?.split("Bearer ")[1];
     if (!authHeader) {
       // no token, continue anonymously

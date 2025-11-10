@@ -1,9 +1,9 @@
-import { PlanType } from "@/generated/prisma/enums";
-import { EmailType, EmailContentMap } from "./email-types";
+import { PlanType } from "@/generated/prisma/index.js";
+import { EmailType, EmailContentMap } from "./email-types.js";
 import { format } from "date-fns";
-import { EDITION_00_RELEASE } from "@/constants";
-import { getPreorderReleaseContent } from "./email-templates/preorder-rekease";
-import { wrap } from "./email-templates/email-wrapper";
+import { EDITION_00_RELEASE } from "@/constants/index.js";
+import { getPreorderReleaseContent } from "./email-templates/preorder-rekease.js";
+import { wrap } from "./email-templates/email-wrapper.js";
 
 const formatDate = (date: Date | string | number) => {
   const day = format(date, "d"); // day number without leading zero

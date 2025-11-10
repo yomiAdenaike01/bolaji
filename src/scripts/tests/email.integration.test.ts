@@ -1,18 +1,17 @@
-import { loadEnv } from "@/config/env";
+import { loadEnv } from "@/config/env.js";
 loadEnv();
 import fs from "fs";
 import path from "path";
-import { initConfig } from "@/config";
-import { EmailIntegration } from "@/infra/integrations/email.integration";
-import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
-import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
-import { initInfra, initStore } from "../../infra";
-import { getMockPayloadFor } from "../../tests/integrations/email/email.integration.mock";
+import { initConfig } from "@/config/index.js";
+import { EmailIntegration } from "@/infra/integrations/email.integration.js";
+import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration.js";
+import { EmailType, AdminEmailType } from "@/infra/integrations/email-types.js";
+import { initInfra } from "../../infra/index.js";
+import { getMockPayloadFor } from "../../tests/integrations/email/email.integration.mock.js";
 
 async function testEmails() {
   const config = initConfig();
-  const store = await initStore(config);
-  const { db } = initInfra(config, store);
+  const { db } = await initInfra(config);
 
   // Initialise integrations
   const userEmailIntegration = new EmailIntegration(
@@ -40,7 +39,7 @@ async function testEmails() {
       console.warn(`⚠️  No mock payload found for ${type}`);
       continue;
     }
-    const email = userEmailIntegration.getTemplate(type, payload);
+    const email = userEmailIntegration.getTemplate(type, payload as any);
     const filePath = path.join(outDir, `${type}.html`);
     fs.writeFileSync(filePath, email.template);
 

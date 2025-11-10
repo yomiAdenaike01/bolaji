@@ -1,7 +1,8 @@
-import { PlanType } from "@/generated/prisma/enums";
+import { PlanType } from "@/generated/prisma/index.js";
 import countries from "i18n-iso-countries";
+import en from "i18n-iso-countries/langs/en.json" with { type: "json" };
 
-countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
+countries.registerLocale(en);
 export type ShippingZone = "UK" | "EUROPE" | "ROW";
 
 const SHIPPING_PRICES: Record<ShippingZone, number> = {

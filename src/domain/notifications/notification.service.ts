@@ -1,10 +1,10 @@
-import { AccessStatus, PlanType } from "@/generated/prisma/enums";
-import { Db } from "@/infra";
-import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
-import { EmailType } from "@/infra/integrations/email-types";
-import { EmailIntegration } from "@/infra/integrations/email.integration";
-import { JobsQueues } from "@/infra/workers/jobs-queue";
-import { logger } from "@/lib/logger";
+import { AccessStatus, PlanType } from "@/generated/prisma/index.js";
+import { Db } from "@/infra/index.js";
+import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration.js";
+import { EmailType } from "@/infra/integrations/email-types.js";
+import { EmailIntegration } from "@/infra/integrations/email.integration.js";
+import { JobsQueues } from "@/infra/workers/jobs-queue.js";
+import { logger } from "@/lib/logger.js";
 import { ZodType } from "zod";
 
 export class NotificationService {

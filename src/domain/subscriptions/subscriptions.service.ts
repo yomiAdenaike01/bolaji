@@ -1,11 +1,11 @@
 import bcrypt from "bcrypt";
-import { Db, TransactionClient } from "@/infra";
-import { Integrations } from "@/infra/integrations";
+import { Db, TransactionClient } from "@/infra/index.js";
+import { Integrations } from "@/infra/integrations/index.js";
 import {
   CreateSubscriptionInput,
   CreateSubscriptionResult,
   UpdateSubscriptionInput,
-} from "./dto";
+} from "./dto.js";
 import crypto from "crypto";
 import {
   AccessStatus,
@@ -16,13 +16,13 @@ import {
   ShipmentStatus,
   SubscriptionStatus,
   UserStatus,
-} from "@/generated/prisma/enums";
-import { logger } from "@/lib/logger";
-import { JobsQueues } from "../../infra/workers/jobs-queue";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+} from "@/generated/prisma/index.js";
+import { logger } from "@/lib/logger.js";
+import { JobsQueues } from "../../infra/workers/jobs-queue.js";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types.js";
 import { addYears } from "date-fns";
-import { Config } from "@/config";
-import { PricingService } from "../pricing.service";
+import { Config } from "@/config/index.js";
+import { PricingService } from "../pricing.service.js";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {

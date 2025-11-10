@@ -1,31 +1,30 @@
 import { Job, Worker } from "bullmq";
-import { Db } from "..";
-import { EmailIntegration } from "../integrations/email.integration";
-import { Domain } from "@/domain/domain";
+import { Db } from "../index.js";
+import { Domain } from "@/domain/domain.js";
 import {
   updateSubscriptionInputSchema,
   onCreateSubscriptionInputSchema,
-} from "@/domain/subscriptions/dto";
+} from "@/domain/subscriptions/dto.js";
 import {
   OrderStatus,
   OrderType,
   PlanType,
   SubscriptionStatus,
   UserStatus,
-} from "@/generated/prisma/enums";
-import { logger } from "@/lib/logger";
+} from "@/generated/prisma/index.js";
+import { logger } from "@/lib/logger.js";
 import z, { ZodType } from "zod";
-import { PaymentEvent } from "../integrations/checkout.dto";
-import { EmailType, AdminEmailType } from "../integrations/email-types";
-import { preorderSchema } from "../integrations/schema";
-import { PaymentEventActions } from "../integrations/stripe.integration";
-import { CompletePreorderStatus } from "@/domain/preorders/preorders.service";
-import { Config } from "@/config";
-import { padNumber } from "@/utils";
+import { PaymentEvent } from "../integrations/checkout.dto.js";
+import { EmailType, AdminEmailType } from "../integrations/email-types.js";
+import { preorderSchema } from "../integrations/schema.js";
+import { PaymentEventActions } from "../integrations/stripe.integration.js";
+import { CompletePreorderStatus } from "@/domain/preorders/preorders.service.js";
+import { Config } from "@/config/index.js";
+import { padNumber } from "@/utils.js";
 import { isBefore } from "date-fns";
-import { EDITION_01_RELEASE } from "@/constants";
+import { EDITION_01_RELEASE } from "@/constants/index.js";
 import { hash } from "crypto";
-import { GeneratedPassword } from "@/domain/password/password.service";
+import { GeneratedPassword } from "@/domain/password/password.service.js";
 
 const failedPreorderDto = z.object({
   action: z.string(),

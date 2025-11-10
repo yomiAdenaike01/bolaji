@@ -2,8 +2,8 @@ import {
   EDITION_00_RELEASE,
   EDITION_01_RELEASE,
   PREORDER_OPENING_DATETIME,
-} from "@/constants";
-import { logger } from "@/lib/logger";
+} from "@/constants/index.js";
+import { logger } from "@/lib/logger.js";
 import { JobsOptions, Queue } from "bullmq";
 import { differenceInMilliseconds, addHours } from "date-fns";
 

@@ -1,4 +1,4 @@
-import { Hub, UserStatus } from "@/generated/prisma/enums";
+import { Hub, UserStatus } from "@/generated/prisma/index.js";
 import { Db, TransactionClient } from "@/infra";
 import { Integrations } from "@/infra/integrations";
 import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";

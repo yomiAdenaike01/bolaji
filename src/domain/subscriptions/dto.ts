@@ -1,4 +1,4 @@
-import { OrderType, PlanType } from "@/generated/prisma/enums";
+import { OrderType, PlanType } from "@/generated/prisma/index.js";
 import { z } from "zod";
 import { shippingAddressSchema } from "../schemas/users";
 

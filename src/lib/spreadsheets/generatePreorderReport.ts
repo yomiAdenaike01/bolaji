@@ -1,12 +1,12 @@
 import ExcelJS from "exceljs";
-import { logger } from "../logger";
+import { logger } from "../logger.js";
 import {
   OrderStatus,
   PlanType,
   ShipmentStatus,
-} from "@/generated/prisma/enums";
-import { Db } from "@/infra";
-import { PREORDER_EDITION_MAX_COPIES } from "@/constants";
+} from "@/generated/prisma/index.js";
+import { Db } from "@/infra/index.js";
+import { PREORDER_EDITION_MAX_COPIES } from "@/constants/index.js";
 
 function capitalize(str: string): string {
   if (!str) return "";

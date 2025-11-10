@@ -1,10 +1,9 @@
-import { Config } from "@/config";
-import { logger } from "@/lib/logger";
+import { Config } from "@/config/index.js";
+import { logger } from "@/lib/logger.js";
 import { randomUUID } from "crypto";
 import createHttpError from "http-errors";
 import jwt from "jsonwebtoken";
-import { Db } from "@/infra";
-import { Store } from "@/infra";
+import { Db, Store } from "@/infra/index.js";
 import { Request } from "express";
 
 export type DecodedJwt = {

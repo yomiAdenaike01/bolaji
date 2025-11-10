@@ -1,17 +1,17 @@
-import { Config } from "@/config";
-import { Domain } from "@/domain/domain";
+import { Config } from "@/config/index.js";
+import { Domain } from "@/domain/domain.js";
 import {
   authenticateUserSchema,
   deviceIdentifierSchema,
-} from "@/domain/schemas/users";
-import { Store } from "@/infra";
-import { logger } from "@/lib/logger";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+} from "@/domain/schemas/users.js";
+import { Store } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils.js";
 import { Request, Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { PlanType } from "@/generated/prisma/enums";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils.js";
+import { PlanType } from "@/generated/prisma/index.js";
 
 export class AuthController {
   constructor(
@@ -44,22 +44,7 @@ export class AuthController {
       throw createHttpError.Unauthorized("Failed to validate");
     }
   };
-  handleDevAuth = async (req: Request, res: Response) => {
-    try {
-      const user = await this.domain.auth.loginAsDev();
-      if (!user?.id) {
-        throw createHttpError.Unauthorized("user not found");
-      }
-      const { jwtPair } = await this.initSession({
-        id: user.id,
-        email: user.email,
-      });
 
-      res.status(200).json({ user, jwtPair });
-    } catch (error) {
-      throw error;
-    }
-  };
   private initSession = async ({
     id,
     email,

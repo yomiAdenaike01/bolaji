@@ -1,5 +1,5 @@
-import { ShippingAddress } from "@/domain/schemas/users";
-import { PlanType } from "@/generated/prisma/enums";
+import { ShippingAddress } from "@/domain/schemas/users.js";
+import { PlanType } from "@/generated/prisma/index.js";
 
 export type PreorderReleaseContent = {
   name: string;

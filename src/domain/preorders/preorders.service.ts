@@ -1,9 +1,9 @@
-import { Config } from "@/config";
+import { Config } from "@/config/index.js";
 import {
   EDITION_00_REMANING_CACHE_KEY,
   PREORDER_EDITION_MAX_COPIES,
-} from "@/constants";
-import { Address } from "@/generated/prisma/client";
+} from "@/constants/index.js";
+import { Address } from "@/generated/prisma/client.js";
 import {
   AccessStatus,
   OrderStatus,
@@ -13,23 +13,23 @@ import {
   PlanType,
   ShipmentStatus,
   UserStatus,
-} from "@/generated/prisma/enums";
-import { Db, Store, TransactionClient } from "@/infra";
-import { Integrations } from "@/infra/integrations";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+} from "@/generated/prisma/index.js";
+import { Db, Store, TransactionClient } from "@/infra/index.js";
+import { Integrations } from "@/infra/integrations/index.js";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types.js";
 import {
   CompletedPreoderEventDto,
   preorderSchema,
-} from "@/infra/integrations/schema";
-import { logger } from "@/lib/logger";
+} from "@/infra/integrations/schema.js";
+import { logger } from "@/lib/logger.js";
 import { addYears, isAfter } from "date-fns";
 import z from "zod";
-import { EditionsService } from "../editions.service";
-import { PasswordService } from "../password/password.service";
-import { PricingService } from "../pricing.service";
-import { createPreorderSchema } from "../schemas/preorder";
-import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
-import { UserService } from "../user/users.service";
+import { EditionsService } from "../editions.service.js";
+import { PasswordService } from "../password/password.service.js";
+import { PricingService } from "../pricing.service.js";
+import { createPreorderSchema } from "../schemas/preorder.js";
+import { ShippingAddress, shippingAddressSchema } from "../schemas/users.js";
+import { UserService } from "../user/users.service.js";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully

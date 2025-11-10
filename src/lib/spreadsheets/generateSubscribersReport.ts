@@ -1,10 +1,10 @@
 // domain/reports/subscriber-editions.report.ts
 import ExcelJS from "exceljs";
-import { Db } from "@/infra";
-import { logger } from "@/lib/logger";
+import { Db } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
-import { SubscriptionStatus } from "@/generated/prisma/enums";
+import { SubscriptionStatus } from "@/generated/prisma/index.js";
 
 type SubPeriod = {
   start: Date;

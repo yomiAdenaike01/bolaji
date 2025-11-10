@@ -1,8 +1,8 @@
 // src/tests/mockEmailPayloads.ts
-import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
-import { PlanType } from "@/generated/prisma/enums";
-import { Config } from "@/config";
-import { initConfig } from "@/config";
+import { EmailType, AdminEmailType } from "@/infra/integrations/email-types.js";
+import { PlanType } from "@/generated/prisma/index.js";
+import { Config } from "@/config/index.js";
+import { initConfig } from "@/config/index.js";
 
 const mockUserEmails = (config: Config) => ({
   [EmailType.EDITION_00_DIGITAL_RELEASE]: {

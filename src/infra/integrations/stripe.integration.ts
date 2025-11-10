@@ -2,7 +2,7 @@ import {
   onCreateSubscriptionInputSchema,
   subscriptionSchema,
 } from "@/domain/subscriptions/dto";
-import { OrderType, PlanType } from "@/generated/prisma/enums";
+import { OrderType, PlanType } from "@/generated/prisma/index.js";
 import { logger } from "@/lib/logger";
 import Stripe from "stripe";
 import z from "zod";

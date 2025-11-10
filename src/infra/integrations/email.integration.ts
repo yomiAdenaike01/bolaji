@@ -1,9 +1,9 @@
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
 import { Resend } from "resend";
 import z from "zod";
-import { subjects, templates } from "./email.integrations.templates";
-import { EmailType, EmailContentMap } from "./email-types";
-import { BaseEmailIntegration } from "./base.email.integration";
+import { subjects, templates } from "./email.integrations.templates.js";
+import { EmailType, EmailContentMap } from "./email-types.js";
+import { BaseEmailIntegration } from "./base.email.integration.js";
 
 export class EmailIntegration extends BaseEmailIntegration {
   constructor(

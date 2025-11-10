@@ -1,33 +1,9 @@
 {
+  "extends": "./tsconfig.node.json",
   "compilerOptions": {
-    /* === Core build options === */
-    "target": "ES2022",
-    "module": "CommonJS",
-    "rootDir": "./src",
-    "outDir": "./dist",
-    /* === Interop & path alias === */
-    "esModuleInterop": true,
-    "moduleResolution": "node",
-    "baseUrl": "./src",
-    "paths": {
-      "@/*": [
-        "*"
-      ]
-    },
-    /* === Strictness (safe locally, tolerant in CI) === */
-    "strict": true,
-    "noImplicitAny": false, // prevents "implicit any" from breaking builds
-    "skipLibCheck": true, // skip type checking of node_modules
-    "noEmitOnError": false, // always emit JS even if type errors exist
-    "forceConsistentCasingInFileNames": true
+    "noEmit": true
   },
-  /* === Included files === */
   "include": [
     "src"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".render"
   ]
 }

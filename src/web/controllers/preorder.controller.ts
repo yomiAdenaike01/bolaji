@@ -1,26 +1,26 @@
 import crypto from "crypto";
-import { Config } from "@/config";
-import { Domain } from "@/domain/domain";
+import { Config } from "@/config/index.js";
+import { Domain } from "@/domain/domain.js";
 import {
   createPreorderSchema,
   createUserPreorderInputSchema,
   shoudlValidateShippingAddress,
-} from "@/domain/schemas/preorder";
-import { shippingAddressSchema } from "@/domain/schemas/users";
-import { DecodedJwt } from "@/domain/session/session";
-import { PlanType, UserStatus } from "@/generated/prisma/enums";
-import { Store } from "@/infra";
-import { logger } from "@/lib/logger";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+} from "@/domain/schemas/preorder.js";
+import { shippingAddressSchema } from "@/domain/schemas/users.js";
+import { DecodedJwt } from "@/domain/session/session.js";
+import { PlanType, UserStatus } from "@/generated/prisma/index.js";
+import { Store } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils.js";
 import { NextFunction, Request, Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";
 import jwt from "jsonwebtoken";
 import z from "zod";
-import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage";
-import { getThankYouPage } from "../templates/getPreorderThankyouPage";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
-import { getNoAccessPage } from "../templates/getNoAccessPage";
+import { getPreorderPasswordPage } from "../templates/getPreorderPasswordPage.js";
+import { getThankYouPage } from "../templates/getPreorderThankyouPage.js";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils.js";
+import { getNoAccessPage } from "../templates/getNoAccessPage.js";
 export class PreorderController {
   constructor(
     private readonly store: Store,
