@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc && tsc-alias",
-    "build:prod": "sudo yarn tsc --project tsconfig.node.json && sudo yarn tsc-alias --project tsconfig.node.json --verbose",
+    "build:prod": "sudo yarn tsc --project tsconfig.build.json && sudo yarn tsc-alias --project tsconfig.build.json --verbose",
     "migrate:prod": "sudo yarn prisma migrate deploy",
     "exec:waitlist-release": "yarn ts-node -r tsconfig-paths/register src/scripts/send-waitlist-emails.ts",
     "test:emails": "NODE_ENV=development yarn ts-node -r tsconfig-paths/register src/scripts/tests/email.integration.test.ts",

@@ -14,9 +14,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@generated/*": [
-        "src/generated/*"
       ]
     },
     /* === Type safety === */

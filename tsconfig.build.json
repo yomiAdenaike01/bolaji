@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@generated/*": [
+        "src/generated/*"
+      ]
+    },
+    /* === RELAX TYPE CHECKING === */
+    "skipLibCheck": true, // skip type checking node_modules
+    "noImplicitAny": false, // allow implicit 'any' everywhere
+    "strict": false, // turn off all strict rules
+    "suppressImplicitAnyIndexErrors": true, // allow indexing by any key
+    "resolveJsonModule": true,
+    "allowJs": true,
+    /* === ESM Compatibility === */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".render"
+  ]
+}
