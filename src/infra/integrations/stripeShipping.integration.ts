@@ -1,5 +1,5 @@
-import { PricingService, ShippingZone } from "@/domain/pricing.service";
-import { logger } from "@/lib/logger";
+import { PricingService, ShippingZone } from "@/domain/pricing.service.js";
+import { logger } from "@/lib/logger.js";
 import Stripe from "stripe";
 
 export class StripeShippingService {

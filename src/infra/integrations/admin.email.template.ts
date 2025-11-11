@@ -1,6 +1,6 @@
-import { ShippingAddress } from "@/domain/schemas/users";
-import { AdminEmailContent, AdminEmailType } from "./email-types";
-import { formatDate } from "@/utils";
+import { ShippingAddress } from "@/domain/schemas/users.js";
+import { AdminEmailContent, AdminEmailType } from "./email-types.js";
+import { formatDate } from "@/utils.js";
 
 const LOGO_URL =
   "https://static.wixstatic.com/media/7ec957_cdb075d0cbbe459ebbb49f125106e1fb~mv2.png/v1/fill/w_99,h_66,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/Ade_Logo_Black.png";

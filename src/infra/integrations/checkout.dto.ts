@@ -1,6 +1,6 @@
 import { OrderType, PlanType } from "@/generated/prisma/index.js";
 import Stripe from "stripe";
-import { PaymentEventActions } from "./stripe.integration";
+import { PaymentEventActions } from "./stripe.integration.js";
 
 export type PaymentEvent = {
   userId: string;

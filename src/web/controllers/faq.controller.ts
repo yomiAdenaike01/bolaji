@@ -1,4 +1,4 @@
-import { FAQS } from "@/config/faq";
+import { FAQS } from "@/config/faq.js";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 

@@ -1,5 +1,5 @@
 // infra/integrations/base.email.integration.ts
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
 import { Attachment, Resend } from "resend";
 
 export abstract class BaseEmailIntegration {

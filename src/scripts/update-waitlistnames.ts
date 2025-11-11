@@ -1,13 +1,12 @@
-import { initConfig } from "@/config";
-import { initInfra, initStore } from "@/infra";
+import { initConfig } from "@/config/index.js";
+import { initInfra } from "@/infra/index.js";
 /**
  * @description Only firstnames are stored in the db right now if want to update then do this
  * @deprecated
  */
 const updateNames = async (waitlist: Array<any>) => {
   const config = initConfig();
-  const store = await initStore(config);
-  const { db } = initInfra(config, store);
+  const { db } = await initInfra(config);
 
   const emailMap = new Map(
     waitlist.map((u) => [

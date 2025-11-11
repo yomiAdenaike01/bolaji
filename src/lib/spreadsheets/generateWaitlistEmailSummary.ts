@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
-import { Db } from "@/infra";
-import { logger } from "@/lib/logger";
+import { Db } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
 
 /**
  * Generates a Preorder Email Status Report

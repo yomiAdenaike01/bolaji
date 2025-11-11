@@ -1,10 +1,10 @@
-import { Domain } from "@/domain/domain";
-import { logger } from "@/lib/logger";
+import { Domain } from "@/domain/domain.js";
+import { logger } from "@/lib/logger.js";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { IntegrationsController } from "./integrations.controller";
-import { createErrorResponse } from "./utils";
-import { PaymentEvent } from "@/infra/integrations/checkout.dto";
+import { IntegrationsController } from "./integrations.controller.js";
+import { createErrorResponse } from "./utils.js";
+import { PaymentEvent } from "@/infra/integrations/checkout.dto.js";
 
 export class WebhookController {
   constructor(

@@ -1,16 +1,16 @@
-import { Db } from "@/infra";
-import { logger } from "@/lib/logger";
-import { generatePreorderSummaryReport } from "@/lib/spreadsheets/generatePreorderReport";
-import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport";
+import { Db } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
+import { generatePreorderSummaryReport } from "@/lib/spreadsheets/generatePreorderReport.js";
+import { generateUsersReportSheet } from "@/lib/spreadsheets/generateUsersReport.js";
 import ExcelJS from "exceljs";
 import { Attachment, Resend } from "resend";
 import {
   adminEmailSubjects,
   adminEmailTemplates,
-} from "./admin.email.template";
-import { AdminEmailContent, AdminEmailType } from "./email-types";
-import { generateSubscriberReport } from "@/lib/spreadsheets/generateSubscribersReport";
-import { BaseEmailIntegration } from "./base.email.integration";
+} from "./admin.email.template.js";
+import { AdminEmailContent, AdminEmailType } from "./email-types.js";
+import { generateSubscriberReport } from "@/lib/spreadsheets/generateSubscribersReport.js";
+import { BaseEmailIntegration } from "./base.email.integration.js";
 
 const reportGenerators: Partial<
   Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>

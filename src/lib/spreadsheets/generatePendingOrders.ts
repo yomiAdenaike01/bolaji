@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { Db } from "@/infra";
+import { Db } from "@/infra/index.js";
 // TODO: GROUP ORDERS AND SHIPMENTS BY COUNTRY
 
 const getOrders = async (db: Db) => {

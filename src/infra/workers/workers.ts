@@ -1,10 +1,10 @@
-import { Config } from "@/config";
-import { Db } from "..";
-import { EmailWorker } from "./email.worker";
-import { logger } from "@/lib/logger";
-import { PaymentWorker } from "./payment.worker";
-import { Domain } from "@/domain/domain";
-import { ReleaseWorker } from "./editions.worker";
+import { Config } from "@/config/index.js";
+import { Db } from "../index.js";
+import { EmailWorker } from "./email.worker.js";
+import { logger } from "@/lib/logger.js";
+import { PaymentWorker } from "./payment.worker.js";
+import { Domain } from "@/domain/domain.js";
+import { ReleaseWorker } from "./editions.worker.js";
 // TODO: ALL EDITIONS ACCESS EXPIRES AFTER 2 YEARS
 
 export class JobWorkers {

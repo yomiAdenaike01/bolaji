@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { Db } from "@/infra";
+import { Db } from "@/infra/index.js";
 
 export async function generateUsersReportSheet(
   db: Db,

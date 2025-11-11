@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PlanType } from "@/generated/prisma/index.js";
-import { createUserSchema } from "./users";
+import { createUserSchema } from "./users.js";
 
 export const shoudlValidateShippingAddress = (data: any, ctx: any) => {
   const needsShipping = (

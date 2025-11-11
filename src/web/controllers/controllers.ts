@@ -1,15 +1,15 @@
-import { Domain } from "@/domain/domain";
-import { AuthController } from "./auth.controller";
-import { IntegrationsController } from "./integrations.controller";
-import { PreorderController } from "./preorder.controller";
-import { UserController } from "./user.controller";
-import { createStripePaymentWebhook } from "./createStripeWebhook";
-import { SubscriptionsController } from "./subscriptions.controller";
-import { Config } from "@/config";
-import { Store } from "@/infra";
-import { ScreenController } from "./screen.controller";
-import { FaqController } from "./faq.controller";
-import { JobController } from "./job.controller";
+import { Domain } from "@/domain/domain.js";
+import { AuthController } from "./auth.controller.js";
+import { IntegrationsController } from "./integrations.controller.js";
+import { PreorderController } from "./preorder.controller.js";
+import { UserController } from "./user.controller.js";
+import { createStripePaymentWebhook } from "./createStripeWebhook.js";
+import { SubscriptionsController } from "./subscriptions.controller.js";
+import { Config } from "@/config/index.js";
+import { Store } from "@/infra/index.js";
+import { ScreenController } from "./screen.controller.js";
+import { FaqController } from "./faq.controller.js";
+import { JobController } from "./job.controller.js";
 
 export const initControllers = (
   store: Store,

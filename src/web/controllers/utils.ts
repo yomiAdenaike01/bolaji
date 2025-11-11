@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
 import { Response } from "express";
 import createHttpError from "http-errors";
 import { StatusCodes } from "http-status-codes";

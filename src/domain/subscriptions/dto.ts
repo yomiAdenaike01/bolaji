@@ -1,6 +1,6 @@
 import { OrderType, PlanType } from "@/generated/prisma/index.js";
 import { z } from "zod";
-import { shippingAddressSchema } from "../schemas/users";
+import { shippingAddressSchema } from "../schemas/users.js";
 
 export const createSubscriptionInputSchema = z.object({
   name: z.string(),

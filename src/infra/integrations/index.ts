@@ -1,10 +1,10 @@
-import { Db } from "@/infra";
-import { logger } from "@/lib/logger";
-import { Config } from "../../config";
-import { AdminEmailIntegration } from "./admin.email.integration";
-import { EmailIntegration } from "./email.integration";
-import { StripeIntegration } from "./stripe.integration";
-import { StripeShippingService } from "./stripeShipping.integration";
+import { Db } from "@/infra/index.js";
+import { logger } from "@/lib/logger.js";
+import { Config } from "../../config/index.js";
+import { AdminEmailIntegration } from "./admin.email.integration.js";
+import { EmailIntegration } from "./email.integration.js";
+import { StripeIntegration } from "./stripe.integration.js";
+import { StripeShippingService } from "./stripeShipping.integration.js";
 
 export class Integrations {
   public readonly payments: StripeIntegration;

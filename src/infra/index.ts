@@ -6,11 +6,7 @@ import { logger } from "@/lib/logger.js";
 import { seed } from "./seed.js";
 import { JobWorkers } from "./workers/workers.js";
 import { Domain } from "@/domain/domain.js";
-import AdminJS from "adminjs";
-import { Database, Resource, getModelByName } from "@adminjs/prisma";
-import { PrismaClient as DbClient } from "@prisma/client";
-
-AdminJS.registerAdapter({ Database, Resource });
+import { registerWorkspace } from "./registerWorkspace.js";
 
 const initDb = () => {
   const db = new PrismaClient();
@@ -62,35 +58,14 @@ const initWorkers = (config: Config, db: Db) => (domain: Domain) => {
   return new JobWorkers(config, db, domain);
 };
 
-const registerWorkspace = () => {
-  const db = new DbClient();
-
-  // console.log(Database.isAdapterFor({ model: db.user, client: db }));
-
-  const workspace = new AdminJS({
-    resources: [
-      {
-        resource: { model: getModelByName("User"), client: db },
-      },
-    ],
-    rootPath: "/workspace",
-    branding: {
-      companyName: "Bolaji Editions",
-    },
-  });
-  return workspace;
-};
-
 export const initInfra = async (config: Config) => {
   const store = await initStore(config);
   const db = initDb();
-  const workspace = registerWorkspace();
   seed(db, store).catch((err) => {
     logger.error(err, "Failed to seed db");
   });
   return {
     db,
-    workspace,
     store,
     initWorkers: initWorkers(config, db),
   };

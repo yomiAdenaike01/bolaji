@@ -1,8 +1,5 @@
-import { Config } from "@/config";
-import { Domain } from "@/domain/domain";
-import { logger } from "@/lib/logger";
-import { Request, Response } from "express";
-import { StatusCodes } from "http-status-codes";
+import { Config } from "@/config/index.js";
+import { Domain } from "@/domain/domain.js";
 
 export class ScreenController {
   constructor(

@@ -1,7 +1,7 @@
-import { Config } from "@/config";
-import { PREORDER_OPENING_DATETIME } from "@/constants";
-import { Domain } from "@/domain/domain";
-import { logger } from "@/lib/logger";
+import { Config } from "@/config/index.js";
+import { PREORDER_OPENING_DATETIME } from "@/constants/index.js";
+import { Domain } from "@/domain/domain.js";
+import { logger } from "@/lib/logger.js";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 

@@ -1,15 +1,15 @@
 import {
   onCreateSubscriptionInputSchema,
   subscriptionSchema,
-} from "@/domain/subscriptions/dto";
+} from "@/domain/subscriptions/dto.js";
 import { OrderType, PlanType } from "@/generated/prisma/index.js";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/logger.js";
 import Stripe from "stripe";
 import z from "zod";
-import { preorderSchema } from "./schema";
-import { PaymentEvent } from "./checkout.dto";
-import { Db } from "..";
-import { StripeShippingService } from "./stripeShipping.integration";
+import { preorderSchema } from "./schema.js";
+import { PaymentEvent } from "./checkout.dto.js";
+import { Db } from "../index.js";
+import { StripeShippingService } from "./stripeShipping.integration.js";
 
 export enum PaymentEventActions {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",

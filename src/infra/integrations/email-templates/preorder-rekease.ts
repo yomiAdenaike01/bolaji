@@ -1,5 +1,5 @@
-import { PreorderReleaseContent } from "../email-types";
-import { wrap } from "./email-wrapper";
+import { PreorderReleaseContent } from "../email-types.js";
+import { wrap } from "./email-wrapper.js";
 
 export const getPreorderReleaseContent = ({
   name,

@@ -1,5 +1,5 @@
-import { Domain } from "@/domain/domain";
-import { logger } from "@/lib/logger";
+import { Domain } from "@/domain/domain.js";
+import { logger } from "@/lib/logger.js";
 import { Request, Response } from "express";
 import z from "zod";
 
@@ -15,7 +15,7 @@ export class IntegrationsController {
       sig = z.string().min(1).parse(sig);
       return this.domain.integrations.payments.handleWebhook(req.body, sig);
     } catch (error: any) {
-      logger.error(error,`Failed to handle stripe event`);
+      logger.error(error, `Failed to handle stripe event`);
       return null;
     }
   };

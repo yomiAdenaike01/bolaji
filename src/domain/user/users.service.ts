@@ -1,15 +1,15 @@
 import { Hub, UserStatus } from "@/generated/prisma/index.js";
-import { Db, TransactionClient } from "@/infra";
-import { Integrations } from "@/infra/integrations";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
-import { logger } from "@/lib/logger";
+import { Db, TransactionClient } from "@/infra/index.js";
+import { Integrations } from "@/infra/integrations/index.js";
+import { AdminEmailType, EmailType } from "@/infra/integrations/email-types.js";
+import { logger } from "@/lib/logger.js";
 import bcrypt from "bcrypt";
 import z from "zod";
 import {
   CreateUserInput,
   ShippingAddress,
   shippingAddressSchema,
-} from "../schemas/users";
+} from "../schemas/users.js";
 
 export class UserService {
   constructor(

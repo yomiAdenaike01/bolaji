@@ -1,9 +1,9 @@
-import { Domain } from "@/domain/domain";
-import { createUserSchema } from "@/domain/schemas/users";
-import { createDeviceFingerprint, getRequestUserAgent } from "@/utils";
+import { Domain } from "@/domain/domain.js";
+import { createUserSchema } from "@/domain/schemas/users.js";
+import { createDeviceFingerprint, getRequestUserAgent } from "@/utils.js";
 import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { createErrorResponse, invalidInputErrorResponse } from "./utils";
+import { createErrorResponse, invalidInputErrorResponse } from "./utils.js";
 import { Hub } from "@/generated/prisma/index.js";
 import createHttpError from "http-errors";
 import { randomUUID } from "crypto";

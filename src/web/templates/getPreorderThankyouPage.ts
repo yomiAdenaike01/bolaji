@@ -1,4 +1,4 @@
-import { EDITION_00_RELEASE, PREORDER_OPENING_DATETIME } from "@/constants";
+import { EDITION_00_RELEASE } from "@/constants/index.js";
 import { PlanType } from "@/generated/prisma/index.js";
 
 export const getThankYouPage = ({
