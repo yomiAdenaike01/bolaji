@@ -4,6 +4,7 @@ import {
   PREORDER_EDITION_MAX_COPIES,
 } from "@/constants";
 import { Address } from "@/generated/prisma/client";
+import { EditionStatus } from "@/generated/prisma/enums";
 import {
   AccessStatus,
   OrderStatus,
@@ -30,7 +31,6 @@ import { PricingService } from "../pricing.service";
 import { createPreorderSchema } from "../schemas/preorder";
 import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
-import { EditionStatus } from "@prisma/client";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
