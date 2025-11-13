@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
 import { SubscriptionStatus } from "@/generated/prisma/enums";
+import { Address, PlanType } from "@prisma/client";
 
 type SubPeriod = {
   start: Date;
@@ -14,33 +15,54 @@ type SubPeriod = {
 const fmt = (d?: Date | null) =>
   d ? format(d, "yyyy-MM-dd HH:mm", { locale: enGB }) : "—";
 
+const fmtAddress = (address: Address) => {
+  return address
+    ? `${address.fullName}\n${address.line1}\n${address.line2}\n${address.postalCode}\n${address.state || ""}\n${address.city}\n${address.country}`
+    : "-";
+};
+
 export async function generateSubscriberReport(db: Db) {
   logger.info("[Admin Digest] Building daily subscriber + editions report…");
-
-  // 1) Pull active subs and minimal user info
-  const activeSubs = await db.subscription.findMany({
-    where: { status: SubscriptionStatus.ACTIVE }, // adjust enum if different
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      // include plan fields if you want to show tier/price/etc
-    },
-    orderBy: { createdAt: "asc" },
+  const [activeSubs, editions] = await db.$transaction(async (tx) => {
+    return Promise.all([
+      tx.subscription.findMany({
+        where: {
+          status: SubscriptionStatus.ACTIVE,
+        }, // adjust enum if different
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              addresses: {
+                take: 1,
+              },
+            },
+          },
+          // include plan fields if you want to show tier/price/etc
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      tx.edition.findMany({
+        where: { number: { gt: 0 } },
+        select: {
+          id: true,
+          number: true,
+          code: true,
+          title: true,
+          releasedAt: true,
+          releaseDate: true,
+        },
+        orderBy: { number: "asc" },
+      }),
+    ]);
   });
 
   // 2) Pull all editions >= 1 (subscription editions)
   //    We load once, then filter per subscriber in-memory for speed.
-  const editions = await db.edition.findMany({
-    where: { number: { gt: 0 } },
-    select: {
-      id: true,
-      number: true,
-      code: true,
-      title: true,
-      releasedAt: true,
-      releaseDate: true,
-    },
-    orderBy: { number: "asc" },
-  });
+
+  // 1) Pull active subs and minimal user info
 
   // Helper: pick usable release timestamp
   const getReleaseAt = (e: (typeof editions)[number]) =>
@@ -68,6 +90,7 @@ export async function generateSubscriberReport(db: Db) {
     editionCode: string;
     editionTitle: string;
     editionRelease: string;
+    subscriberAddress: string;
   };
 
   const rows: Row[] = [];
@@ -83,6 +106,9 @@ export async function generateSubscriberReport(db: Db) {
 
     // at least one line per covered edition; if none, add a placeholder
     if (covered.length === 0) {
+      const address = sub.user.addresses?.[0];
+      const addressDetails = fmtAddress(address);
+
       rows.push({
         subscriberName: sub.user?.name ?? "—",
         subscriberEmail: sub.user?.email ?? "—",
@@ -93,11 +119,15 @@ export async function generateSubscriberReport(db: Db) {
         editionCode: "—",
         editionTitle: "—",
         editionRelease: "—",
+        subscriberAddress: addressDetails,
       });
       continue;
     }
 
     for (const e of covered) {
+      const address = sub.user.addresses?.[0];
+      const addressDetails = fmtAddress(address);
+
       rows.push({
         subscriberName: sub.user?.name ?? "—",
         subscriberEmail: sub.user?.email ?? "—",
@@ -108,6 +138,7 @@ export async function generateSubscriberReport(db: Db) {
         editionCode: e.code,
         editionTitle: e.title,
         editionRelease: fmt(getReleaseAt(e)),
+        subscriberAddress: addressDetails,
       });
     }
   }
@@ -119,7 +150,6 @@ export async function generateSubscriberReport(db: Db) {
   const overview = wb.addWorksheet("Overview");
   overview.addRow(["Metric", "Value"]);
   overview.addRow(["Active subscribers", activeSubs.length]);
-  overview.addRow(["Total editions considered (>= 01)", editions.length]);
   overview.getRow(1).font = { bold: true };
   overview.columns.forEach((c) => (c.width = 32));
 
@@ -131,13 +161,14 @@ export async function generateSubscriberReport(db: Db) {
     { header: "Period Start", key: "start", width: 22 },
     { header: "Period End", key: "end", width: 22 },
     { header: "Covered Editions", key: "count", width: 18 },
+    { header: "Address", key: "address", width: 30 },
   ];
   subsSheet.getRow(1).font = { bold: true };
 
   // Summarize covered editions by subscriber
   const byEmail = new Map<
     string,
-    { name: string; start: string; end: string; count: number }
+    { name: string; start: string; end: string; count: number; address: string }
   >();
   for (const r of rows) {
     const key = r.subscriberEmail;
@@ -148,6 +179,7 @@ export async function generateSubscriberReport(db: Db) {
         start: r.periodStart,
         end: r.periodEnd,
         count: r.editionsCount,
+        address: r.subscriberAddress,
       });
     }
   }
@@ -158,6 +190,7 @@ export async function generateSubscriberReport(db: Db) {
       start: rec.start,
       end: rec.end,
       count: rec.count,
+      address: rec.address,
     });
   }
 

@@ -30,6 +30,7 @@ import { PricingService } from "../pricing.service";
 import { createPreorderSchema } from "../schemas/preorder";
 import { ShippingAddress, shippingAddressSchema } from "../schemas/users";
 import { UserService } from "../user/users.service";
+import { EditionStatus } from "@prisma/client";
 
 export enum CompletePreorderStatus {
   SUCCESS = "SUCCESS", // fully created and completed successfully
@@ -781,7 +782,10 @@ export class PreordersService {
           accessType: plan,
           unlockAt:
             edition?.releaseDate || edition?.preorderOpenAt || new Date(),
-          status: AccessStatus.SCHEDULED,
+          status:
+            edition?.status === EditionStatus.ACTIVE
+              ? AccessStatus.ACTIVE
+              : AccessStatus.SCHEDULED,
           expiresAt: addYears(Date.now(), 1),
         },
       });

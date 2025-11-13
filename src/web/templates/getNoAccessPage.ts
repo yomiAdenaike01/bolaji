@@ -96,8 +96,8 @@ export const getNoAccessPage = () => `<!DOCTYPE html>
       </p>
       <div class="support">
         Experiencing any issues? Contact our support team at
-        <a href="mailto:assistant@adebayobolaji.com?subject=Access%20Issue%20—%20Bolaji%20Editions&body=Hello%20Bolaji%20Editions%20Team%2C%0A%0AI%27m%20experiencing%20an%20issue%20accessing%20my%20private%20area.%20Here%20are%20the%20details%3A%0A%0A%E2%80%A2%20Name%3A%20%0A%E2%80%A2%20Email%3A%20%0A%E2%80%A2%20Issue%20description%3A%20%0A%0AThank%20you%2C%0A%5BYour%20Name%5D">
-          assistant@adebayobolaji.com
+        <a href="mailto:support@bolaji.studio?subject=Access%20Issue%20—%20Bolaji%20Editions&body=Hello%20Bolaji%20Editions%20Team%2C%0A%0AI%27m%20experiencing%20an%20issue%20accessing%20my%20private%20area.%20Here%20are%20the%20details%3A%0A%0A%E2%80%A2%20Name%3A%20%0A%E2%80%A2%20Email%3A%20%0A%E2%80%A2%20Issue%20description%3A%20%0A%0AThank%20you%2C%0A%5BYour%20Name%5D">
+          support@bolaji.studio
         </a>
       </div>
       <div class="footer">
