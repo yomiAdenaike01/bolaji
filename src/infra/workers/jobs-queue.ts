@@ -16,7 +16,10 @@ export class JobsQueues {
   private stripePaymentsQueue: Queue;
   private editionReleasesQueue: Queue;
 
-  constructor(private readonly connectionUrl: string) {
+  constructor(
+    private readonly connectionUrl: string,
+    private readonly env: string,
+  ) {
     this.emailQueue = new Queue("emails", {
       connection: { url: this.connectionUrl },
       defaultJobOptions: {
@@ -49,9 +52,8 @@ export class JobsQueues {
   }
 
   private async init() {
-    await this.addPreorderOpeningJob({ waitlist: [] });
-    await this.addSendPreorderReminderJob();
     await this.queueReleaseJobs();
+    if (this.env !== "production") return;
     await this.queueAdminDigestJobs();
   }
 
@@ -98,41 +100,8 @@ export class JobsQueues {
     logger.info(`[Scheduler] ✅ Queued ${jobName} for ${date.toISOString()}`);
   }
 
-  async addPreorderOpeningJob(data: {
-    waitlist: Array<{ email: string; name: string }>;
-  }) {
-    const releaseDate = PREORDER_OPENING_DATETIME;
-    await this.addIfFuture(
-      this.emailQueue,
-      "email.preorders_open",
-      releaseDate,
-      data,
-    );
-  }
-
-  private async addSendPreorderReminderJob() {
-    const reminder = new Date("2025-11-08T12:00:00Z"); // 9 AM UTC (10 AM UK)
-    await this.addIfFuture(
-      this.emailQueue,
-      "email.preorder_reminder",
-      reminder,
-    );
-  }
-
   private async queueReleaseJobs() {
     logger.info("[Scheduler] Checking edition release jobs...");
-
-    const now = new Date();
-
-    // Edition 00 release (preorder/limited)
-    await this.addIfFuture(
-      this.editionReleasesQueue,
-      "edition-00",
-      EDITION_00_RELEASE,
-      {
-        edition: "00",
-      },
-    );
 
     // Edition 01 release
     await this.addIfFuture(
@@ -145,15 +114,15 @@ export class JobsQueues {
     );
 
     // Monthly repeating edition auto-release
-    await this.editionReleasesQueue.add(
-      "edition-monthly",
-      { task: "auto-release-next-edition" },
-      {
-        repeat: { pattern: "0 9 1 * *" }, // every 1st of month at 9:00 UTC
-        jobId: "monthly-edition-release",
-        removeOnComplete: true,
-      },
-    );
+    // await this.editionReleasesQueue.add(
+    //   "edition-monthly",
+    //   { task: "auto-release-next-edition" },
+    //   {
+    //     repeat: { pattern: "0 9 1 * *" }, // every 1st of month at 9:00 UTC
+    //     jobId: "monthly-edition-release",
+    //     removeOnComplete: true,
+    //   },
+    // );
 
     logger.info("[Scheduler] Edition release jobs check complete ✅");
   }

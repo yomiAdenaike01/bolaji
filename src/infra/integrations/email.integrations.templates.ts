@@ -138,8 +138,18 @@ export const templates: {
     `,
     ),
 
-  [EmailType.NEW_EDITION_RELEASED]: ({ name, editionTitle, editionCode }) =>
-    wrap(
+  [EmailType.NEW_EDITION_RELEASED]: ({
+    name,
+    editionTitle,
+    editionCode,
+    planType,
+    editionsCollectionUrl,
+  }) => {
+    const fullOrPhysical = [PlanType.FULL, PlanType.PHYSICAL].includes(
+      planType as any,
+    );
+    const isPhysical = planType === PlanType.PHYSICAL;
+    return wrap(
       ` ${editionTitle} — Now Available`,
       `
     <p style="font-size:16px;line-height:1.6;margin:0 0 16px 0;color:#333;">
@@ -147,7 +157,7 @@ export const templates: {
       We’re excited to share that <strong>${editionTitle}</strong> (${editionCode})
       has officially launched!<br /><br />
       This new release continues Bolaji’s mission of celebrating artistry,
-      craftsmanship, and culture — available now in both digital and physical formats.
+      craftsmanship, and culture is available now. ${fullOrPhysical ? "You will also be notified when your edition is on it's way." : ""} ${!isPhysical ? `You can access your digital edition <a href=${editionsCollectionUrl}>here</a>` : ""}
     </p>
 
     <p style="font-size:15px;line-height:1.6;color:#444;">
@@ -159,7 +169,8 @@ export const templates: {
       — The Bolaji Editions Team
     </p>
   `,
-    ),
+    );
+  },
   [EmailType.PREORDER_RELEASED]: getPreorderReleaseContent,
   [EmailType.PREORDER_RELEASED_REMINDER]: getPreorderReleaseContent,
   [EmailType.REGISTER]: ({ name, email, password }) => {

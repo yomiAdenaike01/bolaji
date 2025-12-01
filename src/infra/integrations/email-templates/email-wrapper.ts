@@ -7,6 +7,14 @@ export const wrap = (title: string, body: string) => `
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
+    <style>
+      p {
+      font-family:Inter,Arial,sans-serif;
+      font-size:15px;
+      line-height:1.7;
+      color:#222;
+      }
+    </style>
   </head>
   <body style="margin:0;padding:0;background:#f9f9f9;-webkit-font-smoothing:antialiased;">
     <table align="center" cellpadding="0" cellspacing="0" width="100%" style="background:#f9f9f9;padding:40px 0;">

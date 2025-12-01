@@ -6,7 +6,7 @@ export const PREORDER_OPENING_DATETIME = new Date("2025-11-07T17:00:00Z");
 
 export const PREORDER_CLOSING_DATETIME = new Date("2025-11-09T14:35:00Z");
 export const EDITION_00_RELEASE = PREORDER_CLOSING_DATETIME;
-export const EDITION_01_RELEASE = new Date("2025-12-01T09:00:00Z");
+export const EDITION_01_RELEASE = new Date("2025-12-05T09:00:00Z");
 
 export const DEFAULT_PLANS = [
   {

@@ -58,7 +58,7 @@ const ensureEditions = async (db: TransactionClient) => {
     update: {
       ...(process.env.NODE_ENV !== "production" && {
         title: "Edition 00 — Preorder",
-        status: EditionStatus.PENDING,
+        status: EditionStatus.ACTIVE,
         releaseDate: EDITION_00_RELEASE,
         preorderOpenAt: PREORDER_OPENING_DATETIME,
         preorderCloseAt: PREORDER_CLOSING_DATETIME,
@@ -102,14 +102,14 @@ const ensureEditions = async (db: TransactionClient) => {
       )
     ) {
       logger.info(
-        `⏭️ Skipping Edition ${i} — already finalized (${existing.status})`,
+        `Skipping Edition ${i} — already finalized (${existing.status})`,
       );
       continue;
     }
 
     if (existing) {
       if (isProd) {
-        logger.info(`✅ Edition ${i} already exists — no overwrite`);
+        logger.info(`Edition ${i} already exists — no overwrite`);
         continue;
       }
 

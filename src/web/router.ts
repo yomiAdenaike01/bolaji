@@ -204,9 +204,6 @@ export const setupRouters = (
   router.use("/auth", authRouter);
   router.use("/preorders", preorderRouter);
   router.use("/users", userRouter);
-  router.post(
-    "/admin/update-preorder-job",
-    controllers.jobs.handleSendWaitlist,
-  );
+
   app.use("/api", router);
 };

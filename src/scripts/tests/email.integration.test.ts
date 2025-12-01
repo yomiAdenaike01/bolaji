@@ -40,10 +40,22 @@ async function testEmails() {
       console.warn(`⚠️  No mock payload found for ${type}`);
       continue;
     }
+
+    if (Array.isArray(payload)) {
+      payload.forEach((p, index) => {
+        const email = userEmailIntegration.getTemplate(type, p);
+        const filePath = path.join(
+          outDir,
+          `${type}_${p.planType || index}.html`,
+        );
+        fs.writeFileSync(filePath, email.template);
+        console.log(`✅ Rendered user email: ${type}`);
+      });
+      continue;
+    }
     const email = userEmailIntegration.getTemplate(type, payload);
     const filePath = path.join(outDir, `${type}.html`);
     fs.writeFileSync(filePath, email.template);
-
     console.log(`✅ Rendered user email: ${type}`);
   }
 
@@ -53,6 +65,16 @@ async function testEmails() {
     const payload = getMockPayloadFor(type);
     if (!payload) {
       console.warn(`⚠️  No mock payload found for ${type}`);
+      continue;
+    }
+
+    if (Array.isArray(payload)) {
+      payload.forEach((p, index) => {
+        const email = adminEmailIntegration.getTemplate(type, p);
+        const filePath = path.join(outDir, `${type}_${index}.html`);
+        fs.writeFileSync(filePath, email.template);
+        console.log(`✅ Rendered user email: ${type}`);
+      });
       continue;
     }
 

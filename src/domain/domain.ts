@@ -20,7 +20,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
   await integrations.init();
   const userService = new UserService(db, integrations);
 
-  const jobQueues = new JobsQueues(appConfig.redisConnectionUrl);
+  const jobQueues = new JobsQueues(appConfig.redisConnectionUrl, appConfig.env);
   const passwordService = new PasswordService();
   const editionsService = new EditionsService(db, store, jobQueues);
   const preorders = new PreordersService(

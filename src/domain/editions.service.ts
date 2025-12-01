@@ -151,7 +151,6 @@ export class EditionsService {
       where: {
         editionId: edition.id,
         status: AccessStatus.SCHEDULED,
-        unlockAt: { lte: now },
       },
       data: {
         status: AccessStatus.ACTIVE,
@@ -212,6 +211,7 @@ export class EditionsService {
   };
 
   releaseEdition = async (editionNumber: number) => {
+    logger.info(`[EditionService] Starting Edition:${editionNumber} release`);
     const result = await this.db.$transaction((tx) =>
       this.getReleaseEditionTransaction(tx, editionNumber),
     );
@@ -322,6 +322,7 @@ export class EditionsService {
   releaseNextPendingEdition = async () => {
     const nextEdition = await this.db.edition.findFirst({
       where: {
+        readyForRelease: true,
         OR: [
           { status: EditionStatus.PENDING },
           { status: EditionStatus.PREORDER_OPEN },
@@ -336,6 +337,9 @@ export class EditionsService {
     }
 
     logger.info(`Releasing next edition: ${nextEdition.title}`);
-    await this.releaseEdition(nextEdition.number);
+    return {
+      affectedUsers: await this.releaseEdition(nextEdition.number),
+      nextEdition,
+    };
   };
 }

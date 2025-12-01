@@ -1,77 +1,126 @@
 // src/tests/mockEmailPayloads.ts
-import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
+import {
+  EmailType,
+  AdminEmailType,
+  EmailContentMap,
+} from "@/infra/integrations/email-types";
 import { PlanType } from "@/generated/prisma/enums";
 import { Config } from "@/config";
 import { initConfig } from "@/config";
 
-const mockUserEmails = (config: Config) => ({
-  [EmailType.EDITION_00_DIGITAL_RELEASE]: {
-    name: "Ade",
-    planType: PlanType.DIGITAL,
-    resetPasswordLink: `${config.frontEndUrl}/auth/reset-password`,
-    accessLink: `${config.frontEndUrl}/auth/login`,
-    subscribeLink: `${config.frontEndUrl}/subscription/dashboard-subscription`,
-  },
-  [EmailType.SUBSCRIPTION_FAILED_TO_START]: {
-    name: "Ade",
-    email: "email@example.com",
-    plan: PlanType.FULL,
-    reason: "Payment authorization failed",
-    resetLink: `${config.frontEndUrl}/edition.00/payment`,
-  },
-  [EmailType.SUBSCRIPTION_STARTED]: {
-    name: "Ade",
-    planType: PlanType.DIGITAL,
-    nextEdition: 1,
-    newPassword: "Password",
-  },
-  [EmailType.NEW_EDITION_RELEASED]: {
-    name: "Ade",
-    editionTitle: "Edition 01",
-    editionCode: "01",
-  },
-  [EmailType.REGISTER]: {
-    name: "Ade",
-    email: "email@example.com",
-    password: "temp1234",
-  },
-  [EmailType.PREORDER_CONFIRMATION]: {
-    name: "Ade",
-    email: "email@example.com",
-    editionCode: "00",
-    plan: PlanType.PHYSICAL,
-    newPassword: "Bolaji#2025",
-  },
-  [EmailType.PAYMENT_FAILED]: {
-    name: "Ade",
-    email: "email@example.com",
-    reason: "Card declined",
-  },
-  [EmailType.PASSWORD_RESET]: {
-    name: "Ade",
-    email: "email@example.com",
-    resetLink: "https://bolaji.app/reset/token123",
-  },
-  [EmailType.SUBSCRIPTION_RENEWED]: {
-    name: "Ade",
-    email: "email@example.com",
-    nextEdition: "Edition 02",
-  },
-  [EmailType.PREORDER_RELEASED]: {
-    name: "Ade",
-    preorderLink: "https://bolaji.app/preorder/edition1",
-    password: "PrivateAccess123",
-    accountPassword: "Bolaji#2025",
-  },
-  [EmailType.PREORDER_PAYMENT_FAILED]: {
-    name: "Ade",
-    email: "email@example.com",
-    editionCode: "01",
-    plan: PlanType.PHYSICAL,
-    reason: "Card expired",
-    retryLink: "https://bolaji.app/retry-preorder",
-  },
-});
+const mockUserEmails = (config: Config) => {
+  const baseMocks: Record<
+    EmailType,
+    Array<EmailContentMap[keyof EmailContentMap]>
+  > = {
+    [EmailType.EDITION_00_DIGITAL_RELEASE]: [
+      {
+        name: "Ade",
+        planType: PlanType.DIGITAL,
+        resetPasswordLink: `${config.frontEndUrl}/auth/reset-password`,
+        subscribeLink: `${config.frontEndUrl}/subscription/dashboard-subscription`,
+      },
+    ],
+    [EmailType.SUBSCRIPTION_FAILED_TO_START]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        plan: PlanType.FULL,
+        reason: "Payment authorization failed",
+        resetLink: `${config.frontEndUrl}/edition.00/payment`,
+      },
+    ],
+    [EmailType.SUBSCRIPTION_STARTED]: [
+      {
+        name: "Ade",
+        planType: PlanType.DIGITAL,
+        nextEdition: 1,
+        newPassword: "Password",
+      },
+    ],
+    [EmailType.NEW_EDITION_RELEASED]: [
+      {
+        name: "Ade",
+        editionTitle: "Edition 01",
+        editionCode: "01",
+        planType: PlanType.FULL,
+        editionsCollectionUrl: "",
+      },
+      {
+        name: "Ade",
+        editionTitle: "Edition 01",
+        editionCode: "01",
+        planType: PlanType.DIGITAL,
+        editionsCollectionUrl: "",
+      },
+      {
+        name: "Ade",
+        editionTitle: "Edition 01",
+        editionCode: "01",
+        planType: PlanType.PHYSICAL,
+        editionsCollectionUrl: "",
+      },
+    ],
+    [EmailType.REGISTER]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        password: "temp1234",
+      },
+    ],
+    [EmailType.PREORDER_CONFIRMATION]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        editionCode: "00",
+        plan: PlanType.PHYSICAL,
+        newPassword: "Bolaji#2025",
+      },
+    ],
+    [EmailType.PAYMENT_FAILED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        reason: "Card declined",
+      },
+    ],
+    [EmailType.PASSWORD_RESET]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        resetLink: "https://bolaji.app/reset/token123",
+      },
+    ],
+    [EmailType.SUBSCRIPTION_RENEWED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        nextEdition: "Edition 02",
+      },
+    ],
+    [EmailType.PREORDER_RELEASED]: [
+      {
+        name: "Ade",
+        preorderLink: "https://bolaji.app/preorder/edition1",
+        password: "PrivateAccess123",
+        accountPassword: "Bolaji#2025",
+      },
+    ],
+    [EmailType.PREORDER_PAYMENT_FAILED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        editionCode: "01",
+        plan: PlanType.PHYSICAL,
+        reason: "Card expired",
+        retryLink: "https://bolaji.app/retry-preorder",
+      },
+    ],
+    [EmailType.PREORDER_RELEASED_REMINDER]: [],
+  };
+
+  return baseMocks;
+};
 
 export const mockAdminEmails = {
   [AdminEmailType.NEW_USER]: {

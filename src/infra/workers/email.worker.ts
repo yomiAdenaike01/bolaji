@@ -15,11 +15,11 @@ import { AdminEmailIntegration } from "../integrations/admin.email.integration";
 import { NotificationService } from "@/domain/notifications/notification.service";
 import Bottleneck from "bottleneck";
 
-export type EmailRecipient = {
+export type EmailData = {
   name: string;
   email: string;
   planType: PlanType;
-};
+} & Record<string, any>;
 
 const emailReleaseSchema = z.object({
   emailType: z.enum(EmailType),
@@ -50,12 +50,30 @@ export class EmailWorker {
         subscribeLink: `${this.config.frontEndUrl}/subscription/dashboard-subscription`,
       }),
     },
+    [EmailType.NEW_EDITION_RELEASED]: {
+      schema: z.object({
+        name: z.string(),
+        editionTitle: z.string(),
+        editionCode: z.string(),
+        planType: z.enum(PlanType),
+        editionsCollectionUrl: z.string(),
+      }),
+      build: (data) => {
+        return {
+          name: data.name,
+          planType: data.planType,
+          editionTitle: data.editionTitle,
+          editionCode: data.editionCode,
+          editionsCollectionUrl: `${this.config.frontEndUrl}/editions-collections`,
+        };
+      },
+    },
   } as any as Record<
     keyof EmailContentMap,
     {
       schema: ZodType<any>;
       build: (
-        emailRecipient: EmailRecipient,
+        rawEmailData: EmailData,
       ) => EmailContentMap[keyof EmailContentMap];
     }
   >;
@@ -88,14 +106,14 @@ export class EmailWorker {
 
   private getReleaseEmailContent = <T extends EmailType>(
     emailType: T,
-    recipient: EmailRecipient,
+    rawData: EmailData,
   ): EmailContentMap[T] => {
     const entry = this.schemaMap[emailType];
     if (!entry) {
       throw new Error(`[EmailWorker] Unknown emailType: ${emailType}`);
     }
 
-    const content = entry.build(recipient);
+    const content = entry.build(rawData);
     entry.schema.parse(content);
     return content as EmailContentMap[T];
   };
@@ -148,14 +166,19 @@ export class EmailWorker {
             recipients.map((recipient) => {
               limiter.schedule(async () => {
                 try {
-                  const emailContent = this.getReleaseEmailContent(
+                  const personalisedContent = this.getReleaseEmailContent(
                     emailType,
-                    recipient,
+                    {
+                      ...recipient,
+                      editionTitle,
+                      editionCode,
+                    },
                   );
+
                   await this.emailIntegration.sendEmail({
                     email: recipient.email,
                     type: emailType,
-                    content: emailContent,
+                    content: personalisedContent,
                   });
                 } catch (error) {
                   logger.error(
@@ -184,42 +207,6 @@ export class EmailWorker {
           adminEmailIntegration: this.adminEmailIntegration,
           emailType: EmailType.PREORDER_RELEASED_REMINDER,
         });
-      }
-      case "email.preorder_reminder": {
-        const users = await this.db.user.findMany({
-          where: {
-            preorderLinkClickedAt: null,
-            status: UserStatus.PENDING_PREORDER,
-          },
-        });
-
-        if (!users[0]) return;
-
-        const { successful } = await sendWaitlistEmails({
-          job: {
-            data: {
-              waitlist: users.map((u) => ({
-                Email: u.email,
-                ["First name"]: u.name,
-              })),
-            },
-          } as any,
-          config: this.config,
-          db: this.db,
-          emailIntegration: this.emailIntegration,
-          adminEmailIntegration: this.adminEmailIntegration,
-        });
-        await this.db.user.updateMany({
-          where: {
-            email: {
-              in: successful.map((s) => s.email),
-            },
-          },
-          data: {
-            reminderEmailSentAt: new Date(),
-          },
-        });
-        return;
       }
 
       case "email.subscription_renewed": {

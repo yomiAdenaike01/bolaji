@@ -19,28 +19,30 @@ export class ReleaseWorker {
 
   private async process(job: Job) {
     switch (job.name) {
-      case "edition-00":
       case "edition-01": {
-        const editionNumber = Number(job.data.edition);
+        let editionNumber = 0;
         try {
-          logger.info(
-            `[release] Starting release for edition ${editionNumber}`,
-          );
+          const result = await this.domain.editions.releaseNextPendingEdition();
 
-          const affectedUsers =
-            await this.domain.editions.releaseEdition(editionNumber);
+          if (!result) {
+            return;
+          }
 
-          if (!affectedUsers?.[0]) {
+          const { nextEdition, affectedUsers } = result;
+
+          if (!affectedUsers) {
             logger.info(
-              "[EditionsWorker] No affected users found, notifications are not required",
+              "[release] No affected users found. No notifications are required",
             );
             return;
           }
 
+          editionNumber = nextEdition.number;
+
           await this.domain.notifications.sendEditionReleaseEmails({
             editionNumber,
             users: affectedUsers,
-            emailType: EmailType.EDITION_00_DIGITAL_RELEASE, // Handle 01 release
+            emailType: EmailType.NEW_EDITION_RELEASED,
           });
           logger.info(
             `[release] Edition ${editionNumber} emails sent successfully.`,
@@ -48,7 +50,7 @@ export class ReleaseWorker {
         } catch (err) {
           logger.error(
             err,
-            `[EditionsWorker] Failed to release edition=${editionNumber}`,
+            `[release] Failed to release edition=${editionNumber}`,
           );
         }
 
