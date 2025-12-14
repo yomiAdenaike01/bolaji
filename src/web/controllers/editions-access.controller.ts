@@ -1,4 +1,5 @@
-import { Hub, PlanType } from "@prisma/client";
+import { Hub, PlanType } from "@/generated/prisma/client";
+
 import { Domain } from "../../domain/domain";
 import { StatusCodes } from "http-status-codes";
 import z from "zod";
