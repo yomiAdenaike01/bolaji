@@ -19,6 +19,7 @@ import { createBullBoard } from "@bull-board/api";
 import { ExpressAdapter } from "@bull-board/express";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { Config } from "@/config";
+import { EditionsAccessController } from "./controllers/editions-access.controller";
 
 export const makeBullMqRouter = (
   app: Application,
@@ -72,6 +73,11 @@ const makeAuthRouter = (
 
   r.get("/dev/authenticate", authController.handleDevAuth);
   r.post("/reset-password", authController.handleResetPassword);
+  r.get("/is-authenticated", authGuard, (req, res) => {
+    res.status(200).json({
+      isValid: true,
+    });
+  });
   r.get("/is-valid", authGuard, (req, res) => {
     const tknContext = (req as any)?.context; // returned from parseOrThrow()
 
@@ -162,6 +168,16 @@ export const makePaymentsRouter = (
   app.use("/api/integrations/payments", paymentsRouter);
 };
 
+const makeEditionsAccessRouter = (
+  authGuard: AuthGuard,
+  ctrl: EditionsAccessController,
+) => {
+  const r = express.Router();
+
+  r.get("/", authGuard, ctrl.handleHasAccess);
+  return r;
+};
+
 export const setupRouters = (
   authGuard: AuthGuard,
   optionalAuthGuard: OptionalAuthGuard,
@@ -198,6 +214,11 @@ export const setupRouters = (
   //#endregion
   const faqRouter = makeFaqsRouter(controllers.faqs);
 
+  const editionsAccessRouter = makeEditionsAccessRouter(
+    authGuard,
+    controllers.editionsAccess,
+  );
+  router.use("/editions-access", editionsAccessRouter);
   router.use("/faqs", faqRouter);
   router.use("/subscriptions", subscriptionsRouter);
   router.use("/integrations", integrationsRouter);

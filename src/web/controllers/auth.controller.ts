@@ -130,17 +130,6 @@ export class AuthController {
         [PlanType.DIGITAL, PlanType.FULL],
       );
 
-      // If they have Edition 00 unlocked → redirect to Edition 00
-      const hasEdition00 = activeAccess.some((a) => a.edition?.number === 0);
-      if (hasEdition00) {
-        return res.status(StatusCodes.OK).json({
-          user,
-          accessToken: jwtPair.accessToken,
-          edition: { number: 0 },
-          showComingSoonModal: false,
-        });
-      }
-
       // If they have any other ACTIVE edition → redirect to latest one
       if (activeAccess.length > 0) {
         const latest = [...activeAccess].sort(

@@ -1,15 +1,16 @@
-import { Domain } from "@/domain/domain";
-import { AuthController } from "./auth.controller";
-import { IntegrationsController } from "./integrations.controller";
-import { PreorderController } from "./preorder.controller";
-import { UserController } from "./user.controller";
-import { createStripePaymentWebhook } from "./createStripeWebhook";
-import { SubscriptionsController } from "./subscriptions.controller";
 import { Config } from "@/config";
+import { Domain } from "@/domain/domain";
 import { Store } from "@/infra";
-import { ScreenController } from "./screen.controller";
+import { AuthController } from "./auth.controller";
+import { createStripePaymentWebhook } from "./createStripeWebhook";
+import { EditionsAccessController } from "./editions-access.controller";
 import { FaqController } from "./faq.controller";
+import { IntegrationsController } from "./integrations.controller";
 import { JobController } from "./job.controller";
+import { PreorderController } from "./preorder.controller";
+import { ScreenController } from "./screen.controller";
+import { SubscriptionsController } from "./subscriptions.controller";
+import { UserController } from "./user.controller";
 
 export const initControllers = (
   store: Store,
@@ -26,6 +27,7 @@ export const initControllers = (
     integrations,
     jobs: new JobController(config, domain),
     faqs: new FaqController(),
+    editionsAccess: new EditionsAccessController(domain),
     stripePaymentWebhook: createStripePaymentWebhook(integrations, domain),
   };
 };

@@ -78,24 +78,14 @@ export class EditionsService {
       } catch {}
     }
 
-    // 2️⃣ Prepare where clause
-    let where: any = {
-      userId,
-      status: AccessStatus.ACTIVE,
-      expiresAt: { gt: now },
-    };
-
-    if (Array.isArray(planTypes)) {
-      // Multiple plan types → use OR
-      where.OR = planTypes.map((type) => ({ accessType: type }));
-    } else {
-      // Single plan type → direct match
-      where.accessType = planTypes;
-    }
-
-    // 3️⃣ Fetch valid edition access
     const activeAccess = (await this.db.editionAccess.findMany({
-      where,
+      where: {
+        userId,
+        status: AccessStatus.ACTIVE,
+        accessType: {
+          in: Array.isArray(planTypes) ? planTypes : [planTypes],
+        },
+      },
       include: {
         edition: true,
       },
