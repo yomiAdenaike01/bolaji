@@ -8,6 +8,11 @@ import { PlanType } from "@/generated/prisma/enums";
 import { Config } from "@/config";
 import { initConfig } from "@/config";
 
+const mockEdition = {
+  editionTitle: "Edition 02",
+  editionCode: "02",
+};
+
 const mockUserEmails = (config: Config) => {
   const baseMocks: Record<
     EmailType,
@@ -41,22 +46,19 @@ const mockUserEmails = (config: Config) => {
     [EmailType.NEW_EDITION_RELEASED]: [
       {
         name: "Ade",
-        editionTitle: "Edition 01",
-        editionCode: "01",
+        ...mockEdition,
         planType: PlanType.FULL,
         editionsCollectionUrl: "",
       },
       {
         name: "Ade",
-        editionTitle: "Edition 01",
-        editionCode: "01",
+        ...mockEdition,
         planType: PlanType.DIGITAL,
         editionsCollectionUrl: "",
       },
       {
         name: "Ade",
-        editionTitle: "Edition 01",
-        editionCode: "01",
+        ...mockEdition,
         planType: PlanType.PHYSICAL,
         editionsCollectionUrl: "",
       },

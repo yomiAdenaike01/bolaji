@@ -19,7 +19,7 @@ export class ReleaseWorker {
 
   private async process(job: Job) {
     switch (job.name) {
-      case "edition-01": {
+      case "edition-monthly": {
         let editionNumber = 0;
         try {
           const result = await this.domain.editions.releaseNextPendingEdition();
@@ -30,7 +30,7 @@ export class ReleaseWorker {
 
           const { nextEdition, affectedUsers } = result;
 
-          if (!affectedUsers) {
+          if (!affectedUsers?.[0]) {
             logger.info(
               "[release] No affected users found. No notifications are required",
             );
@@ -54,12 +54,6 @@ export class ReleaseWorker {
           );
         }
 
-        break;
-      }
-
-      case "edition-monthly": {
-        logger.info(`[release] Running monthly auto-release`);
-        await this.domain.editions.releaseNextPendingEdition();
         break;
       }
 

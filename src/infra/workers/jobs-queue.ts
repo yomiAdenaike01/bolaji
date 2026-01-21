@@ -103,26 +103,15 @@ export class JobsQueues {
   private async queueReleaseJobs() {
     logger.info("[Scheduler] Checking edition release jobs...");
 
-    // Edition 01 release
-    await this.addIfFuture(
-      this.editionReleasesQueue,
-      "edition-01",
-      EDITION_01_RELEASE,
+    await this.editionReleasesQueue.add(
+      "edition-monthly",
+      { task: "auto-release-next-edition" },
       {
-        edition: "01",
+        repeat: { pattern: "0 17 1 * *" }, // every 1st of month at 9:00 UTC
+        jobId: "monthly-edition-release",
+        removeOnComplete: true,
       },
     );
-
-    // Monthly repeating edition auto-release
-    // await this.editionReleasesQueue.add(
-    //   "edition-monthly",
-    //   { task: "auto-release-next-edition" },
-    //   {
-    //     repeat: { pattern: "0 9 1 * *" }, // every 1st of month at 9:00 UTC
-    //     jobId: "monthly-edition-release",
-    //     removeOnComplete: true,
-    //   },
-    // );
 
     logger.info("[Scheduler] Edition release jobs check complete ✅");
   }

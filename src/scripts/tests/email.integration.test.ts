@@ -1,6 +1,6 @@
 import { loadEnv } from "@/config/env";
 loadEnv();
-import fs from "fs";
+import fs, { readdirSync } from "fs";
 import path from "path";
 import { initConfig } from "@/config";
 import { EmailIntegration } from "@/infra/integrations/email.integration";
@@ -8,6 +8,24 @@ import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integrat
 import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
 import { initInfra, initStore } from "../../infra";
 import { getMockPayloadFor } from "../../tests/integrations/email/email.integration.mock";
+
+const ensureDirExists = () => {
+  const outDir = path.join(process.cwd(), "emails_previews");
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir);
+    console.log(`Created dir path:${outDir}`);
+    return outDir;
+  }
+  const filesList = readdirSync(outDir);
+  if (!filesList[0]) return outDir;
+  console.log(`Removing files from dir path:${outDir}`);
+  for (const file of filesList) {
+    fs.unlink(file, () => {
+      console.log(`Removed file: ${file}`);
+    });
+  }
+  return outDir;
+};
 
 async function testEmails() {
   const config = initConfig();
@@ -26,13 +44,8 @@ async function testEmails() {
     config.sentFromEmailAddr,
   );
 
-  // Create output directory
-  const outDir = path.join(process.cwd(), "emails_previews");
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir);
-  }
+  const outDir = ensureDirExists();
 
-  // ----- User Emails -----
   console.log("🧪 Generating user emails...\n");
   for (const type of Object.values(EmailType)) {
     const payload = getMockPayloadFor(type);
@@ -59,7 +72,6 @@ async function testEmails() {
     console.log(`✅ Rendered user email: ${type}`);
   }
 
-  // ----- Admin Emails -----
   console.log("\n🧪 Generating admin emails...\n");
   for (const type of Object.values(AdminEmailType)) {
     const payload = getMockPayloadFor(type);

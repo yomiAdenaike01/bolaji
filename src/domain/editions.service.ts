@@ -8,6 +8,7 @@ import {
 import { Db, Store, TransactionClient } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
+import { startOfToday } from "date-fns";
 
 export type UserEditionAccess = ({
   edition: {
@@ -171,7 +172,7 @@ export class EditionsService {
       (u) => u.user && Object.values(u.user).every(Boolean),
     );
 
-    const affectedUsersPromise = tx.editionAccess.findMany({
+    const userEditionsAccess = await tx.editionAccess.findMany({
       where: {
         userId: { in: affectedUsers.map((a) => a.user.id) },
         status: AccessStatus.ACTIVE,
@@ -181,15 +182,13 @@ export class EditionsService {
       orderBy: { edition: { number: "asc" } },
     });
 
-    const accesses = await affectedUsersPromise;
-
     const userAccessData = new Map<string, EditionAccess[]>();
 
-    for (const a of accesses) {
-      if (!userAccessData.has(a.userId)) {
-        userAccessData.set(a.userId, []);
+    for (const access of userEditionsAccess) {
+      if (!userAccessData.has(access.userId)) {
+        userAccessData.set(access.userId, []);
       }
-      userAccessData.get(a.userId)!.push(a);
+      userAccessData.get(access.userId)!.push(access);
     }
 
     return {
@@ -310,9 +309,11 @@ export class EditionsService {
   };
 
   releaseNextPendingEdition = async () => {
+    const today = startOfToday();
     const nextEdition = await this.db.edition.findFirst({
       where: {
         readyForRelease: true,
+        releaseDate: { gte: today },
         OR: [
           { status: EditionStatus.PENDING },
           { status: EditionStatus.PREORDER_OPEN },
