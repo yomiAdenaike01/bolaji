@@ -46,17 +46,15 @@ async function testEmails() {
 
   const outDir = ensureDirExists();
 
-  console.log("🧪 Generating user emails...\n");
   for (const type of Object.values(EmailType)) {
     const payload = getMockPayloadFor(type);
-    if (!payload) {
+    if (payload === null) {
       console.warn(`⚠️  No mock payload found for ${type}`);
       continue;
     }
-
     if (Array.isArray(payload)) {
-      payload.forEach((p, index) => {
-        const email = userEmailIntegration.getTemplate(type, p);
+      payload.forEach(async (p, index) => {
+        const email = await userEmailIntegration.getTemplate(type, p);
         const filePath = path.join(
           outDir,
           `${type}_${p.planType || index}.html`,
@@ -66,7 +64,8 @@ async function testEmails() {
       });
       continue;
     }
-    const email = userEmailIntegration.getTemplate(type, payload);
+    const email = await userEmailIntegration.getTemplate(type, payload);
+    
     const filePath = path.join(outDir, `${type}.html`);
     fs.writeFileSync(filePath, email.template);
     console.log(`✅ Rendered user email: ${type}`);

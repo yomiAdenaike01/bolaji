@@ -16,8 +16,9 @@ const mockEdition = {
 const mockUserEmails = (config: Config) => {
   const baseMocks: Record<
     EmailType,
-    Array<EmailContentMap[keyof EmailContentMap]>
+    EmailContentMap[keyof EmailContentMap] | Array<EmailContentMap[keyof EmailContentMap]>
   > = {
+    [EmailType.EDITIONS_INTRODUCTION]: undefined,
     [EmailType.EDITION_00_DIGITAL_RELEASE]: [
       {
         name: "Ade",

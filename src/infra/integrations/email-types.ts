@@ -99,9 +99,11 @@ export enum EmailType {
 
   NEW_EDITION_RELEASED = "NEW_EDITION_RELEASED",
   PREORDER_PAYMENT_FAILED = "PREORDER_PAYMENT_FAILED",
+  EDITIONS_INTRODUCTION = 'EDITIONS_INTRODUCTION'
 }
 
 export interface EmailContentMap {
+  [EmailType.EDITIONS_INTRODUCTION]: undefined
   [EmailType.EDITION_00_DIGITAL_RELEASE]: {
     name: string;
     subscribeLink: string;

@@ -12,3 +12,6 @@ testing.md
 emails_previews
 **/scripts/*.json
 src/scripts/data.ts
+/email-templates
+assets/emails/*.json
+assets/emails/*.csv

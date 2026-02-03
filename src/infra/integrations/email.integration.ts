@@ -13,12 +13,12 @@ export class EmailIntegration extends BaseEmailIntegration {
     super(apiKey);
     this.sourceEmailAddr = sourceEmailAddr;
   }
-  getTemplate<K extends EmailType>(
+  getTemplate = async <K extends EmailType>(
     emailType: K,
     content: EmailContentMap[K],
-  ): { template: string; subject: string } {
+  ): Promise<{ template: string; subject: string }> => {
     return {
-      template: templates[emailType](content),
+      template: await templates[emailType](content),
       subject: subjects[emailType],
     };
   }
@@ -35,14 +35,14 @@ export class EmailIntegration extends BaseEmailIntegration {
           email: z.email().min(1),
           subject: z.string().min(1).optional(),
           type: z.enum(EmailType),
-          content: z.object(),
+          content: z.object().optional(),
         })
         .parse(input);
 
       logger.info(
         `[EmailIntegration] Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );
-      const emailContent = this.getTemplate(type, input.content);
+      const emailContent = await this.getTemplate(type, input.content);
       const response = await this.performSend({
         to: email,
         html: emailContent.template,

@@ -1,9 +1,14 @@
 import { PlanType } from "@/generated/prisma/enums";
-import { EmailType, EmailContentMap } from "./email-types";
+import {
+  EmailType,
+  EmailContentMap,
+} from "./email-types";
 import { format } from "date-fns";
 import { EDITION_00_RELEASE } from "@/constants";
 import { getPreorderReleaseContent } from "./email-templates/preorder-rekease";
 import { wrap } from "./email-templates/email-wrapper";
+import { readFile } from 'fs/promises';
+import path from 'path'
 
 const formatDate = (date: Date | string | number) => {
   const day = format(date, "d"); // day number without leading zero
@@ -41,8 +46,14 @@ const renderPassword = (password: string, subtitle?: string) => {
 };
 
 export const templates: {
-  [K in EmailType]: (content: EmailContentMap[K]) => string;
+  [K in EmailType]: (
+    content:  EmailContentMap[K]
+  ) => string | Promise<string>;
 } = {
+  [EmailType.EDITIONS_INTRODUCTION]: async () => {
+    const templatePath = path.resolve('./assets/emails/introduction-email/index.html')
+    return await readFile(templatePath,{encoding:'utf-8'})
+  },
   [EmailType.SUBSCRIPTION_FAILED_TO_START]: ({
     name,
     plan,
@@ -394,6 +405,7 @@ export const templates: {
 };
 
 export const subjects: Record<EmailType, string> = {
+  [EmailType.EDITIONS_INTRODUCTION]: 'Private Invitation: The Editions Are Open',
   [EmailType.EDITION_00_DIGITAL_RELEASE]:
     "Your Access to Bolaji Editions 0.0 Is Now Live",
   [EmailType.REGISTER]: "Welcome to Bolaji Editions — your account is ready!",
