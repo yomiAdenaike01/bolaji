@@ -1,3 +1,5 @@
+import { loadEnv } from "@/config/env";
+loadEnv();
 import { initConfig } from "@/config";
 import { EmailType } from "@/infra/integrations/email-types";
 import { EmailIntegration } from "@/infra/integrations/email.integration";

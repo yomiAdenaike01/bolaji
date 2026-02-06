@@ -318,6 +318,7 @@ export class SubscriptionsService {
     let shippingCents: number | undefined = undefined;
     let shippingZone: string | undefined = undefined;
     if (!input.userId) {
+      logger.info(input, `[Subscription Service] No userId found, creating with input`)
       const password = crypto.randomBytes(4).toString("hex");
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await this.db.user.upsert({

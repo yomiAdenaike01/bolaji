@@ -63,6 +63,16 @@ export class SubscriptionsController {
     try {
       const userId =
         this.domain.session.getUserFromRequest(req)?.userId || req.body.userId;
+      logger.info(
+        {
+          path: req.originalUrl,
+          method: req.method,
+          userId,
+          requestBody: req.body,
+        },
+        "[SubscriptionController] Incoming create subscription request",
+      );
+
       const { error, data: subscriptionsInput } =
         createSubscriptionInputSchema.safeParse({
           ...req.body,
@@ -70,6 +80,10 @@ export class SubscriptionsController {
         });
 
       if (error) {
+        logger.warn(
+          { userId, issues: error.issues },
+          "[SubscriptionController] Subscription input validation failed",
+        );
         invalidInputErrorResponse(res, error.issues, "/subscriptions/create");
         return;
       }
@@ -84,7 +98,14 @@ export class SubscriptionsController {
       res.status(StatusCodes.OK).json({ url: checkoutUrl });
     } catch (error) {
       logger.error(
-        error,
+        {
+          err: error,
+          path: req.originalUrl,
+          method: req.method,
+          userId:
+            this.domain.session.getUserFromRequest(req)?.userId ||
+            req.body.userId,
+        },
         "[SubscriptionController] Failed to start subscription",
       );
       if (error instanceof SubscriptionAlreadyActiveError) {

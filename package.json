@@ -15,7 +15,7 @@
     "dev:staging": "NODE_ENV=development nodemon",
     "dev:production": "NODE_ENV=production nodemon",
     "start": "node dist/main.js",
-    "send:emails":"NODE_ENV=development EMAIL_TYPE=EDITIONS_INTRODUCTION EMAILS_LIST=./assets/emails/test-emails.json ts-node -r tsconfig-paths/register src/scripts/broadcasts/email.broadcast.ts",
+    "send:emails":"NODE_ENV=development EMAIL_TYPE=EDITIONS_INTRODUCTION EMAILS_LIST=./assets/emails/newemails.json ts-node -r tsconfig-paths/register src/scripts/broadcasts/email.broadcast.ts",
     "start:prod": "NODE_ENV=production node -r tsconfig-paths/register ./dist/main.js"
   },
   "devDependencies": {
