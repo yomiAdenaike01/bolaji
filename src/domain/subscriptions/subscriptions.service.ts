@@ -324,9 +324,6 @@ export class SubscriptionsService {
       const user = await this.db.user.upsert({
         where: {
           email: input.email,
-          status: {
-            not: UserStatus.ACTIVE,
-          },
         },
         update: {},
         create: {
