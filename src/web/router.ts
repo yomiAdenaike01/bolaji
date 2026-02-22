@@ -72,6 +72,7 @@ export const makeBullMqRouter = (
         return res.status(401).end();
       return next();
     },
+    express.json(),
     jobsController.handleBroadcast,
   );
 };
@@ -178,7 +179,11 @@ const makeEmailsWebookRouter = (
   webhookController: WebhookController,
 ) => {
   const r = express.Router();
-  r.post("/webhook", webhookController.handleRecordEmailInteraction);
+  r.post(
+    "/webhook",
+    bodyParser.raw({ type: "application/json" }),
+    webhookController.handleRecordEmailInteraction,
+  );
   app.use("/api/integrations/emails", r);
 };
 

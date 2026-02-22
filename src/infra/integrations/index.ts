@@ -6,6 +6,7 @@ import { AdminEmailIntegration } from "./admin.email.integration";
 import { EmailIntegration } from "./email.integration";
 import { StripeIntegration } from "./stripe.integration";
 import { StripeShippingService } from "./stripeShipping.integration";
+import { Webhook } from "svix";
 
 export class Integrations {
   public readonly payments: StripeIntegration;
@@ -69,32 +70,23 @@ export class Integrations {
 
     if (!events.includes(eventType || "")) return null;
 
-    const createdAt = payload?.created_at
-      ? new Date(payload.created_at)
-      : new Date();
-
     const data = payload?.data ?? {};
 
-    const campaign =
-      (data?.tags && (data.tags.campaign || data.tags.campaign)) ||
-      data?.metadata?.campaign ||
-      data?.metadata?.campaign ||
-      undefined;
-
-    const providerMessageId = data?.email_id || data?.id;
+    const campaign = data.tags.campaign || null;
+    const providerEventId = data?.email_id || data?.id;
 
     if (!campaign) {
       logger.info(
-        `[handleEmailWebhook]: No campaign found on id=${providerMessageId}`,
+        `[handleEmailWebhook]: No campaign found on id=${providerEventId}`,
       );
       return null;
     }
 
     const toEmail = Array.isArray(data?.to) ? data.to[0] : data?.to;
 
-    if (!eventType || !providerMessageId || !toEmail) {
+    if (!eventType || !providerEventId || !toEmail) {
       logger.warn(
-        { eventType, providerMessageId, toEmail },
+        { eventType, providerEventId, toEmail },
         "[Integrations] Invalid email webhook payload",
       );
       return null;
@@ -110,6 +102,10 @@ export class Integrations {
         "email.complained": EmailEventType.SPAM,
         "email.unsubscribed": EmailEventType.UNSUBSCRIBED,
       }[eventType] || EmailEventType.FAILED;
+
+    const createdAt = payload?.created_at
+      ? new Date(payload.created_at)
+      : new Date();
 
     const statusFields: any = {
       status,
@@ -135,10 +131,10 @@ export class Integrations {
     return {
       campaign,
       toEmail,
-      providerEventId: data?.id,
+      providerEventId,
       eventType: status,
       occurredAt: createdAt,
-      payload: payload ?? null,
+      payload: JSON.stringify(payload) ?? null,
     };
   };
 

@@ -12,12 +12,13 @@ import { SubscriptionsController } from "./subscriptions.controller";
 import { UserController } from "./user.controller";
 import { WebhookController } from "./webhook.controller";
 
+// [TODO]: Refactor intergrations and webhook controller implementation doesn't make sense
 export const initControllers = (
   store: Store,
   config: Config,
   domain: Domain,
 ) => {
-  const integrations = new IntegrationsController(domain);
+  const integrations = new IntegrationsController(config, domain);
   return {
     auth: new AuthController(config, domain, store),
     user: new UserController(domain),

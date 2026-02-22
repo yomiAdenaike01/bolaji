@@ -24,12 +24,13 @@ export class WebhookController {
         "email.recordEvent",
         recordEmailEventPayload,
       );
+      res.status(StatusCodes.OK).json({ recieved: true });
     } catch (error) {
       logger.error(
         `[HandleRecordEmailInteraction]: Failed to handle email interaction err=${JSON.stringify(error)}`,
       );
       createErrorResponse(res, {
-        error: "Failed to handle stripe event",
+        error: "Failed to handle email event",
         endpoint: "/integrations/emails",
         statusCode: StatusCodes.BAD_REQUEST,
       });

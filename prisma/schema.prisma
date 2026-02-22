@@ -538,6 +538,7 @@ model EmailEvent {
   providerEventId String @unique
   eventType         EmailEventType
   occurredAt        DateTime
+  payload String?
   @@index([campaign, eventType])
   @@index([toEmail, eventType])
 }

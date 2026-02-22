@@ -1,10 +1,15 @@
+import { Config } from "@/config";
 import { Domain } from "@/domain/domain";
 import { logger } from "@/lib/logger";
 import { Request, Response } from "express";
+import { Webhook } from "svix";
 import z from "zod";
 
 export class IntegrationsController {
-  constructor(private readonly domain: Domain) {}
+  constructor(
+    private readonly appConfig: Config,
+    private readonly domain: Domain,
+  ) {}
   handlePaymentEvents = (req: Request, res: Response) => {
     try {
       logger.info(
@@ -21,14 +26,20 @@ export class IntegrationsController {
   };
 
   handleEmailEvents = async (req: Request, res: Response) => {
+    let evt: any = null;
+    const payload = req.body.toString();
+    const headers = req.headers;
     try {
-      return this.domain.integrations.constructEmailEventPayload(req.body);
+      const wh = new Webhook(this.appConfig.resendWebhookSigningSecret);
+      evt = wh.verify(payload, headers as any);
     } catch (error) {
       logger.error(
         error,
         "[IntegrationsController] Failed to handle email webhook",
       );
-      return null;
+      throw error;
     }
+
+    return this.domain.integrations.constructEmailEventPayload(evt);
   };
 }

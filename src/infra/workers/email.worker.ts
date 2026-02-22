@@ -107,13 +107,16 @@ export class EmailWorker {
   handleEmailBroadcastJob = async ({
     recipients,
     campaign,
+    subject,
   }: {
+    subject: string;
     recipients: string[];
     campaign: EmailType;
   }) => {
     await this.emailIntegration.sendEmail({
       email: recipients,
       content: undefined,
+      subject,
       type: campaign,
       tags: [
         {
@@ -122,6 +125,7 @@ export class EmailWorker {
         },
       ],
     });
+    return;
   };
 
   private getReleaseEmailContent = <T extends EmailType>(
@@ -136,6 +140,45 @@ export class EmailWorker {
     const content = entry.build(rawData);
     entry.schema.parse(content);
     return content as EmailContentMap[T];
+  };
+
+  private recordEmailEvent = async (jobData: any) => {
+    const recordEventPayload = z
+      .object({
+        campaign: z.string(),
+        toEmail: z.string(),
+        providerEventId: z.string(),
+        eventType: z.enum(EmailEventType),
+        occurredAt: z.string(),
+        payload: z.string().nullable(),
+      })
+      .parse(jobData);
+
+    const {
+      providerEventId,
+      payload,
+      campaign,
+      toEmail,
+      occurredAt,
+      eventType,
+    } = recordEventPayload;
+
+    logger.info(
+      `[recordEmailEvent]: Processing email event id=${recordEventPayload.providerEventId} payload=${payload}`,
+    );
+
+    return this.db.emailEvent.upsert({
+      where: {
+        providerEventId,
+        toEmail,
+        campaign,
+      },
+      update: {
+        eventType,
+        occurredAt,
+      },
+      create: recordEventPayload,
+    });
   };
 
   process = async (job: Job<any, any, string>) => {
@@ -171,41 +214,23 @@ export class EmailWorker {
       }
 
       case "email.recordEvent": {
-        logger.info(
-          `[EmailWorker] Recording email event=${JSON.stringify(job.data)} `,
-        );
-        const recordEventPayload = z
-          .object({
-            campaign: z.string(),
-            toEmail: z.string(),
-            providerEventId: z.string(),
-            eventType: z.enum(EmailEventType),
-            occurredAt: z.date(),
-            payload: z.object().nullable(),
-          })
-          .parse(job.data);
+        try {
+          logger.info(
+            `[EmailWorker] Recording email event=${JSON.stringify(job.data)} `,
+          );
+          const emailEvent = await this.recordEmailEvent(job.data);
 
-        const { providerEventId, campaign, toEmail, occurredAt, eventType } =
-          recordEventPayload;
+          logger.info(
+            `[EmailWorker] Successfully processed email eventId=${emailEvent.id} providerEventId=${emailEvent.providerEventId} `,
+          );
 
-        const emailEvent = await this.db.emailEvent.upsert({
-          where: {
-            providerEventId,
-            toEmail,
-            campaign,
-          },
-          update: {
-            eventType,
-            occurredAt,
-          },
-          create: recordEventPayload,
-        });
-
-        logger.info(
-          `[EmailWorker] Successfully processed email eventId=${emailEvent.id} providerEventId=${emailEvent.providerEventId} `,
-        );
-
-        return true;
+          return true;
+        } catch (error) {
+          logger.error(
+            `Failed to process job=email.recordEvent err=${(error as any).message}`,
+          );
+          throw error;
+        }
       }
 
       case "email.release": {
@@ -272,6 +297,7 @@ export class EmailWorker {
           .object({
             recipients: z.array(z.string()),
             campaign: z.enum(EmailType),
+            subject: z.string(),
           })
           .parse(job.data);
         return this.handleEmailBroadcastJob(broadcastDto);
