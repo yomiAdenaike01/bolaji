@@ -72,7 +72,7 @@ export class Integrations {
 
     const data = payload?.data ?? {};
 
-    const campaign = data.tags.campaign || null;
+    const campaign = data.tags?.campaign || null;
     const providerEventId = data?.email_id || data?.id;
 
     if (!campaign) {
