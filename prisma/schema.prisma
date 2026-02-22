@@ -519,6 +519,29 @@ model EmailLog {
   deliveredAt DateTime?
 }
 
+enum EmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  SPAM
+  UNSUBSCRIBED
+  FAILED
+}
+
+model EmailEvent {
+  id        String         @id @default(cuid())
+  createdAt DateTime       @default(now())
+  campaign String
+  toEmail           String
+  providerEventId String @unique
+  eventType         EmailEventType
+  occurredAt        DateTime
+  @@index([campaign, eventType])
+  @@index([toEmail, eventType])
+}
+
 model StripeEvent {
   id         String    @id
   type       String

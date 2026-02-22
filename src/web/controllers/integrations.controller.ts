@@ -15,7 +15,19 @@ export class IntegrationsController {
       sig = z.string().min(1).parse(sig);
       return this.domain.integrations.payments.handleWebhook(req.body, sig);
     } catch (error: any) {
-      logger.error(error,`Failed to handle stripe event`);
+      logger.error(error, `Failed to handle stripe event`);
+      return null;
+    }
+  };
+
+  handleEmailEvents = async (req: Request, res: Response) => {
+    try {
+      return this.domain.integrations.constructEmailEventPayload(req.body);
+    } catch (error) {
+      logger.error(
+        error,
+        "[IntegrationsController] Failed to handle email webhook",
+      );
       return null;
     }
   };

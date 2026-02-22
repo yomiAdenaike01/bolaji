@@ -12,7 +12,31 @@ export class WebhookController {
     private readonly domain: Domain,
   ) {}
 
-  handle = () => async (req: Request, res: Response) => {
+  handleRecordEmailInteraction = async (req: Request, res: Response) => {
+    try {
+      const recordEmailEventPayload =
+        await this.integrationsCtrl.handleEmailEvents(req, res);
+      if (!recordEmailEventPayload) {
+        res.status(StatusCodes.OK).json({ recieved: true });
+        return;
+      }
+      await this.domain.jobQueues.add(
+        "email.recordEvent",
+        recordEmailEventPayload,
+      );
+    } catch (error) {
+      logger.error(
+        `[HandleRecordEmailInteraction]: Failed to handle email interaction err=${JSON.stringify(error)}`,
+      );
+      createErrorResponse(res, {
+        error: "Failed to handle stripe event",
+        endpoint: "/integrations/emails",
+        statusCode: StatusCodes.BAD_REQUEST,
+      });
+    }
+  };
+
+  handlePayments = () => async (req: Request, res: Response) => {
     let paymentEvent: PaymentEvent | null = null;
     try {
       paymentEvent = await this.integrationsCtrl.handlePaymentEvents(req, res);
