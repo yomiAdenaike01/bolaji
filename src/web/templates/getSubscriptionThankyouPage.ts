@@ -31,7 +31,7 @@ export const getSubscriptionThankYouPage = (
         padding: 48px 36px;
         border-radius: 16px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-        max-width: 480px;
+        max-width: 520px;
         width: 90%;
         text-align: center;
         animation: fadeIn 0.4s ease-out;
@@ -52,14 +52,37 @@ export const getSubscriptionThankYouPage = (
         font-family: 'Georgia', 'Times New Roman', serif;
         font-weight: 400;
         font-size: 1.7rem;
-        margin: 0 0 14px 0;
+        margin: 0 0 18px 0;
       }
 
-      p {
-        font-size: 0.94rem;
+      p, li {
+        font-size: 0.95rem;
         color: var(--muted);
         margin: 0 0 16px 0;
-        line-height: 1.65;
+        line-height: 1.7;
+      }
+
+      .section {
+        margin-top: 22px;
+        text-align: left;
+      }
+
+      .section-title {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text);
+        font-size: 0.95rem;
+      }
+
+      ul {
+        padding-left: 18px;
+        margin: 0;
+      }
+
+      li {
+        margin-bottom: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
       }
 
       .highlight {
@@ -83,7 +106,7 @@ export const getSubscriptionThankYouPage = (
         width: 100%;
         cursor: pointer;
         transition: background 0.25s ease, transform 0.1s ease;
-        margin-top: 12px;
+        margin-top: 28px;
       }
 
       button.primary:hover { background-color: #5A52E0; }
@@ -112,12 +135,31 @@ export const getSubscriptionThankYouPage = (
 
       <h2>Subscription Confirmed</h2>
 
-      <p>Thank you for subscribing to <strong>Bolaji Editions</strong>.  
-      ${isPrerelease ? "Your first edition will be released from 1st Decemeber." : ""} 
-      Every month a new edition is released. You’ll receive ongoing access to each new edition.</p>
+      <p>
+        Thank you for subscribing to <strong>Bolaji Editions</strong>.
+        We’re really glad you’re here and excited to have you as part of this growing creative space.
+      </p>
 
-      <p>An email has been sent for your confirmation.</p>
+      <p>
+        Bolaji Editions is released on a monthly cycle.
+        This means your subscription begins with the next edition release.
+        ${isPrerelease ? "<br/><br/><strong>Your first edition will be released from 1st December.</strong>" : ""}
+      </p>
 
+      <div class="section">
+        <div class="section-title">What happens next:</div>
+        <ul>
+          <li>Your first digital edition will be available at the start of the next monthly release cycle.</li>
+          <li>You’ll receive an email as soon as your edition is live and ready to access.</li>
+          <li>If you’ve subscribed to the physical edition, we’ll also email you when your copy is released and on its way to you.</li>
+        </ul>
+      </div>
+
+      <p>
+        If you have any questions at all, we’re here to help.
+        <br/><br/>
+        <strong>Welcome to Bolaji Editions.</strong>
+      </p>
 
       <button class="primary" onclick="window.location.replace('${redirectUrl}')">
         Go to Home
