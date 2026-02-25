@@ -21,21 +21,25 @@ export class EmailIntegration extends BaseEmailIntegration {
       template: await templates[emailType](content),
       subject: subjects[emailType],
     };
-  }
+  };
 
   async sendEmail<T extends EmailType>(input: {
     content: EmailContentMap[T];
-    email: string;
+    email: string | string[];
     type: EmailType;
     subject?: string;
+    tags?: { name: string; value: string }[];
   }) {
     try {
-      const { email, type, subject } = z
+      const { email, type, subject, tags } = z
         .object({
-          email: z.email().min(1),
+          email: z.email().min(1).array().or(z.email().min(1)),
           subject: z.string().min(1).optional(),
           type: z.enum(EmailType),
           content: z.object().optional(),
+          tags: z
+            .array(z.object({ name: z.string(), value: z.any() }))
+            .optional(),
         })
         .parse(input);
 
@@ -43,6 +47,27 @@ export class EmailIntegration extends BaseEmailIntegration {
         `[EmailIntegration] Sending email=${input.email} type=${input.type} metaData=${input.content}`,
       );
       const emailContent = await this.getTemplate(type, input.content);
+
+      if (Array.isArray(email)) {
+        const response = await this.integration.batch.send(
+          email.map((email) => {
+            return {
+              from: `Bolaji Editions <${this.sourceEmailAddr}>`,
+              to: email,
+              html: emailContent.template,
+              subject: subject || emailContent.subject,
+              tags,
+            };
+          }),
+        );
+        if (response.error)
+          logger.error(
+            response.error,
+            `[EmailIntegration] Failed to send batch emails reason=${response.error.message}`,
+          );
+        return;
+      }
+
       const response = await this.performSend({
         to: email,
         html: emailContent.template,
@@ -56,7 +81,7 @@ export class EmailIntegration extends BaseEmailIntegration {
       return response;
     } catch (error) {
       logger.error(error, "Failed to send email");
-      return false;
+      return null;
     }
   }
 }

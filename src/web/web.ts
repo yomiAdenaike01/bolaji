@@ -9,7 +9,7 @@ import {
   setupErrorHandlers,
   setupMiddlewares,
 } from "./middleware";
-import { makeBullMqRouter, makePaymentsRouter, setupRouters } from "./router";
+import { makeBullMqRouter, makeWebhooksRouter, setupRouters } from "./router";
 import path from "path";
 
 export const initWeb = (
@@ -26,9 +26,9 @@ export const initWeb = (
     express.static(path.join(__dirname, "../../assets/well-known")),
   );
 
-  makeBullMqRouter(app, config, domain.jobQueues);
+  makeBullMqRouter(app, config, domain.jobQueues, ctrls.jobs);
 
-  makePaymentsRouter(app, ctrls.stripePaymentWebhook);
+  makeWebhooksRouter(app, ctrls.webhooks);
 
   setupMiddlewares(app, store, config);
 

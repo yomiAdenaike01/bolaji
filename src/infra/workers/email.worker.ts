@@ -9,7 +9,7 @@ import {
 } from "../integrations/email-types";
 import { EmailIntegration } from "../integrations/email.integration";
 import { Config } from "@/config";
-import { PlanType, UserStatus } from "@/generated/prisma/enums";
+import { PlanType, EmailEventType } from "@/generated/prisma/enums";
 import { sendWaitlistEmails } from "@/scripts/send-waitlist-emails";
 import { AdminEmailIntegration } from "../integrations/admin.email.integration";
 import { NotificationService } from "@/domain/notifications/notification.service";
@@ -104,6 +104,30 @@ export class EmailWorker {
     });
   }
 
+  handleEmailBroadcastJob = async ({
+    recipients,
+    campaign,
+    subject,
+  }: {
+    subject: string;
+    recipients: string[];
+    campaign: EmailType;
+  }) => {
+    await this.emailIntegration.sendEmail({
+      email: recipients,
+      content: undefined,
+      subject,
+      type: campaign,
+      tags: [
+        {
+          name: "campaign",
+          value: campaign,
+        },
+      ],
+    });
+    return;
+  };
+
   private getReleaseEmailContent = <T extends EmailType>(
     emailType: T,
     rawData: EmailData,
@@ -116,6 +140,45 @@ export class EmailWorker {
     const content = entry.build(rawData);
     entry.schema.parse(content);
     return content as EmailContentMap[T];
+  };
+
+  private recordEmailEvent = async (jobData: any) => {
+    const recordEventPayload = z
+      .object({
+        campaign: z.string(),
+        toEmail: z.string(),
+        providerEventId: z.string(),
+        eventType: z.enum(EmailEventType),
+        occurredAt: z.string(),
+        payload: z.string().nullable(),
+      })
+      .parse(jobData);
+
+    const {
+      providerEventId,
+      payload,
+      campaign,
+      toEmail,
+      occurredAt,
+      eventType,
+    } = recordEventPayload;
+
+    logger.info(
+      `[recordEmailEvent]: Processing email event id=${recordEventPayload.providerEventId} payload=${payload}`,
+    );
+
+    return this.db.emailEvent.upsert({
+      where: {
+        providerEventId,
+        toEmail,
+        campaign,
+      },
+      update: {
+        eventType,
+        occurredAt,
+      },
+      create: recordEventPayload,
+    });
   };
 
   process = async (job: Job<any, any, string>) => {
@@ -148,6 +211,26 @@ export class EmailWorker {
           throw err;
         }
         break;
+      }
+
+      case "email.recordEvent": {
+        try {
+          logger.info(
+            `[EmailWorker] Recording email event=${JSON.stringify(job.data)} `,
+          );
+          const emailEvent = await this.recordEmailEvent(job.data);
+
+          logger.info(
+            `[EmailWorker] Successfully processed email eventId=${emailEvent.id} providerEventId=${emailEvent.providerEventId} `,
+          );
+
+          return true;
+        } catch (error) {
+          logger.error(
+            `Failed to process job=email.recordEvent err=${(error as any).message}`,
+          );
+          throw error;
+        }
       }
 
       case "email.release": {
@@ -207,6 +290,17 @@ export class EmailWorker {
           adminEmailIntegration: this.adminEmailIntegration,
           emailType: EmailType.PREORDER_RELEASED_REMINDER,
         });
+      }
+
+      case "email.broadcast": {
+        const broadcastDto = z
+          .object({
+            recipients: z.array(z.string()),
+            campaign: z.enum(EmailType),
+            subject: z.string(),
+          })
+          .parse(job.data);
+        return this.handleEmailBroadcastJob(broadcastDto);
       }
 
       case "email.subscription_renewed": {

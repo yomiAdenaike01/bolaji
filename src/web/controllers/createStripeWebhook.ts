@@ -5,4 +5,4 @@ import { WebhookController } from "./webhook.controller";
 export const createStripePaymentWebhook = (
   integrationsCtrl: IntegrationsController,
   domain: Domain,
-) => new WebhookController(integrationsCtrl, domain).handle();
+) => new WebhookController(integrationsCtrl, domain).handlePayments();

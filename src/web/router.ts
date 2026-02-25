@@ -8,7 +8,7 @@ import express, {
 } from "express";
 import { StatusCodes } from "http-status-codes";
 import { AuthController } from "./controllers/auth.controller";
-import { Controllers, PaymentsWebhookHandler } from "./controllers/controllers";
+import { Controllers } from "./controllers/controllers";
 import { FaqController } from "./controllers/faq.controller";
 import { PreorderController } from "./controllers/preorder.controller";
 import { SubscriptionsController } from "./controllers/subscriptions.controller";
@@ -20,11 +20,14 @@ import { ExpressAdapter } from "@bull-board/express";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { Config } from "@/config";
 import { EditionsAccessController } from "./controllers/editions-access.controller";
+import { WebhookController } from "./controllers/webhook.controller";
+import { JobController } from "./controllers/job.controller";
 
 export const makeBullMqRouter = (
   app: Application,
   config: Config,
   jobQueues: JobsQueues,
+  jobsController: JobController,
 ) => {
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath("/admin/queues");
@@ -37,6 +40,7 @@ export const makeBullMqRouter = (
     ],
     serverAdapter: serverAdapter,
   });
+
   const protect = (req: Request, res: Response, next: NextFunction) => {
     const auth = {
       login: "admin",
@@ -61,6 +65,16 @@ export const makeBullMqRouter = (
     res.status(401).send("Authentication required.");
   };
   app.use("/admin/queues", protect, serverAdapter.getRouter());
+  app.use(
+    "/admin/jobs",
+    (req, res, next) => {
+      if (req.headers["x-api-key"] !== config.adminApiKey)
+        return res.status(401).end();
+      return next();
+    },
+    express.json(),
+    jobsController.handleBroadcast,
+  );
 };
 
 const makeAuthRouter = (
@@ -152,20 +166,41 @@ const makePreorderRouter = (
   return r;
 };
 
-export const makePaymentsRouter = (
+export const makeWebhooksRouter = (
   app: Application,
-  paymentWebhookHandler: PaymentsWebhookHandler,
+  webhookController: WebhookController,
 ) => {
-  const paymentsRouter = express.Router();
-  paymentsRouter.post(
+  makePaymentsRouter(app, webhookController);
+  makeEmailsWebookRouter(app, webhookController);
+};
+
+const makeEmailsWebookRouter = (
+  app: Application,
+  webhookController: WebhookController,
+) => {
+  const r = express.Router();
+  r.post(
     "/webhook",
     bodyParser.raw({ type: "application/json" }),
-    paymentWebhookHandler,
+    webhookController.handleRecordEmailInteraction,
   );
-  paymentsRouter.get("/redirect", (req, res) => {
+  app.use("/api/integrations/emails", r);
+};
+
+const makePaymentsRouter = (
+  app: Application,
+  webhookController: WebhookController,
+) => {
+  const r = express.Router();
+  r.post(
+    "/webhook",
+    bodyParser.raw({ type: "application/json" }),
+    webhookController.handlePayments,
+  );
+  r.get("/redirect", (req, res) => {
     res.status(StatusCodes.OK).json(req.body);
   });
-  app.use("/api/integrations/payments", paymentsRouter);
+  app.use("/api/integrations/payments", r);
 };
 
 const makeEditionsAccessRouter = (
@@ -203,6 +238,10 @@ export const setupRouters = (
 
   //#region integration router
   const integrationsRouter = express.Router();
+  integrationsRouter.post(
+    "/email/webhook",
+    controllers.integrations.handleEmailEvents,
+  );
   //#endregion
 
   //#region subscriptions router
@@ -218,6 +257,7 @@ export const setupRouters = (
     authGuard,
     controllers.editionsAccess,
   );
+
   router.use("/editions-access", editionsAccessRouter);
   router.use("/faqs", faqRouter);
   router.use("/subscriptions", subscriptionsRouter);
