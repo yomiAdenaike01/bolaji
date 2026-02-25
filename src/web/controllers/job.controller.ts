@@ -31,7 +31,7 @@ export class JobController {
 
       const batches = chunk(recipients, 20);
 
-      const totalWindowMs = 3 * 24 * 60 * 60 * 1000;
+      const totalWindowMs = 6 * 60 * 60 * 1000;
       const intervalMs =
         batches.length <= 1
           ? 0
