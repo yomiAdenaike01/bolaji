@@ -135,7 +135,7 @@ model User {
   editionAccess              EditionAccess[]
   addresses                  Address[]
   shipments                  Shipment[]
-
+  StripeSubscriptionCheckout StripeSubscriptionCheckoutMetadata[]
   @@index([email])
   @@index([status])
 }
@@ -299,6 +299,9 @@ model Preorder {
   @@index([userId])
 }
 
+//////////////////////////////////////////////////////////
+// ORDERS & PAYMENTS
+//////////////////////////////////////////////////////////
 
 model Order {
   id                    String        @id @default(cuid())
@@ -345,6 +348,9 @@ model Payment {
   @@index([userId])
 }
 
+//////////////////////////////////////////////////////////
+// ADDRESSES & SHIPPING
+//////////////////////////////////////////////////////////
 
 model Address {
   id         String     @id @default(cuid())
@@ -422,4 +428,24 @@ model StripeEvent {
   updatedAt  DateTime  @updatedAt
 
   @@unique([id, type])
+}
+
+model StripeSubscriptionCheckoutMetadata {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  paymentIntentId String   @unique
+  sessionId       String   @unique // Stripe Checkout Session ID
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscriptionId   String? // Your internal placeholder subscription
+  stripeCustomerId String?
+  metadataJson     Json // Full copy of metadata you sent to Stripe
+
+  status String @default("CREATED") // CREATED | COMPLETED | FAILED | EXPIRED
+
+  @@index([userId])
+  @@index([paymentIntentId])
+  @@index([subscriptionId])
 }
