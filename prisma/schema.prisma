@@ -128,9 +128,6 @@ model User {
   status                UserStatus @default(ACTIVE)
 
   devices                    Device[]
-  sessions                   Session[]
-  emailVerificationTokens    EmailVerificationToken[]
-  passwordResetTokens        PasswordResetToken[]
   preorders                  Preorder[]
   subscriptions              Subscription[]
   orders                     Order[]
@@ -138,73 +135,9 @@ model User {
   editionAccess              EditionAccess[]
   addresses                  Address[]
   shipments                  Shipment[]
-  supportTickets             SupportTicket[]
-  authoredMessages           SupportMessage[]                     @relation("AuthorMessages")
-  emails                     EmailLog[]
-  StripeSubscriptionCheckout StripeSubscriptionCheckoutMetadata[]
-  UserRefreshToken           UserRefreshToken[]
 
   @@index([email])
   @@index([status])
-}
-
-model Session {
-  id               String             @id @default(cuid())
-  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId           String
-  createdAt        DateTime           @default(now())
-  expiresAt        DateTime
-  ip               String?
-  userAgent        String?
-  UserRefreshToken UserRefreshToken[]
-
-  @@index([userId, expiresAt])
-}
-
-model EmailVerificationToken {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  token     String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-
-  @@index([userId, expiresAt])
-}
-
-model UserRefreshToken {
-  id String @id @default(uuid())
-
-  // Relationships
-  version   Int     @default(1)
-  userId    String
-  user      User    @relation(fields: [userId], references: [id])
-  sessionId String
-  session   Session @relation(fields: [sessionId], references: [id])
-
-  // Token details
-  tokenHash String    @unique
-  tokenJti  String // from JWT "jti" claim
-  expiresAt DateTime
-  revokedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([expiresAt])
-}
-
-model PasswordResetToken {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  token     String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-
-  @@index([userId, expiresAt])
 }
 
 //////////////////////////////////////////////////////////
@@ -251,7 +184,6 @@ model Edition {
   editionAccess EditionAccess[]
   orders        Order[]
   shipments     Shipment[]
-  orderItems    OrderItem[] // ✅ inverse for OrderItem.edition
 
   @@index([number])
 }
@@ -367,9 +299,6 @@ model Preorder {
   @@index([userId])
 }
 
-//////////////////////////////////////////////////////////
-// ORDERS & PAYMENTS
-//////////////////////////////////////////////////////////
 
 model Order {
   id                    String        @id @default(cuid())
@@ -388,7 +317,6 @@ model Order {
   currency              String        @default("GBP")
   stripePaymentIntentId String?       @unique
   payments              Payment[]
-  items                 OrderItem[]
   preorder              Preorder?
 
   @@index([userId, type, status])
@@ -396,19 +324,6 @@ model Order {
   @@index([editionId])
 }
 
-model OrderItem {
-  id          String   @id @default(cuid())
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId     String
-  edition     Edition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
-  editionId   String?
-  planType    PlanType
-  quantity    Int      @default(1)
-  amountCents Int
-  description String?
-
-  @@index([orderId])
-}
 
 model Payment {
   id                String          @id @default(cuid())
@@ -430,9 +345,6 @@ model Payment {
   @@index([userId])
 }
 
-//////////////////////////////////////////////////////////
-// ADDRESSES & SHIPPING
-//////////////////////////////////////////////////////////
 
 model Address {
   id         String     @id @default(cuid())
@@ -476,49 +388,6 @@ model Shipment {
   @@index([editionId, status])
 }
 
-//////////////////////////////////////////////////////////
-// SUPPORT & EMAIL
-//////////////////////////////////////////////////////////
-
-model SupportTicket {
-  id        String           @id @default(cuid())
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId    String?
-  email     String?
-  subject   String
-  category  TicketCategory   @default(OTHER)
-  status    TicketStatus     @default(OPEN)
-  messages  SupportMessage[]
-
-  @@index([userId, status])
-}
-
-model SupportMessage {
-  id           String        @id @default(cuid())
-  createdAt    DateTime      @default(now())
-  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  ticketId     String
-  authorUser   User?         @relation("AuthorMessages", fields: [authorUserId], references: [id], onDelete: SetNull)
-  authorUserId String?
-  authorRole   String?
-  body         String
-}
-
-model EmailLog {
-  id          String    @id @default(cuid())
-  createdAt   DateTime  @default(now())
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId      String?
-  toEmail     String
-  templateKey String
-  subject     String
-  payloadJson Json?
-  providerId  String?
-  deliveredAt DateTime?
-}
-
 enum EmailEventType {
   SENT
   DELIVERED
@@ -553,31 +422,4 @@ model StripeEvent {
   updatedAt  DateTime  @updatedAt
 
   @@unique([id, type])
-}
-
-model StripeSubscriptionCheckoutMetadata {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  paymentIntentId String   @unique
-  sessionId       String   @unique // Stripe Checkout Session ID
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  subscriptionId   String? // Your internal placeholder subscription
-  stripeCustomerId String?
-  metadataJson     Json // Full copy of metadata you sent to Stripe
-
-  status String @default("CREATED") // CREATED | COMPLETED | FAILED | EXPIRED
-
-  @@index([userId])
-  @@index([paymentIntentId])
-  @@index([subscriptionId])
-}
-
-model SystemFlag {
-  key       String   @id
-  value     Json
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
 }
