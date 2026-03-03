@@ -8,7 +8,7 @@ import {
 import { Db, Store, TransactionClient } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
-import { longFormatters, startOfToday } from "date-fns";
+import { startOfToday } from "date-fns";
 
 type DbUserAccess = {
   userId: string;

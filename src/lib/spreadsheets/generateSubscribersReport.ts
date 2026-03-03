@@ -4,7 +4,7 @@ import { Db } from "@/infra";
 import { logger } from "@/lib/logger";
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
-import { SubscriptionStatus } from "@/generated/prisma/enums";
+import { PlanType, SubscriptionStatus } from "@/generated/prisma/enums";
 import { Address, AccessStatus } from "@/generated/prisma/client";
 
 type SubPeriod = {
@@ -28,7 +28,7 @@ export async function generateSubscriberReport(db: Db) {
       tx.editionAccess.findMany({
         where: {
           status: {
-            in: [AccessStatus.SCHEDULED, AccessStatus.ACTIVE],
+            in: [AccessStatus.ACTIVE],
           },
         },
         include: {
@@ -43,7 +43,7 @@ export async function generateSubscriberReport(db: Db) {
       tx.subscription.findMany({
         where: {
           status: SubscriptionStatus.ACTIVE,
-        }, // adjust enum if different
+        },
         include: {
           user: {
             select: {
@@ -55,33 +55,23 @@ export async function generateSubscriberReport(db: Db) {
               },
             },
           },
-          // include plan fields if you want to show tier/price/etc
         },
         orderBy: { createdAt: "asc" },
       }),
     ]);
   });
 
-  // 2) Pull all editions >= 1 (subscription editions)
-  //    We load once, then filter per subscriber in-memory for speed.
-
-  // 1) Pull active subs and minimal user info
-
-  // Helper: pick usable release timestamp
   const getReleaseAt = (e: any) => e.releasedAt ?? e.releaseDate ?? null;
 
-  // Helper: get a subscriber’s active period for this digest
   const getPeriod = (sub: any): SubPeriod => {
-    const start = sub.currentPeriodStart ?? sub.startedAt ?? new Date(); // fallback (shouldn’t happen)
+    const start = sub.currentPeriodStart ?? sub.startedAt ?? new Date();
     const end =
       sub.currentPeriodEnd ??
       sub.endsAt ??
-      // if open-ended, include the next 12 months by default for visibility
       new Date(new Date(start).setMonth(start.getMonth() + 12));
     return { start, end };
   };
 
-  // 3) Build rows for Excel
   type Row = {
     subscriberName: string;
     subscriberEmail: string;
@@ -103,7 +93,6 @@ export async function generateSubscriberReport(db: Db) {
       (ea) => ea.userId === sub.userId,
     ) as any[];
 
-    // at least one line per covered edition; if none, add a placeholder
     if (covered.length === 0) {
       const address = sub.user.addresses?.[0];
       const addressDetails = fmtAddress(address);
@@ -132,7 +121,9 @@ export async function generateSubscriberReport(db: Db) {
         subscriberEmail: sub.user?.email ?? "—",
         periodStart: fmt(period.start),
         periodEnd: fmt(period.end),
-        editionsCount: covered.length,
+        editionsCount:
+          covered.find((c) => c.status === AccessStatus.ACTIVE)?.edition
+            ?.number || 0,
         editionNumber: String(e.edition.number).padStart(2, "0"),
         editionCode: e.edition.code,
         editionTitle: e.edition.title,
@@ -142,17 +133,14 @@ export async function generateSubscriberReport(db: Db) {
     }
   }
 
-  // 4) Create Excel
   const wb = new ExcelJS.Workbook();
 
-  // Sheet: Overview
   const overview = wb.addWorksheet("Overview");
   overview.addRow(["Metric", "Value"]);
   overview.addRow(["Active subscribers", activeSubs.length]);
   overview.getRow(1).font = { bold: true };
   overview.columns.forEach((c) => (c.width = 32));
 
-  // Sheet: Subscribers (one row per subscriber, summary count)
   const subsSheet = wb.addWorksheet("Subscribers");
   subsSheet.columns = [
     { header: "Name", key: "name", width: 28 },
@@ -164,7 +152,6 @@ export async function generateSubscriberReport(db: Db) {
   ];
   subsSheet.getRow(1).font = { bold: true };
 
-  // Summarize covered editions by subscriber
   const byEmail = new Map<
     string,
     { name: string; start: string; end: string; count: number; address: string }
@@ -193,7 +180,6 @@ export async function generateSubscriberReport(db: Db) {
     });
   }
 
-  // Sheet: Schedules (one row per subscriber-edition)
   const sched = wb.addWorksheet("Schedules");
   sched.columns = [
     { header: "Subscriber", key: "subscriber", width: 28 },
@@ -208,7 +194,7 @@ export async function generateSubscriberReport(db: Db) {
   sched.getRow(1).font = { bold: true };
 
   for (const r of rows) {
-    if (r.editionNumber === "—") continue; // skip placeholder here
+    if (r.editionNumber === "—") continue;
     sched.addRow({
       subscriber: r.subscriberName,
       email: r.subscriberEmail,
