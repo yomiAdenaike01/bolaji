@@ -16,6 +16,7 @@ import {
   ShipmentStatus,
   SubscriptionStatus,
   UserStatus,
+  EditionStatus,
 } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
@@ -23,7 +24,6 @@ import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
 import { Config } from "@/config";
 import { PricingService } from "../pricing.service";
-import { EditionStatus } from "@prisma/client";
 import { EditionsService } from "../editions.service";
 import z from "zod";
 

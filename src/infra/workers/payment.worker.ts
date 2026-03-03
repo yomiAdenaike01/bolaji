@@ -12,6 +12,7 @@ import {
   PlanType,
   SubscriptionStatus,
   UserStatus,
+  EditionStatus,
 } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import z, { ZodType } from "zod";
@@ -24,9 +25,7 @@ import { Config } from "@/config";
 import { padNumber } from "@/utils";
 import { isBefore } from "date-fns";
 import { EDITION_01_RELEASE } from "@/constants";
-import { hash } from "crypto";
 import { GeneratedPassword } from "@/domain/password/password.service";
-import { EditionStatus } from "@prisma/client";
 
 const failedPreorderDto = z.object({
   action: z.string(),

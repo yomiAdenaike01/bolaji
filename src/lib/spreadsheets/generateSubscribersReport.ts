@@ -5,8 +5,7 @@ import { logger } from "@/lib/logger";
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
 import { SubscriptionStatus } from "@/generated/prisma/enums";
-import { Address } from "@/generated/prisma/client";
-import { AccessStatus } from "@prisma/client";
+import { Address, AccessStatus } from "@/generated/prisma/client";
 
 type SubPeriod = {
   start: Date;
