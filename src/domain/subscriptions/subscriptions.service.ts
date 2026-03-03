@@ -177,51 +177,7 @@ export class SubscriptionsService {
     const unlockedIds = new Set(unlocked.map((u) => u.editionId));
     return allEditions.find((ed) => !unlockedIds.has(ed.id));
   };
-  onSubscriptionCreate = async ({
-    planId,
-    userId,
-  }: {
-    subscriptionId: string;
-    planId: string;
-    userId: string;
-  }) => {
-    const [plan, user] = await this.db.$transaction((tx) =>
-      Promise.all([
-        tx.subscriptionPlan.findUniqueOrThrow({
-          where: {
-            id: planId,
-          },
-        }),
-        tx.user.findUniqueOrThrow({
-          where: {
-            id: userId,
-          },
-        }),
-      ]),
-    );
-    if (!user.name) throw new Error("User not found");
-    this.integrations.adminEmail
-      .send({
-        type: AdminEmailType.SUBSCRIPTION_STARTED,
-        attachReport: true,
-        content: {
-          plan: plan.type,
-          email: user.email,
-          name: user.name,
-          periodStart: new Date().toISOString(),
-          periodEnd: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth() + 1,
-          ).toISOString(),
-        },
-      })
-      .catch((err) => {
-        logger.error(
-          `[Subscription Service]: Failed to send subscription started email err=${(err as any).message || "Unknown"}`,
-        );
-      });
-  };
-  onSubscriptionUpdate = async (params: UpdateSubscriptionInput) => {
+  onCreateOrUpdateSubscription = async (params: UpdateSubscriptionInput) => {
     const {
       subscriptionId,
       stripeSubscriptionId,
@@ -249,7 +205,8 @@ export class SubscriptionsService {
       ]);
 
       if (existingSubscription) {
-        isNewSubscription = false;
+        isNewSubscription =
+          existingSubscription.status === SubscriptionStatus.AWAITING_PAYMENT;
         logger.info(
           `[Subscription Service] Existing subscription found id=${existingSubscription.id}`,
         );
@@ -349,6 +306,7 @@ export class SubscriptionsService {
           status: isNextEditionReleased
             ? AccessStatus.ACTIVE
             : AccessStatus.SCHEDULED,
+          unlockedAt: isNextEditionReleased ? new Date() : null,
           expiresAt: shouldEditionExpire ? addYears(new Date(), 2) : null,
           userId: existingSubscription.userId,
           editionId: nextEdition.id,
@@ -392,7 +350,7 @@ export class SubscriptionsService {
           `[Subscription Service]: Failed to set user - ${result.updatedSubscription.user.id} status to ACTIVE`,
         );
       }
-    if (result.updatedSubscription.userId)
+    if (result.updatedSubscription.userId && !isNewSubscription)
       await this.editionsService.invalidateEditionAccess(
         result.updatedSubscription.userId,
       );
@@ -706,7 +664,7 @@ export class SubscriptionsService {
         priceId,
         subscriptionId: placeholder.id,
         addressId,
-        isNewSubscription: true,
+        isNewSubscription: true, // It was an oversight to attach this since it will always be true
         type: OrderType.SUBSCRIPTION_RENEWAL,
         shippingCents,
         shippingZone,

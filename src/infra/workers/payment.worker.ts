@@ -148,14 +148,15 @@ export class PaymentWorker {
 
       return;
     }
+    const isSubscription = paymentEvent.type === OrderType.SUBSCRIPTION_RENEWAL;
 
-    if (paymentEvent.type === OrderType.SUBSCRIPTION_RENEWAL) {
+    if (isSubscription) {
       this.isValidOrThrow(paymentEvent, updateSubscriptionInputSchema);
       const {
         updatedSubscription,
         nextEdition,
         isNewSubscription: confirmedIsNewSubscription,
-      } = await this.domain.subscriptions.onSubscriptionUpdate({
+      } = await this.domain.subscriptions.onCreateOrUpdateSubscription({
         subscriptionId: paymentEvent.subscriptionId,
         stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
         subscriptionPlanId: paymentEvent.subscriptionPlanId,
@@ -267,15 +268,6 @@ export class PaymentWorker {
         );
       }
 
-      return;
-    }
-    if (paymentEvent.action === PaymentEventActions.SUBSCRIPTION_STARTED) {
-      this.isValidOrThrow(paymentEvent, onCreateSubscriptionInputSchema);
-      await this.domain.subscriptions.onSubscriptionCreate({
-        planId: paymentEvent.planId,
-        subscriptionId: paymentEvent.subscriptionId,
-        userId: paymentEvent.userId,
-      });
       return;
     }
   };
