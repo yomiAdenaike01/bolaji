@@ -56,6 +56,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
       appConfig,
       jobQueues,
       pricingService,
+      editionsService,
     ),
   };
 };

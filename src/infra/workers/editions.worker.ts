@@ -19,10 +19,13 @@ export class ReleaseWorker {
 
   private async process(job: Job) {
     switch (job.name) {
-      case "edition-monthly": {
-        let editionNumber = 0;
+      case "edition-release": {
+        let editionNumber = job.data.edition || 0;
         try {
-          const result = await this.domain.editions.releaseNextPendingEdition();
+          const result =
+            await this.domain.editions.releasePendingOrSpecificEdition(
+              editionNumber,
+            );
 
           if (!result) {
             return;
@@ -32,7 +35,7 @@ export class ReleaseWorker {
 
           if (!affectedUsers?.[0]) {
             logger.info(
-              "[release] No affected users found. No notifications are required",
+              "[Release Worker] No affected users found. No notifications are required",
             );
             return;
           }
@@ -45,12 +48,12 @@ export class ReleaseWorker {
             emailType: EmailType.NEW_EDITION_RELEASED,
           });
           logger.info(
-            `[release] Edition ${editionNumber} emails sent successfully.`,
+            `[Release Worker] Edition ${editionNumber} emails sent successfully.`,
           );
         } catch (err) {
           logger.error(
             err,
-            `[release] Failed to release edition=${editionNumber}`,
+            `[Release Worker] Failed to release edition=${editionNumber}`,
           );
         }
 
@@ -58,7 +61,7 @@ export class ReleaseWorker {
       }
 
       default:
-        logger.warn(`[release] Unknown job name: ${job.name}`);
+        logger.warn(`[Release Worker] Unknown job name: ${job.name}`);
     }
   }
 }

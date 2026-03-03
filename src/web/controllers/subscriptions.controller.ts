@@ -11,12 +11,45 @@ import { SubscriptionAlreadyActiveError } from "@/domain/subscriptions/subscript
 import { logger } from "@/lib/logger";
 import { isBefore } from "date-fns";
 import { EDITION_01_RELEASE } from "@/constants";
+import z from "zod";
 
 export class SubscriptionsController {
   constructor(
     private readonly domain: Domain,
     private readonly config: Config,
   ) {}
+  handleResumeSubscription = async (req, res) => {
+    const { user_id, redirect_url } = z
+      .object({
+        user_id: z.string().min(1),
+        redirect_url: z.url(),
+      })
+      .parse(req.query);
+
+    const response =
+      await this.domain.subscriptions.resumeSubscription(user_id);
+    res.redirect(`/resume-confirm?redirect_url=${redirect_url}`);
+  };
+  /**
+   * POST /api/subscription
+   * @param req
+   * @param res
+   */
+  handleCancelSubscription = async (req: Request, res: Response) => {
+    try {
+      const userId = await this.domain.session.getUserIdOrThrow(
+        (req as any).sessionId,
+      );
+      await this.domain.subscriptions.cancelSubscription(userId);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error(
+        error,
+        `[SubscriptionsController]: Failed to cancel subscription err=${(error as any).message} sessionId=${(req as any).sessionId}`,
+      );
+      res.json({ success: false });
+    }
+  };
   /**
    * GET - /api/subscriptions/cancel
    */

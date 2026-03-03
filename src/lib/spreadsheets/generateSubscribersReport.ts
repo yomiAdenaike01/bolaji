@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
 import { SubscriptionStatus } from "@/generated/prisma/enums";
 import { Address } from "@/generated/prisma/client";
+import { AccessStatus } from "@prisma/client";
 
 type SubPeriod = {
   start: Date;
@@ -23,8 +24,23 @@ const fmtAddress = (address: Address) => {
 
 export async function generateSubscriberReport(db: Db) {
   logger.info("[Admin Digest] Building daily subscriber + editions report…");
-  const [activeSubs, editions] = await db.$transaction(async (tx) => {
+  const [editionAccess, activeSubs] = await db.$transaction(async (tx) => {
     return Promise.all([
+      tx.editionAccess.findMany({
+        where: {
+          status: {
+            in: [AccessStatus.SCHEDULED, AccessStatus.ACTIVE],
+          },
+        },
+        include: {
+          edition: true,
+        },
+        orderBy: {
+          edition: {
+            number: "desc",
+          },
+        },
+      }),
       tx.subscription.findMany({
         where: {
           status: SubscriptionStatus.ACTIVE,
@@ -44,18 +60,6 @@ export async function generateSubscriberReport(db: Db) {
         },
         orderBy: { createdAt: "asc" },
       }),
-      tx.edition.findMany({
-        where: { number: { gt: 0 } },
-        select: {
-          id: true,
-          number: true,
-          code: true,
-          title: true,
-          releasedAt: true,
-          releaseDate: true,
-        },
-        orderBy: { number: "asc" },
-      }),
     ]);
   });
 
@@ -65,8 +69,7 @@ export async function generateSubscriberReport(db: Db) {
   // 1) Pull active subs and minimal user info
 
   // Helper: pick usable release timestamp
-  const getReleaseAt = (e: (typeof editions)[number]) =>
-    e.releasedAt ?? e.releaseDate ?? null;
+  const getReleaseAt = (e: any) => e.releasedAt ?? e.releaseDate ?? null;
 
   // Helper: get a subscriber’s active period for this digest
   const getPeriod = (sub: any): SubPeriod => {
@@ -97,12 +100,9 @@ export async function generateSubscriberReport(db: Db) {
   for (const sub of activeSubs) {
     const period = getPeriod(sub);
 
-    // editions that fall within the subscriber’s current period
-    const covered = editions.filter((e) => {
-      const r = getReleaseAt(e);
-      if (!r) return false;
-      return r >= period.start && r <= period.end;
-    });
+    const covered = editionAccess.filter(
+      (ea) => ea.userId === sub.userId,
+    ) as any[];
 
     // at least one line per covered edition; if none, add a placeholder
     if (covered.length === 0) {
@@ -134,10 +134,10 @@ export async function generateSubscriberReport(db: Db) {
         periodStart: fmt(period.start),
         periodEnd: fmt(period.end),
         editionsCount: covered.length,
-        editionNumber: String(e.number).padStart(2, "0"),
-        editionCode: e.code,
-        editionTitle: e.title,
-        editionRelease: fmt(getReleaseAt(e)),
+        editionNumber: String(e.edition.number).padStart(2, "0"),
+        editionCode: e.edition.code,
+        editionTitle: e.edition.title,
+        editionRelease: fmt(getReleaseAt(e.edition)),
         subscriberAddress: addressDetails,
       });
     }

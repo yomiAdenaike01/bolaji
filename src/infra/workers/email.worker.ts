@@ -64,7 +64,7 @@ export class EmailWorker {
           planType: data.planType,
           editionTitle: data.editionTitle,
           editionCode: data.editionCode,
-          editionsCollectionUrl: `${this.config.frontEndUrl}/editions-collections`,
+          editionsCollectionUrl: `${this.config.frontEndUrl}/bookpage`,
         };
       },
     },
@@ -301,43 +301,6 @@ export class EmailWorker {
           })
           .parse(job.data);
         return this.handleEmailBroadcastJob(broadcastDto);
-      }
-
-      case "email.subscription_renewed": {
-        const parsedData = z
-          .object({
-            userId: z.string(),
-            nextEdition: z.object({
-              id: z.string(),
-              number: z.number().nonnegative(),
-            }),
-          })
-          .parse(job.data);
-
-        const { userId, nextEdition } = parsedData;
-
-        if (!nextEdition) return;
-        const user = await this.db.user.findUnique({ where: { id: userId } });
-        if (!user?.email) return;
-
-        this.emailIntegration
-          .sendEmail({
-            type: EmailType.SUBSCRIPTION_RENEWED,
-            email: user.email,
-            content: {
-              name: user.name ?? "",
-              email: user.email,
-              nextEdition: nextEdition?.id,
-            },
-          })
-          .catch((err) => {
-            logger.error(
-              err,
-              `[Email Worker] Failed to send ${EmailType.SUBSCRIPTION_RENEWED}`,
-            );
-          });
-
-        break;
       }
 
       default:

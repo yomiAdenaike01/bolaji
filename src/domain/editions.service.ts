@@ -8,7 +8,20 @@ import {
 import { Db, Store, TransactionClient } from "@/infra";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
-import { startOfToday } from "date-fns";
+import { longFormatters, startOfToday } from "date-fns";
+
+type DbUserAccess = {
+  userId: string;
+  subscriptionId: string | null;
+  id: string;
+  status: AccessStatus;
+  editionId: string;
+  unlockedAt: Date | null;
+  unlockAt: Date | null;
+  grantedAt: Date;
+  expiresAt: Date | null;
+  accessType: PlanType;
+};
 
 export type UserEditionAccess = ({
   edition: {
@@ -58,7 +71,6 @@ export class EditionsService {
     const cacheKey = `editionAccess:${userId}`;
     const now = new Date();
 
-    // 1️⃣ Try Redis cache
     const cached = await this.store.get(cacheKey);
     if (cached) {
       try {
@@ -93,24 +105,22 @@ export class EditionsService {
       orderBy: { edition: { number: "asc" } },
     })) as (EditionAccess & { edition: Edition | null })[];
 
-    // 4️⃣ Filter only released editions
     const releasedAccess = activeAccess.filter((a) =>
       a.edition?.releaseDate
         ? a.edition.releaseDate <= now || a.edition.readyForRelease
         : true,
     );
 
-    // 5️⃣ Cache for 5 minutes
-    await this.store.setEx(
-      cacheKey,
-      this.EDITIONS_ACCESS_TTL,
-      JSON.stringify(releasedAccess),
-    );
+    await this.cacheEditionAccess(userId, releasedAccess);
 
-    // 6️⃣ Return fresh data
     return releasedAccess;
   };
-
+  invalidateEditionAccess = async (userId: string) => {
+    logger.info(
+      `[Edition Service]: Invalidating edition access userId=${userId}`,
+    );
+    return this.store.expire(`editionAccess:${userId}`, -1);
+  };
   private getReleaseEditionTransaction = async (
     tx: TransactionClient,
     editionNumber: number,
@@ -137,7 +147,6 @@ export class EditionsService {
       `[Edition Service] Edition ${editionNumber} status updated ${edition.code} to - ${edition.status}.`,
     );
 
-    // Unlock all scheduled access for this edition
     const userAccess = await tx.editionAccess.updateManyAndReturn({
       where: {
         editionId: edition.id,
@@ -199,8 +208,8 @@ export class EditionsService {
     };
   };
 
-  releaseEdition = async (editionNumber: number) => {
-    logger.info(`[EditionService] Starting Edition:${editionNumber} release`);
+  private releaseEdition = async (editionNumber: number) => {
+    logger.info(`[EditionsService] Starting Edition:${editionNumber} release`);
     const result = await this.db.$transaction((tx) =>
       this.getReleaseEditionTransaction(tx, editionNumber),
     );
@@ -211,7 +220,7 @@ export class EditionsService {
           editionNumber,
           reason: "Edition already ACTIVE or CLOSED — no unlocks performed",
         },
-        "[EditionService] 💤 No-op: edition release skipped",
+        "[EditionService] No-op: edition release skipped",
       );
       return;
     }
@@ -219,10 +228,9 @@ export class EditionsService {
     const { edition, unlocked, affectedUsers, userAccessData } = result;
 
     logger.info(
-      `[Edition Service] ✅ Edition ${edition.title} → ${edition.status} — ${unlocked} user accesses unlocked`,
+      `[EditionsService] ✅ Edition ${edition.title} → ${edition.status} — ${unlocked} user accesses unlocked`,
     );
 
-    // ─── Cache invalidation ───────────────────────────────
     if (
       affectedUsers.length === 0 ||
       !userAccessData ||
@@ -230,7 +238,7 @@ export class EditionsService {
     ) {
       logger.info(
         { editionNumber },
-        "[EditionService] No users had updated access — skipping cache invalidation",
+        "[EditionsService] No users had updated access — skipping cache invalidation",
       );
       return affectedUsers;
     }
@@ -240,7 +248,7 @@ export class EditionsService {
         editionNumber,
         affectedUsers: affectedUsers.length,
       },
-      "[EditionService] 🧹 Clearing editionAccess cache for affected users",
+      "[EditionsService] 🧹 Clearing editionAccess cache for affected users",
     );
 
     const batchSize = 100;
@@ -255,15 +263,11 @@ export class EditionsService {
           const userAccess = userAccessData?.get(id);
           if (!userAccess) return;
           try {
-            await this.store.setEx(
-              `editionAccess:${id}`,
-              this.EDITIONS_ACCESS_TTL,
-              JSON.stringify(userAccess),
-            );
+            await this.cacheEditionAccess(id, userAccess);
           } catch (err) {
             logger.error(
               err,
-              `[EditionService] Failed to refresh cache for user=${id}`,
+              `[EditionsService] Failed to refresh cache for user=${id}`,
             );
           }
         }),
@@ -275,9 +279,17 @@ export class EditionsService {
         editionNumber,
         clearedUsers: affectedUsers.length,
       },
-      "[EditionService] ✅ Cache invalidation complete",
+      `[EditionsService] Sucessfully cached edition access users=${affectedUsers.map((u) => u.user.id).join(",")}complete`,
     );
     return affectedUsers;
+  };
+
+  cacheEditionAccess = (id: string, userAccess: DbUserAccess[]) => {
+    return this.store.setEx(
+      `editionAccess:${id}`,
+      this.EDITIONS_ACCESS_TTL,
+      JSON.stringify(userAccess),
+    );
   };
 
   getUserScheduledEditionAccess = async (
@@ -298,7 +310,6 @@ export class EditionsService {
       where.accessType = planTypes;
     }
 
-    // Only future / not-yet-released editions
     const scheduledAccess = (await this.db.editionAccess.findMany({
       where,
       include: { edition: true },
@@ -308,26 +319,35 @@ export class EditionsService {
     return scheduledAccess;
   };
 
-  releaseNextPendingEdition = async () => {
+  releasePendingOrSpecificEdition = async (editionNum?: number) => {
     const today = startOfToday();
     const nextEdition = await this.db.edition.findFirst({
-      where: {
-        readyForRelease: true,
-        releaseDate: { gte: today },
-        OR: [
-          { status: EditionStatus.PENDING },
-          { status: EditionStatus.PREORDER_OPEN },
-        ],
-      },
+      where: editionNum
+        ? {
+            number: editionNum,
+            status: {
+              not: { in: [EditionStatus.ACTIVE, EditionStatus.CLOSED] },
+            },
+          }
+        : {
+            readyForRelease: true,
+            releaseDate: { gte: today },
+            OR: [
+              { status: EditionStatus.PENDING },
+              { status: EditionStatus.PREORDER_OPEN },
+            ],
+          },
       orderBy: { number: "asc" },
     });
 
     if (!nextEdition) {
-      logger.info("No pending editions left to release.");
+      logger.info("[EditionsService]: No pending editions left to release.");
       return;
     }
 
-    logger.info(`Releasing next edition: ${nextEdition.title}`);
+    logger.info(
+      `[EditionsService]: Releasing next edition: ${nextEdition.title}`,
+    );
     return {
       affectedUsers: await this.releaseEdition(nextEdition.number),
       nextEdition,

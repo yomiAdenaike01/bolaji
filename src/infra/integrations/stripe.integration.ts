@@ -35,6 +35,11 @@ export class StripeIntegration {
   init = async () => {
     await this.shippingPrice.ensure(this.stripe);
   };
+
+  resumeSubscription = (subscriptionId: string) => {
+    return this.stripe.subscriptions.resume(subscriptionId);
+  };
+
   invalidatePaymentLink = async (linkId: string) => {
     try {
       await this.stripe.paymentLinks.update(linkId, {
@@ -561,6 +566,18 @@ export class StripeIntegration {
     });
     await setCustomerId(customer.id);
     return customer.id;
+  };
+
+  cancelSubscription = async (subscriptionId: string) => {
+    const existingSubscription =
+      await this.stripe.subscriptions.retrieve(subscriptionId);
+    logger.info(
+      `[StripeIntegration]: Retrieved subscriptionId=${subscriptionId} subscription=${JSON.stringify(existingSubscription)}`,
+    );
+    if (existingSubscription.status !== "active") {
+      return;
+    }
+    return this.stripe.subscriptions.cancel(subscriptionId);
   };
 
   ensureStripePrice = async (

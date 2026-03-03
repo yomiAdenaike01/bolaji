@@ -37,7 +37,7 @@ export class WebhookController {
     }
   };
 
-  handlePayments = () => async (req: Request, res: Response) => {
+  handlePayments  = async (req: Request, res: Response) => {
     let paymentEvent: PaymentEvent | null = null;
     try {
       paymentEvent = await this.integrationsCtrl.handlePaymentEvents(req, res);

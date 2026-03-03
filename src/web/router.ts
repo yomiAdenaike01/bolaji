@@ -65,14 +65,23 @@ export const makeBullMqRouter = (
     res.status(401).send("Authentication required.");
   };
   app.use("/admin/queues", protect, serverAdapter.getRouter());
-  app.use(
-    "/admin/jobs",
-    (req, res, next) => {
+
+  const middlewares = [
+    (req: Request, res: Response, next: NextFunction) => {
       if (req.headers["x-api-key"] !== config.adminApiKey)
         return res.status(401).end();
       return next();
     },
     express.json(),
+  ];
+  app.post(
+    "/admin/jobs/release-edition",
+    ...middlewares,
+    jobsController.handleReleaseEdition,
+  );
+  app.use(
+    "/admin/jobs/broadcast",
+    ...middlewares,
     jobsController.handleBroadcast,
   );
 };
@@ -131,6 +140,11 @@ const makeSubscriptionsRouter = (
 ) => {
   const r = Router();
   r.get("/thank-you", subscriptionsController.handleThankYouPage);
+  r.post(
+    "/cancel",
+    authGuard,
+    subscriptionsController.handleCancelSubscription,
+  );
   r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
   r.post(
     "/create",
@@ -170,39 +184,23 @@ export const makeWebhooksRouter = (
   app: Application,
   webhookController: WebhookController,
 ) => {
-  makePaymentsRouter(app, webhookController);
-  makeEmailsWebookRouter(app, webhookController);
-};
-
-const makeEmailsWebookRouter = (
-  app: Application,
-  webhookController: WebhookController,
-) => {
   const r = express.Router();
   r.post(
-    "/webhook",
+    "/emails/webhook",
     bodyParser.raw({ type: "application/json" }),
     webhookController.handleRecordEmailInteraction,
   );
-  app.use("/api/integrations/emails", r);
-};
 
-const makePaymentsRouter = (
-  app: Application,
-  webhookController: WebhookController,
-) => {
-  const r = express.Router();
   r.post(
-    "/webhook",
+    "/payments/webhook",
     bodyParser.raw({ type: "application/json" }),
     webhookController.handlePayments,
   );
-  r.get("/redirect", (req, res) => {
+  r.get("/payments/redirect", (req, res) => {
     res.status(StatusCodes.OK).json(req.body);
   });
-  app.use("/api/integrations/payments", r);
+  app.use("/api/integrations", r);
 };
-
 const makeEditionsAccessRouter = (
   authGuard: AuthGuard,
   ctrl: EditionsAccessController,

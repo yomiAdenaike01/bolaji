@@ -19,6 +19,29 @@ export class JobController {
     private readonly config: Config,
     private readonly domain: Domain,
   ) {}
+
+  handleReleaseEdition = async (req: Request, res: Response) => {
+    try {
+      const { edition, releaseDate } = z
+        .object({
+          edition: z.number().nonnegative(),
+          releaseDate: z.date().optional().nullable(),
+        })
+        .parse(req.body);
+
+      const job = await this.domain.jobQueues.queueRelease(
+        edition,
+        releaseDate || undefined,
+      );
+      res.status(200).json({ id: job.id, error: null });
+    } catch (error) {
+      logger.error(
+        `[JobController::handleReleaseEdition]: Failed to release edition=${req.body.edition} err=${(error as any).message}`,
+      );
+      res.status(500).json({ id: null, error: (error as any)?.message });
+    }
+  };
+
   handleBroadcast = async (req: Request, res: Response) => {
     try {
       const { recipients, campaign, subject } = z

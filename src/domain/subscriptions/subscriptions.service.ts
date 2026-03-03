@@ -23,6 +23,9 @@ import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
 import { Config } from "@/config";
 import { PricingService } from "../pricing.service";
+import { EditionStatus } from "@prisma/client";
+import { EditionsService } from "../editions.service";
+import z from "zod";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {
@@ -37,7 +40,120 @@ export class SubscriptionsService {
     private readonly config: Config,
     private readonly queues: JobsQueues,
     private readonly pricingService: PricingService,
+    private readonly editionsService: EditionsService,
   ) {}
+
+  resumeSubscription = async (userId: string) => {
+    const subscription =
+      await this.integrations.payments.resumeSubscription(userId);
+    this.db.$transaction((tx) =>
+      Promise.all([
+        tx.subscription.update({
+          where: {
+            stripeSubscriptionId: subscription.id,
+            status: {
+              not: SubscriptionStatus.ACTIVE,
+            },
+          },
+          data: {
+            status: SubscriptionStatus.ACTIVE,
+            canceledAt: null,
+            cancelReason: null,
+          },
+        }),
+        tx.user.update({
+          where: { id: userId },
+          data: { status: UserStatus.ACTIVE },
+        }),
+      ]),
+    );
+    await this.db.subscription.update({
+      where: {
+        stripeSubscriptionId: subscription.id,
+      },
+      data: {
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+    return null;
+  };
+
+  cancelSubscription = async (userId: string) => {
+    try {
+      const uid = z.string().parse(userId);
+      const subscription = await this.db.subscription.findFirst({
+        where: {
+          userId: uid,
+          status: SubscriptionStatus.ACTIVE,
+        },
+        include: {
+          user: {
+            select: {
+              email: true,
+              name: true,
+            },
+          },
+          plan: {
+            select: {
+              type: true,
+            },
+          },
+        },
+      });
+
+      if (!subscription || !subscription.stripeSubscriptionId) {
+        logger.info(
+          `[Subscription Service] Failed to find subscription userId=${userId} || no stripeSubscriptionId found subscriptionId=${subscription?.id}`,
+        );
+        return;
+      }
+
+      const cancelledSubscription =
+        await this.integrations.payments.cancelSubscription(
+          subscription?.stripeSubscriptionId,
+        );
+      if (!cancelledSubscription)
+        logger.info(
+          "[Subscription Service]: Failed to cancel stripe subscription",
+        );
+      await this.db.subscription.update({
+        where: {
+          id: subscription.id,
+          status: SubscriptionStatus.ACTIVE,
+        },
+        data: {
+          status: SubscriptionStatus.CANCELED,
+        },
+      });
+      logger.info(
+        `[Subscription Service]: Successfully cancelled subscription userId=${userId} subscriptionId=${subscription.id}`,
+      );
+
+      this.integrations.adminEmail
+        .send({
+          content: {
+            canceledAt: new Date(
+              cancelledSubscription?.ended_at || Date.now(),
+            ).toISOString(),
+            email: subscription.user.email,
+            name: subscription.user.name || "Unknown",
+            plan: subscription.plan.type,
+          },
+          type: AdminEmailType.SUBSCRIPTION_CANCELED,
+        })
+        .catch((err) => {
+          logger.error(
+            err,
+            "[Subscription Service] Failed to send subscription cancelled admin email",
+          );
+        });
+    } catch (err) {
+      logger.error(
+        `[Subscription Service]: Failed to cancel subscription err=${(err as any).message}`,
+      );
+      throw err;
+    }
+  };
 
   private getNextAvaliableEditionForSubscription = async (
     tx: Db | TransactionClient,
@@ -51,7 +167,7 @@ export class SubscriptionsService {
             gte: 1,
           },
         },
-        select: { id: true, number: true },
+        select: { id: true, number: true, status: true },
       }),
       tx.editionAccess.findMany({
         where: { userId: userId },
@@ -69,8 +185,8 @@ export class SubscriptionsService {
     planId: string;
     userId: string;
   }) => {
-    const [plan, user] = await this.db.$transaction(async (tx) => {
-      return Promise.all([
+    const [plan, user] = await this.db.$transaction((tx) =>
+      Promise.all([
         tx.subscriptionPlan.findUniqueOrThrow({
           where: {
             id: planId,
@@ -81,23 +197,29 @@ export class SubscriptionsService {
             id: userId,
           },
         }),
-      ]);
-    });
+      ]),
+    );
     if (!user.name) throw new Error("User not found");
-    this.integrations.adminEmail.send({
-      type: AdminEmailType.SUBSCRIPTION_STARTED,
-      attachReport: true,
-      content: {
-        plan: plan.type,
-        email: user.email,
-        name: user.name,
-        periodStart: new Date().toISOString(),
-        periodEnd: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-        ).toISOString(),
-      },
-    });
+    this.integrations.adminEmail
+      .send({
+        type: AdminEmailType.SUBSCRIPTION_STARTED,
+        attachReport: true,
+        content: {
+          plan: plan.type,
+          email: user.email,
+          name: user.name,
+          periodStart: new Date().toISOString(),
+          periodEnd: new Date(
+            new Date().getFullYear(),
+            new Date().getMonth() + 1,
+          ).toISOString(),
+        },
+      })
+      .catch((err) => {
+        logger.error(
+          `[Subscription Service]: Failed to send subscription started email err=${(err as any).message || "Unknown"}`,
+        );
+      });
   };
   onSubscriptionUpdate = async (params: UpdateSubscriptionInput) => {
     const {
@@ -108,8 +230,9 @@ export class SubscriptionsService {
       subscriptionPlanId,
       stripeInvoiceId,
       addressId,
-      isNewSubscription = false,
     } = params;
+
+    let isNewSubscription = params.isNewSubscription;
 
     const result = await this.db.$transaction(async (tx) => {
       logger.info(
@@ -125,10 +248,13 @@ export class SubscriptionsService {
         }),
       ]);
 
-      if (existingSubscription)
+      if (existingSubscription) {
+        isNewSubscription = false;
         logger.info(
           `[Subscription Service] Existing subscription found id=${existingSubscription.id}`,
         );
+      }
+
       if (subscriptionPlan)
         logger.info(
           `[Subscription Service] Existing subscriptionPlan found id=${subscriptionPlan.id}`,
@@ -198,13 +324,13 @@ export class SubscriptionsService {
         logger.info(
           `[Subscriptions Service] User ${existingSubscription.userId} already has all editions unlocked.`,
         );
-        return { updatedSubscription, nextEdition: null };
+        return { updatedSubscription, nextEdition: null, isNewSubscription };
       }
 
       logger.info(
         `[Subscriptions Service] Subscription ${subscriptionId} renewed → Edition ${nextEdition.number} unlocked.`,
       );
-      // 🔀 unlock next edition
+      const isNextEditionReleased = nextEdition.status === EditionStatus.ACTIVE;
       const shouldEditionExpire = subscriptionPlan.type !== PlanType.PHYSICAL;
       logger.info(
         `[Subscription Service] Updating edition access for user=${existingSubscription.userId} nextEditionId=${nextEdition.id} nextEditionNumber=${nextEdition.number}`,
@@ -220,14 +346,19 @@ export class SubscriptionsService {
         update: {},
         create: {
           accessType: subscriptionPlan.type,
-          status: AccessStatus.SCHEDULED,
+          status: isNextEditionReleased
+            ? AccessStatus.ACTIVE
+            : AccessStatus.SCHEDULED,
           expiresAt: shouldEditionExpire ? addYears(new Date(), 2) : null,
           userId: existingSubscription.userId,
           editionId: nextEdition.id,
           subscriptionId: updatedSubscription.id,
         },
       });
-      if (!addressId) return { updatedSubscription, nextEdition };
+
+      if (!addressId)
+        return { updatedSubscription, nextEdition, isNewSubscription };
+
       logger.info(
         `[Subscription Service] Creating shipment for userId=${existingSubscription.userId} `,
       );
@@ -242,7 +373,7 @@ export class SubscriptionsService {
       logger.info(
         `[Subscription Service] Successfully created shipment for userId=${existingSubscription.userId} addressId=${shipment.addressId} editionId=${shipment.editionId}`,
       );
-      return { updatedSubscription, nextEdition };
+      return { updatedSubscription, nextEdition, isNewSubscription };
     });
     if (isNewSubscription)
       try {
@@ -261,8 +392,11 @@ export class SubscriptionsService {
           `[Subscription Service]: Failed to set user - ${result.updatedSubscription.user.id} status to ACTIVE`,
         );
       }
-
-    return result;
+    if (result.updatedSubscription.userId)
+      await this.editionsService.invalidateEditionAccess(
+        result.updatedSubscription.userId,
+      );
+    return { ...result, isNewSubscription };
   };
 
   private findExistingDbSubscription = async ({
@@ -318,7 +452,10 @@ export class SubscriptionsService {
     let shippingCents: number | undefined = undefined;
     let shippingZone: string | undefined = undefined;
     if (!input.userId) {
-      logger.info(input, `[Subscription Service] No userId found, creating with input`)
+      logger.info(
+        input,
+        `[Subscription Service] No userId found, creating with input`,
+      );
       const password = crypto.randomBytes(4).toString("hex");
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await this.db.user.upsert({
@@ -360,9 +497,7 @@ export class SubscriptionsService {
       const plan = await this.db.subscriptionPlan.findFirstOrThrow({
         where: { type: input.plan },
       });
-      // 1️⃣ Resolve plan
 
-      // 2️⃣ Validate address if provided
       if (input.addressId) {
         logger.info(
           `[Subscription Service] Validating address id=${input.addressId} for userId=${userId}`,
@@ -377,7 +512,6 @@ export class SubscriptionsService {
         );
       }
 
-      // 3️⃣ Find existing subscription (if any)
       const { subscription: existingSub, user } =
         await this.findExistingDbSubscription({
           userId: userId,
@@ -400,7 +534,6 @@ export class SubscriptionsService {
           );
       }
 
-      // 4️⃣ Create address if supplied in payload
       if (input.address) {
         logger.info(
           `[Subscription Service] Creating new address for userId=${userId}`,
@@ -443,15 +576,14 @@ export class SubscriptionsService {
 
         if (checkoutSession && checkoutSession.url) {
           logger.info(
-            `[Subscription Service] ✅ Reusing existing checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
+            `[Subscription Service]  Reusing existing checkout session for userId=${user.id}, sessionId=${existingSub.stripeCheckoutSessionId}`,
           );
 
           return { checkoutUrl: checkoutSession.url };
         }
 
-        // If Stripe session retrieval fails, mark it invalid and proceed to recreate
         logger.warn(
-          `[Subscription Service] ⚠️ Stored Stripe sessionId=${existingSub.stripeCheckoutSessionId} is invalid or expired. Cleaning up and creating new one.`,
+          `[Subscription Service] Stored Stripe sessionId=${existingSub.stripeCheckoutSessionId} is invalid or expired. Cleaning up and creating new one.`,
         );
 
         try {
@@ -463,12 +595,12 @@ export class SubscriptionsService {
             },
           });
           logger.info(
-            `[Subscription Service] ✅ Cleared invalid checkout session for subscriptionId=${existingSub.id}`,
+            `[Subscription Service] Cleared invalid checkout session for subscriptionId=${existingSub.id}`,
           );
         } catch (err) {
           logger.error(
             err,
-            `[Subscription Service] ❌ Failed to clear invalid session for subscriptionId=${existingSub.id}`,
+            `[Subscription Service] Failed to clear invalid session for subscriptionId=${existingSub.id}`,
           );
         }
       }
@@ -504,7 +636,7 @@ export class SubscriptionsService {
             }),
           );
       logger.info(
-        `[Subscription Service] ✅ Placeholder subscription created id=${placeholder.id}`,
+        `[Subscription Service] Placeholder subscription created id=${placeholder.id}`,
       );
 
       const ensurePricePromise = this.integrations.payments.ensureStripePrice(
@@ -552,7 +684,6 @@ export class SubscriptionsService {
         ensureCustomerPromise,
       ]);
 
-      // 9️⃣ Generate idempotency key
       const idempotencyKey = crypto
         .createHash("sha256")
         .update(`sub:${user.id}:${plan.id}:${Math.floor(Date.now() / 10000)}`)
@@ -562,7 +693,6 @@ export class SubscriptionsService {
         `[Subscription Service] Generated idempotencyKey=${idempotencyKey.slice(0, 12)}…`,
       );
 
-      // 🔟 Create Stripe Checkout Session
       logger.info(
         `[Subscription Service] Creating Stripe checkout session for userId=${user.id}, planId=${plan.id}, customerId=${customerId}`,
       );
@@ -570,7 +700,7 @@ export class SubscriptionsService {
       const metadata = {
         userId: user.id,
         planId: plan.id,
-        successUrl: `${this.config.serverUrl}/subscriptions/thank-you`,
+        successUrl: `${this.config.serverUrl}/subscriptions/thank-you?planType=${plan.type}`,
         cancelUrl: `${this.config.serverUrl}/subscriptions/cancel`,
         stripeCustomerId: customerId,
         priceId,
@@ -643,7 +773,6 @@ export class SubscriptionsService {
         )}s`,
       );
 
-      // 12️⃣ Return checkout URL
       return { checkoutUrl };
     } catch (err: any) {
       logger.error(

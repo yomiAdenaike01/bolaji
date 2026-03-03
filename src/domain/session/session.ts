@@ -148,9 +148,6 @@ export class SessionService {
     return { accessToken, refreshToken };
   };
 
-  // ─────────────────────────────────────────────
-  // 🔎 JWT VERIFICATION
-  // ─────────────────────────────────────────────
   parseOrThrow = (token: string, type: "access" | "refresh" = "access") => {
     try {
       const secret =
@@ -183,9 +180,6 @@ export class SessionService {
     }
   };
 
-  // ─────────────────────────────────────────────
-  // 🔁 REFRESH ACCESS TOKEN
-  // ─────────────────────────────────────────────
   refreshAccessToken = async (accessToken: string) => {
     const decoded = jwt.decode(accessToken) as {
       sub: string;
@@ -214,9 +208,6 @@ export class SessionService {
     return { accessToken: newAccess };
   };
 
-  // ─────────────────────────────────────────────
-  // 🧱 REDIS SESSION HANDLING
-  // ─────────────────────────────────────────────
   async createSession(
     userId: string,
     email: string,
@@ -272,9 +263,6 @@ export class SessionService {
     logger.info(`[Session] Deleted session ${sessionId}`);
   }
 
-  // ─────────────────────────────────────────────
-  // 🎯 FIELD-LEVEL SESSION UPDATES
-  // ─────────────────────────────────────────────
   async updateSessionProperty(
     sessionId: string,
     updates: Record<string, string | number | null>,
@@ -337,9 +325,6 @@ export class SessionService {
     };
   };
 
-  // ─────────────────────────────────────────────
-  // 🕒 AUTO REFRESH CHECK
-  // ─────────────────────────────────────────────
   async checkAndRefreshAccessToken(accessToken: string, thresholdSeconds = 30) {
     const decoded = jwt.decode(accessToken) as any;
     if (!decoded?.exp) throw createHttpError.BadRequest("Invalid access token");

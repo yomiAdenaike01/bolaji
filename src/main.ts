@@ -9,14 +9,11 @@ import { initWeb } from "./web/web";
 const bootstrap = async () => {
   const config = initConfig();
 
-  // 1️⃣ Await store initialization
   const store = await initStore(config);
-  const { db, initWorkers } = initInfra(config, store); // adjust as needed\
+  const { db, initWorkers } = initInfra(config, store);
 
-  // 2️⃣ Await domain init after Redis ready
   const domain = await initDomain(config, store, db);
 
-  // 3️⃣ Start workers and web
   await initWorkers(domain);
   const web = initWeb(domain, store, config);
 

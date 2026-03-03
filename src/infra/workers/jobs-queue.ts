@@ -1,11 +1,7 @@
-import {
-  EDITION_00_RELEASE,
-  EDITION_01_RELEASE,
-  PREORDER_OPENING_DATETIME,
-} from "@/constants";
+import { PREORDER_OPENING_DATETIME } from "@/constants";
 import { logger } from "@/lib/logger";
 import { JobsOptions, Queue } from "bullmq";
-import { differenceInMilliseconds, addHours } from "date-fns";
+import { differenceInMilliseconds, addHours, isAfter } from "date-fns";
 
 /**
  * Centralized BullMQ queue manager
@@ -52,7 +48,6 @@ export class JobsQueues {
   }
 
   private async init() {
-    await this.queueReleaseJobs();
     if (this.env !== "production") return;
     await this.queueAdminDigestJobs();
   }
@@ -61,6 +56,22 @@ export class JobsQueues {
   public readonly getPaymentsQueue = () => this.stripePaymentsQueue;
   public readonly getEditionsQueue = () => this.editionReleasesQueue;
 
+  queueRelease = (editionNum: number, releaseDate?: Date) => {
+    return this.editionReleasesQueue.add(
+      "edition-release",
+      {
+        edition: editionNum,
+      },
+      releaseDate
+        ? {
+            delay: Math.max(
+              differenceInMilliseconds(releaseDate, Date.now()),
+              0,
+            ),
+          }
+        : undefined,
+    );
+  };
   private async addIfFuture(
     queue: Queue,
     jobName: string,
@@ -98,22 +109,6 @@ export class JobsQueues {
     });
 
     logger.info(`[Scheduler] ✅ Queued ${jobName} for ${date.toISOString()}`);
-  }
-
-  private async queueReleaseJobs() {
-    logger.info("[Scheduler] Checking edition release jobs...");
-
-    await this.editionReleasesQueue.add(
-      "edition-monthly",
-      { task: "auto-release-next-edition" },
-      {
-        repeat: { pattern: "0 17 1 * *" }, // every 1st of month at 9:00 UTC
-        jobId: "monthly-edition-release",
-        removeOnComplete: true,
-      },
-    );
-
-    logger.info("[Scheduler] Edition release jobs check complete ✅");
   }
 
   private async queueAdminDigestJobs() {

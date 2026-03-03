@@ -1,14 +1,11 @@
 import { PlanType } from "@/generated/prisma/enums";
-import {
-  EmailType,
-  EmailContentMap,
-} from "./email-types";
+import { EmailType, EmailContentMap } from "./email-types";
 import { format } from "date-fns";
 import { EDITION_00_RELEASE } from "@/constants";
 import { getPreorderReleaseContent } from "./email-templates/preorder-rekease";
 import { wrap } from "./email-templates/email-wrapper";
-import { readFile } from 'fs/promises';
-import path from 'path'
+import { readFile } from "fs/promises";
+import path from "path";
 
 const formatDate = (date: Date | string | number) => {
   const day = format(date, "d"); // day number without leading zero
@@ -46,13 +43,13 @@ const renderPassword = (password: string, subtitle?: string) => {
 };
 
 export const templates: {
-  [K in EmailType]: (
-    content:  EmailContentMap[K]
-  ) => string | Promise<string>;
+  [K in EmailType]: (content: EmailContentMap[K]) => string | Promise<string>;
 } = {
   [EmailType.EDITIONS_INTRODUCTION]: async () => {
-    const templatePath = path.resolve('./assets/emails/introduction-email/index.html')
-    return await readFile(templatePath,{encoding:'utf-8'})
+    const templatePath = path.resolve(
+      "./assets/emails/introduction-email/index.html",
+    );
+    return await readFile(templatePath, { encoding: "utf-8" });
   },
   [EmailType.SUBSCRIPTION_FAILED_TO_START]: ({
     name,
@@ -294,34 +291,24 @@ export const templates: {
       "Your Subscription Has Begun",
       `
     <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:20px;">
-      Welcome back, ${name.split(" ")[0]}!
+      Welcome, ${name.split(" ")[0]}!
     </h2>
 
     <p style="font-family:Inter,Arial,sans-serif;color:#222;font-size:15px;line-height:1.7;margin:0 0 14px;">
-      Your Bolaji Editions <strong>${planType}</strong> subscription ${
-        isPrerelease ? "will be active from the 1st December" : "is now active"
-      }. ${
-        isPrerelease
-          ? planType !== PlanType.DIGITAL
-            ? "Edition 01 releases on 1st December."
-            : `You will receive your first edition in <strong>December</strong> along with an email notifying you of its release.`
-          : ""
-      }
-      Every month, a new edition is released, and a notification will appear in your account as soon as they are published.
-      Your full access will begin from the 1st December with Edition ${nextEdition}.
+      Thank you for subscribing to the ${(planType === PlanType.FULL ? "all access" : planType).toLowerCase()} edition of Bolaji Editions.
     </p>
 
     <p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
-      You’ll automatically receive each new Edition as it’s released every month.
-      ${
-        planType === PlanType.DIGITAL || planType === PlanType.FULL
-          ? "Your digital editions will appear in your account as soon as they’re published."
-          : ""
-      }
-      ${planType === PlanType.FULL || planType === PlanType.PHYSICAL ? "You will be notified when your edition has been released for shipping" : ""} 
+      Bolaji Editions is an art publication exploring creative ideas, belief systems, and the structures that shape how we think and act. It brings together words, audio, and visual content in a format designed to question, challenge, and build.
     </p>
 
-    ${newPassword ? renderPassword(newPassword, isPrerelease ? `You'll be able to login from <strong>1st December</strong>. ${defaultPasswordSubtitle}` : "") : ""}
+<p style="font-family:Inter,Arial,sans-serif;color:#444;font-size:14px;line-height:1.6;margin:0 0 20px;">
+${planType === PlanType.DIGITAL ? "You now have immediate access to Edition 01. Each edition is released monthly. Your next edition will become available next month, and you’ll receive an email as soon as it’s live." : ""}
+${planType === PlanType.PHYSICAL ? `Your subscription runs on a monthly cycle. We’ll notify you as soon as your first physical edition is dispatched. Each subsequent edition will follow monthly, with confirmation when it’s on its way.` : ""}
+${planType === PlanType.FULL ? `You now have immediate access to Edition 01 digitally. Your physical copy will follow within the monthly release cycle, and we’ll notify you when it has been dispatched. Each new edition will be released monthly, with access continuing as your subscription unfolds.` : ""}
+    </p>
+
+    ${newPassword && planType !== PlanType.PHYSICAL ? renderPassword(newPassword, isPrerelease ? `You'll be able to login from <strong>1st December</strong>. ${defaultPasswordSubtitle}` : "") : ""}
 
     <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;">
       We’re thrilled to have you on this journey. Each month, your subscription supports
@@ -340,7 +327,11 @@ export const templates: {
     );
   },
 
-  [EmailType.SUBSCRIPTION_RENEWED]: ({ name, nextEdition }) =>
+  [EmailType.SUBSCRIPTION_RENEWED]: ({
+    name,
+    nextEdition,
+    hasNextEditionReleased,
+  }) =>
     wrap(
       "Subscription Renewed",
       `
@@ -351,7 +342,7 @@ export const templates: {
         Your Bolaji Editions subscription has been renewed successfully.
       </p>
       <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
-        Next up: <strong>Edition&nbsp;${nextEdition}</strong> — we’ll notify you when it’s released.
+        Next up: <strong>Edition&nbsp;${nextEdition}</strong> ${hasNextEditionReleased ? "" : "— we’ll notify you when it’s released"}.
       </p>
       <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:18px;">
         Thank you for being part of our creative community.
@@ -405,7 +396,8 @@ export const templates: {
 };
 
 export const subjects: Record<EmailType, string> = {
-  [EmailType.EDITIONS_INTRODUCTION]: 'Private Invitation: The Editions Are Open',
+  [EmailType.EDITIONS_INTRODUCTION]:
+    "Private Invitation: The Editions Are Open",
   [EmailType.EDITION_00_DIGITAL_RELEASE]:
     "Your Access to Bolaji Editions 0.0 Is Now Live",
   [EmailType.REGISTER]: "Welcome to Bolaji Editions — your account is ready!",

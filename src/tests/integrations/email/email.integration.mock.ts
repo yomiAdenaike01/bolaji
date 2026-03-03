@@ -16,7 +16,8 @@ const mockEdition = {
 const mockUserEmails = (config: Config) => {
   const baseMocks: Record<
     EmailType,
-    EmailContentMap[keyof EmailContentMap] | Array<EmailContentMap[keyof EmailContentMap]>
+    | EmailContentMap[keyof EmailContentMap]
+    | Array<EmailContentMap[keyof EmailContentMap]>
   > = {
     [EmailType.EDITIONS_INTRODUCTION]: undefined,
     [EmailType.EDITION_00_DIGITAL_RELEASE]: [
@@ -40,6 +41,18 @@ const mockUserEmails = (config: Config) => {
       {
         name: "Ade",
         planType: PlanType.DIGITAL,
+        nextEdition: 1,
+        newPassword: "Password",
+      },
+      {
+        name: "Ade",
+        planType: PlanType.PHYSICAL,
+        nextEdition: 1,
+        newPassword: "Password",
+      },
+      {
+        name: "Ade",
+        planType: PlanType.FULL,
         nextEdition: 1,
         newPassword: "Password",
       },

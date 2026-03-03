@@ -26,6 +26,7 @@ import { isBefore } from "date-fns";
 import { EDITION_01_RELEASE } from "@/constants";
 import { hash } from "crypto";
 import { GeneratedPassword } from "@/domain/password/password.service";
+import { EditionStatus } from "@prisma/client";
 
 const failedPreorderDto = z.object({
   action: z.string(),
@@ -151,17 +152,20 @@ export class PaymentWorker {
 
     if (paymentEvent.type === OrderType.SUBSCRIPTION_RENEWAL) {
       this.isValidOrThrow(paymentEvent, updateSubscriptionInputSchema);
-      const { updatedSubscription, nextEdition } =
-        await this.domain.subscriptions.onSubscriptionUpdate({
-          subscriptionId: paymentEvent.subscriptionId,
-          stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
-          subscriptionPlanId: paymentEvent.subscriptionPlanId,
-          stripeInvoiceId: paymentEvent.stripeInvoiceId,
-          isNewSubscription: paymentEvent.isNewSubscription,
-          addressId: paymentEvent.addressId,
-          currentPeriodEnd: paymentEvent.currentPeriodEnd,
-          currentPeriodStart: paymentEvent.currentPeriodStart,
-        });
+      const {
+        updatedSubscription,
+        nextEdition,
+        isNewSubscription: confirmedIsNewSubscription,
+      } = await this.domain.subscriptions.onSubscriptionUpdate({
+        subscriptionId: paymentEvent.subscriptionId,
+        stripeSubscriptionId: paymentEvent.stripeSubscriptionId,
+        subscriptionPlanId: paymentEvent.subscriptionPlanId,
+        stripeInvoiceId: paymentEvent.stripeInvoiceId,
+        isNewSubscription: paymentEvent.isNewSubscription,
+        addressId: paymentEvent.addressId,
+        currentPeriodEnd: paymentEvent.currentPeriodEnd,
+        currentPeriodStart: paymentEvent.currentPeriodStart,
+      });
 
       const { user, plan } = updatedSubscription;
       if (!user.name || !user.email)
@@ -171,7 +175,7 @@ export class PaymentWorker {
       logger.info(
         "[Subscription Service] 🎉 Successfully completed subscription transactions",
       );
-      if (paymentEvent.isNewSubscription) {
+      if (confirmedIsNewSubscription) {
         let passwordDetails: GeneratedPassword =
           await this.domain.password.generatePassword();
         // if the user has preordered then don't set a password
@@ -196,58 +200,71 @@ export class PaymentWorker {
           }
           return shouldUpdatePwd;
         });
-        this.domain.integrations.email.sendEmail({
-          type: EmailType.SUBSCRIPTION_STARTED,
-          email: user.email,
-          content: {
-            name: user.name,
+        Promise.all([
+          this.domain.integrations.email.sendEmail({
+            type: EmailType.SUBSCRIPTION_STARTED,
             email: user.email,
-            nextEdition: padNumber(nextEdition?.number || 0),
-            planType: plan.type,
-            newPassword: shouldUpdatePassword
-              ? passwordDetails?.plainPassword
-              : undefined,
-            isPrerelease: isBefore(Date.now(), EDITION_01_RELEASE),
-          },
-        });
-        this.domain.integrations.adminEmail.send({
-          type: AdminEmailType.SUBSCRIPTION_STARTED,
-          attachReport: true,
-          content: {
-            name: user.name,
-            email: user.email,
-            plan: plan.type,
-            periodStart: updatedSubscription.currentPeriodStart,
-            periodEnd: updatedSubscription.currentPeriodEnd,
-          },
-        });
+            content: {
+              name: user.name,
+              email: user.email,
+              nextEdition: padNumber(nextEdition?.number || 0),
+              planType: plan.type,
+              newPassword: shouldUpdatePassword
+                ? passwordDetails?.plainPassword
+                : undefined,
+              isPrerelease: isBefore(Date.now(), EDITION_01_RELEASE),
+            },
+          }),
+          this.domain.integrations.adminEmail.send({
+            type: AdminEmailType.SUBSCRIPTION_STARTED,
+            attachReport: true,
+            content: {
+              name: user.name,
+              email: user.email,
+              plan: plan.type,
+              periodStart: updatedSubscription.currentPeriodStart,
+              periodEnd: updatedSubscription.currentPeriodEnd,
+            },
+          }),
+        ]).catch((err) =>
+          logger.error(
+            err,
+            "[Payment Worker]: Failed to send subscription started emails",
+          ),
+        );
+
         logger.info(
-          "[Subscription Service] 🎉 Successfully sent subscription created comms",
+          "[Payment Worker] 🎉 Successfully sent subscription created comms",
         );
       } else {
-        this.domain.integrations.email.sendEmail({
-          type: EmailType.SUBSCRIPTION_RENEWED,
-          email: user.email,
-          content: {
-            name: user.name,
+        Promise.all([
+          this.domain.integrations.email.sendEmail({
+            type: EmailType.SUBSCRIPTION_RENEWED,
             email: user.email,
-            nextEdition: nextEdition?.number,
-          },
-        });
-        this.domain.integrations.adminEmail.send({
-          type: AdminEmailType.SUBSCRIPTION_RENEWED,
-          content: {
-            name: user.name,
-            email: user.email,
-            plan: plan.type,
-            renewedAt: new Date().toISOString(),
-            nextPeriodEnd: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-          },
-        });
+            content: {
+              name: user.name,
+              email: user.email,
+              nextEdition: nextEdition?.number,
+              hasNextEditionReleased:
+                nextEdition?.status === EditionStatus.ACTIVE,
+            },
+          }),
+          this.domain.integrations.adminEmail.send({
+            type: AdminEmailType.SUBSCRIPTION_RENEWED,
+            content: {
+              name: user.name,
+              email: user.email,
+              plan: plan.type,
+              renewedAt: new Date().toISOString(),
+              nextPeriodEnd: new Date(
+                Date.now() + 30 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            },
+          }),
+        ]);
+
         logger.info(
-          "[Subscription Service] 🎉 Successfully sent subscription renewed comms",
+          "[Payment Worker] 🎉 Successfully sent subscription renewed comms",
         );
       }
 
