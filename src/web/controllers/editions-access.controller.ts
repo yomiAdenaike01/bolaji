@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 import z from "zod";
 
 import { Request, Response } from "express";
+import { assertReqUserIdIsDefined } from "../middleware";
 
 export class EditionsAccessController {
   constructor(private readonly domain: Domain) {}
@@ -18,12 +19,9 @@ export class EditionsAccessController {
         edition: +String(req.query.edition),
         hub: req.query.hub,
       });
+    assertReqUserIdIsDefined(req);
 
-    const userId = await this.domain.session.getUserIdOrThrow(
-      (req as any).sessionId,
-    );
-
-    const access = await this.domain.editions.getUserEditionAccess(userId, [
+    const access = await this.domain.editions.getUserEditionAccess(req.userId, [
       PlanType.FULL,
       PlanType.DIGITAL,
     ]);

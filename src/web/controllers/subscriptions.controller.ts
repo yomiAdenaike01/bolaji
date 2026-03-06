@@ -12,13 +12,52 @@ import { logger } from "@/lib/logger";
 import { isBefore } from "date-fns";
 import { EDITION_01_RELEASE } from "@/constants";
 import z from "zod";
+import createHttpError from "http-errors";
+import { assertReqUserIdIsDefined } from "../middleware";
+import { PlanType } from "@prisma/client";
 
 export class SubscriptionsController {
   constructor(
     private readonly domain: Domain,
     private readonly config: Config,
   ) {}
-  handleResumeSubscription = async (req, res) => {
+
+  handleGetAllSubscriptions = async (req: Request, res: Response) => {
+    try {
+      assertReqUserIdIsDefined(req);
+      const subscriptions =
+        await this.domain.subscriptions.getAllActiveSubscriptionsByUserId(
+          req.userId,
+        );
+
+      res.status(StatusCodes.OK).json(
+        subscriptions.map((sub) => ({
+          id: sub.id,
+          type: sub.plan.type === PlanType.FULL ? "ALL ACCESS" : sub.plan.type,
+        })),
+      );
+    } catch (error) {
+      throw createHttpError.InternalServerError("Failed to get subscriptions");
+    }
+  };
+
+  handlePauseSubscription = async (req: Request, res: Response) => {
+    try {
+      assertReqUserIdIsDefined(req);
+      await this.domain.subscriptions.pauseSubscriptionByUserId(
+        req.userId,
+        req.body.subscriptionId,
+      );
+
+      res.status(StatusCodes.OK).json({ success: true });
+    } catch (error) {
+      logger.error(
+        `[Subscription Service]: Failed to pause subscription err=${(error as any).message}`,
+      );
+      throw createHttpError.InternalServerError("Failed to pause subscription");
+    }
+  };
+  handleResumeSubscription = async (req: Request, res: Response) => {
     const { user_id, redirect_url } = z
       .object({
         user_id: z.string().min(1),
@@ -36,16 +75,18 @@ export class SubscriptionsController {
    * @param res
    */
   handleCancelSubscription = async (req: Request, res: Response) => {
+    assertReqUserIdIsDefined(req);
     try {
-      const userId = await this.domain.session.getUserIdOrThrow(
-        (req as any).sessionId,
+      const subscriptionId = z.string().parse(req.body);
+      await this.domain.subscriptions.cancelSubscription(
+        req.userId,
+        subscriptionId,
       );
-      await this.domain.subscriptions.cancelSubscription(userId);
       res.json({ success: true });
     } catch (error) {
       logger.error(
         error,
-        `[SubscriptionsController]: Failed to cancel subscription err=${(error as any).message} sessionId=${(req as any).sessionId}`,
+        `[SubscriptionsController]: Failed to cancel subscription err=${(error as any).message} sessionId=${req.sessionId}`,
       );
       res.json({ success: false });
     }
@@ -82,8 +123,9 @@ export class SubscriptionsController {
     next: NextFunction,
   ) => {
     try {
-      const { userId } = this.domain.session.getUserFromRequestOrThrow(req);
-      const canSubscribe = await this.domain.preorders.canSubscribe(userId);
+      const canSubscribe = await this.domain.preorders.canSubscribe(
+        z.string().parse(req.userId),
+      );
       res.status(StatusCodes.OK).json({ granted: canSubscribe });
     } catch (error) {
       next(error);
@@ -94,8 +136,7 @@ export class SubscriptionsController {
    */
   handleCreateSubscription = async (req: Request, res: Response) => {
     try {
-      const userId =
-        this.domain.session.getUserFromRequest(req)?.userId || req.body.userId;
+      const userId = req.userId || req.body.userId;
       logger.info(
         {
           path: req.originalUrl,

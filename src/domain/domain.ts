@@ -34,16 +34,18 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
     editionsService,
   );
 
+  const notificationService = new NotificationService(
+    integrations.email,
+    integrations.adminEmail,
+    jobQueues,
+    db,
+  );
+
   return {
     pricing: pricingService,
     password: passwordService,
     preorders,
-    notifications: new NotificationService(
-      integrations.email,
-      integrations.adminEmail,
-      jobQueues,
-      db,
-    ),
+    notifications: notificationService,
     editions: editionsService,
     session: new SessionService(appConfig, db, store),
     user: userService,
@@ -57,6 +59,7 @@ export const initDomain = async (appConfig: Config, store: Store, db: Db) => {
       jobQueues,
       pricingService,
       editionsService,
+      notificationService,
     ),
   };
 };

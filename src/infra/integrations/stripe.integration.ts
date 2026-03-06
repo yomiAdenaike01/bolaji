@@ -32,6 +32,18 @@ export class StripeIntegration {
       logger.error(error, "Failed to initlaise stripe");
     }
   }
+
+  pauseSubscription = async (subscriptionId: string) => {
+    const pauseSubscription = await this.stripe.subscriptions.update(
+      subscriptionId,
+      {
+        pause_collection: {
+          behavior: "void",
+        },
+      },
+    );
+    return pauseSubscription;
+  };
   init = async () => {
     await this.shippingPrice.ensure(this.stripe);
   };
@@ -636,10 +648,8 @@ export class StripeIntegration {
       case "checkout.session.completed": {
         const session = event.data.object;
         if (session.payment_status === "paid") {
-          // ✅ Instant success (card, Apple Pay, etc.)
           return this.constructCheckoutEventData(event);
         } else {
-          // ⚠️ Async methods (SEPA, Bacs, etc.) – wait for confirmation
           logger.info(
             `[StripeIntegration] Checkout completed but payment still pending for session=${session.id}`,
           );
@@ -647,19 +657,16 @@ export class StripeIntegration {
         break;
       }
 
-      // 🟢 Async payment confirmation (SEPA, Bacs, etc.)
       case "checkout.session.async_payment_succeeded": {
         return this.handleAsyncPaymentComplete(event);
       }
 
-      // 🔴 Async payment failed (SEPA, Bacs, etc.)
       case "checkout.session.async_payment_failed": {
         return this.handlePreorderOrSubscriptionCheckoutFailure(
           event.data.object as any,
         );
       }
 
-      // 🔴 Direct payment failures (card declined, etc.)
       case "payment_intent.payment_failed":
       case "charge.failed": {
         return this.handlePreorderOrSubscriptionCheckoutFailure(
@@ -667,9 +674,7 @@ export class StripeIntegration {
         );
       }
 
-      // 🟢 Subscription lifecycle
       case "customer.subscription.created": {
-        // First subscription creation (user just subscribed)
         logger.info(
           `[StripeIntegration] Subscription created (id=${event.data.object.id}) — handled via checkout.session.completed.`,
         );
@@ -677,21 +682,15 @@ export class StripeIntegration {
         return null;
       }
 
-      // 🟢 Renewal success
       case "invoice.payment_succeeded": {
-        // Renewal payment succeeded → unlock next edition
         return this.handleRollingSubscription(event);
       }
 
-      // 🔴 Renewal failure (retry attempts start)
       case "invoice.payment_failed": {
-        // Renewal failed → trigger retry email or mark PAST_DUE
         return this.handleInvoiceFailed(event);
       }
 
-      // 🔴 Subscription cancelled (user or failed retries)
       case "customer.subscription.deleted": {
-        // Cancelled → remove from renewal & access cycles
         return this.handleSubscriptionCanceled(event);
       }
 

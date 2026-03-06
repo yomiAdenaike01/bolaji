@@ -67,12 +67,16 @@ export class EditionsService {
   getUserEditionAccess = async (
     userId: string,
     planTypes: PlanType | PlanType[],
+    tx?: TransactionClient,
   ) => {
     const cacheKey = `editionAccess:${userId}`;
     const now = new Date();
-
-    const cached = await this.store.get(cacheKey);
-    if (cached) {
+    if (!tx) {
+      const cached = await this.store.get(cacheKey);
+      if (!cached)
+        throw new Error(
+          "Cannot fetch db details since cached is false and tx client is defined",
+        );
       try {
         return JSON.parse(cached) as ({
           id: string;
@@ -91,7 +95,7 @@ export class EditionsService {
       } catch {}
     }
 
-    const activeAccess = (await this.db.editionAccess.findMany({
+    const activeAccess = (await (tx || this.db).editionAccess.findMany({
       where: {
         userId,
         status: AccessStatus.ACTIVE,

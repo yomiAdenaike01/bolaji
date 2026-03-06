@@ -227,7 +227,7 @@ export class PreorderController {
    */
   handleCreateUserAndPreorder = async (req: Request, res: Response) => {
     const combinedSchema = createUserPreorderInputSchema.safeParse(req.body);
-    const sessionId: string | undefined = (req as any).sessionId;
+    const sessionId: string | undefined = req.sessionId;
 
     if (combinedSchema.error) {
       const { issues } = combinedSchema.error;
@@ -365,9 +365,7 @@ export class PreorderController {
     next: NextFunction,
   ) => {
     try {
-      const userId = await this.domain.session.getUserIdOrThrow(
-        (req as any).sessionId,
-      );
+      const userId = await this.domain.session.getUserIdOrThrow(req.sessionId);
       const canAccess =
         await this.domain.preorders.canAccessPreorderEdition(userId);
       res.status(StatusCodes.OK).json({ granted: canAccess });

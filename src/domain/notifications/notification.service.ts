@@ -1,11 +1,15 @@
 import { AccessStatus, PlanType } from "@/generated/prisma/enums";
 import { Db } from "@/infra";
 import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
-import { EmailType } from "@/infra/integrations/email-types";
+import {
+  AdminEmailType,
+  EmailContentMap,
+  EmailType,
+} from "@/infra/integrations/email-types";
 import { EmailIntegration } from "@/infra/integrations/email.integration";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
 import { logger } from "@/lib/logger";
-import { ZodType } from "zod";
+import z from "zod";
 
 export class NotificationService {
   constructor(
@@ -14,6 +18,77 @@ export class NotificationService {
     private readonly jobQueues: JobsQueues,
     private readonly db: Db,
   ) {}
+
+  notifySubscriptionAction = async (
+    action: "pause" | "cancel",
+    {
+      name,
+      email,
+      plan,
+      editionsAccessDates,
+    }: {
+      name?: string | null;
+      email: string;
+      plan: PlanType;
+      editionsAccessDates?: { number: number; expiryDate: Date }[];
+    },
+  ) => {
+    const nowAsDateString = new Date().toISOString();
+    const pauseEmailContent: EmailContentMap[EmailType.SUBSCRIPTION_PAUSED] = {
+      email,
+      name: name || "User",
+      plan,
+      pausedAt: nowAsDateString,
+    };
+
+    const cancelEmailContent = {
+      name,
+      email,
+      plan,
+      canceledAt: nowAsDateString,
+    };
+
+    const commsEmailConfig: any =
+      {
+        pause: [
+          {
+            content: pauseEmailContent,
+            type: AdminEmailType.SUBSCRIPTION_PAUSED,
+          },
+          {
+            type: EmailType.SUBSCRIPTION_PAUSED,
+            content: pauseEmailContent,
+          },
+        ],
+        cancel: [
+          {
+            type: AdminEmailType.SUBSCRIPTION_CANCELED,
+            content: cancelEmailContent,
+          },
+          {
+            type: EmailType.SUBSCRIPTION_CANCELLED,
+            content: {
+              ...cancelEmailContent,
+              editionsAccessDates,
+            },
+          },
+        ],
+      }[action] || [];
+
+    const [adminEmailConfig, userEmailConfig] = commsEmailConfig;
+
+    if (action === "cancel")
+      z.array(
+        z.object({ number: z.number().nonnegative(), expiryDate: z.date() }),
+      ).parse(userEmailConfig.content.editionsAccessDates);
+
+    const promises = [
+      this.customerEmail.sendEmail({ email, ...userEmailConfig }),
+      this.adminEmail.send(adminEmailConfig),
+    ];
+
+    await Promise.all(promises);
+  };
 
   sendEditionReleaseEmails = async ({
     editionNumber,

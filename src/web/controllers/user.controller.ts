@@ -16,9 +16,7 @@ export class UserController {
     next: NextFunction,
   ) => {
     try {
-      const userId = await this.domain.session.getUserIdOrThrow(
-        (req as any).sessionId,
-      );
+      const userId = await this.domain.session.getUserIdOrThrow(req.sessionId);
       const address = await this.domain.user.findUserAddreses(userId);
       res.status(200).json(address);
       return;
@@ -27,15 +25,11 @@ export class UserController {
     }
   };
   public getUserIdOrUnauthorised = async (req: Request) => {
-    const userId = await this.domain.session.getUserIdOrThrow(
-      (req as any).sessionId,
-    );
+    const userId = await this.domain.session.getUserIdOrThrow(req.sessionId);
   };
 
   handleGetEditionsAccess = async (req: Request, res: Response) => {
-    const userId = await this.domain.session.getUserIdOrThrow(
-      (req as any).sessionId,
-    );
+    const userId = await this.domain.session.getUserIdOrThrow(req.sessionId);
     const currentHubHeader = String(req.headers["x-hub-id"]);
     if (!currentHubHeader) {
       throw createHttpError.Forbidden("Hub not found");

@@ -4,13 +4,15 @@ import express, { type Application } from "express";
 import { Config } from "../config";
 import { initControllers } from "./controllers/controllers";
 import {
-  initOptionalAuth,
-  initTokenAuthGuard,
+  makeOptionalAuthGuard,
+  makeAuthGuard,
   setupErrorHandlers,
   setupMiddlewares,
 } from "./middleware";
-import { makeBullMqRouter, makeWebhooksRouter, setupRouters } from "./router";
+import { setupRouters } from "./router";
 import path from "path";
+import { makeWebhooksRouter } from "./routers/webhooks.router";
+import { makeAdminRouter } from "./routers/admin.router";
 
 export const initWeb = (
   domain: Domain,
@@ -21,19 +23,14 @@ export const initWeb = (
   const app = express();
 
   app.use("/api/images", express.static(path.join(__dirname, "../../assets")));
-  app.use(
-    "/.well-known",
-    express.static(path.join(__dirname, "../../assets/well-known")),
-  );
 
-  makeBullMqRouter(app, config, domain.jobQueues, ctrls.jobs);
-
+  makeAdminRouter(app, config, domain.jobQueues, ctrls.jobs);
   makeWebhooksRouter(app, ctrls.webhooks);
 
   setupMiddlewares(app, store, config);
 
-  const authGuard = initTokenAuthGuard(domain.session);
-  const optionalAuthGuard = initOptionalAuth(domain.session);
+  const authGuard = makeAuthGuard(domain.session);
+  const optionalAuthGuard = makeOptionalAuthGuard(domain.session);
 
   setupRouters(authGuard, optionalAuthGuard, ctrls, app);
 

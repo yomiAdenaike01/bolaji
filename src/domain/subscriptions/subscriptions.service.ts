@@ -20,12 +20,23 @@ import {
 } from "@/generated/prisma/enums";
 import { logger } from "@/lib/logger";
 import { JobsQueues } from "../../infra/workers/jobs-queue";
-import { AdminEmailType, EmailType } from "@/infra/integrations/email-types";
+import {
+  AdminEmailType,
+  EmailContentMap,
+  EmailType,
+} from "@/infra/integrations/email-types";
 import { addYears } from "date-fns";
 import { Config } from "@/config";
 import { PricingService } from "../pricing.service";
 import { EditionsService } from "../editions.service";
 import z from "zod";
+import { NotificationService } from "../notifications/notification.service";
+import {
+  Edition,
+  Subscription,
+  SubscriptionPlan,
+  User,
+} from "@/generated/prisma/client";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {
@@ -41,12 +52,29 @@ export class SubscriptionsService {
     private readonly queues: JobsQueues,
     private readonly pricingService: PricingService,
     private readonly editionsService: EditionsService,
+    private readonly notificationService: NotificationService,
   ) {}
+
+  getAllActiveSubscriptionsByUserId = (userId: string) =>
+    this.db.subscription.findMany({
+      where: {
+        userId,
+        status: SubscriptionStatus.ACTIVE,
+      },
+      include: {
+        plan: {
+          select: {
+            type: true,
+          },
+        },
+      },
+    });
 
   resumeSubscription = async (userId: string) => {
     const subscription =
       await this.integrations.payments.resumeSubscription(userId);
-    this.db.$transaction((tx) =>
+
+    await this.db.$transaction((tx) =>
       Promise.all([
         tx.subscription.update({
           where: {
@@ -77,33 +105,50 @@ export class SubscriptionsService {
     });
     return null;
   };
+  private getActiveSubscriptionAndEditionAccess = async (
+    userId: string,
+    subscriptionId: string,
+  ) => {
+    const [editionsAccess, subscription] = await this.db.$transaction((tx) => {
+      const subscriptionPromise = this.getActiveSubscriptionByUserId(
+        subscriptionId,
+        subscriptionId,
+        tx,
+      );
+      const allPlanTypes = Object.values(PlanType) as PlanType[];
+      const editionsAccessPromise = this.editionsService.getUserEditionAccess(
+        userId,
+        allPlanTypes,
+        tx,
+      );
+      return Promise.all([editionsAccessPromise, subscriptionPromise]);
+    });
 
-  cancelSubscription = async (userId: string) => {
+    const editionExpiries = editionsAccess.map((access) => {
+      return {
+        number: z.number().nonnegative().parse(access.edition?.number),
+        expiryDate: z.date().parse(access.expiresAt),
+      };
+    });
+
+    return { subscription, editionExpiries: editionExpiries };
+  };
+  cancelSubscription = async (userId: string, subscriptionId: string) => {
     try {
-      const uid = z.string().parse(userId);
-      const subscription = await this.db.subscription.findFirst({
-        where: {
-          userId: uid,
-          status: SubscriptionStatus.ACTIVE,
-        },
-        include: {
-          user: {
-            select: {
-              email: true,
-              name: true,
-            },
-          },
-          plan: {
-            select: {
-              type: true,
-            },
-          },
-        },
-      });
+      const { subscription, editionExpiries } =
+        await this.getActiveSubscriptionAndEditionAccess(
+          userId,
+          subscriptionId,
+        );
+
+      if (!subscription)
+        throw new Error(
+          `[Subscription Service]: Failed to fetch subscription by userId=${userId}`,
+        );
 
       if (!subscription || !subscription.stripeSubscriptionId) {
         logger.info(
-          `[Subscription Service] Failed to find subscription userId=${userId} || no stripeSubscriptionId found subscriptionId=${subscription?.id}`,
+          `[Subscription Service]: Failed to find subscription userId=${userId} || no stripeSubscriptionId found subscriptionId=${subscription?.id}`,
         );
         return;
       }
@@ -116,37 +161,39 @@ export class SubscriptionsService {
         logger.info(
           "[Subscription Service]: Failed to cancel stripe subscription",
         );
-      await this.db.subscription.update({
-        where: {
-          id: subscription.id,
-          status: SubscriptionStatus.ACTIVE,
-        },
-        data: {
-          status: SubscriptionStatus.CANCELED,
-        },
-      });
+      await this.db.$transaction((tx) =>
+        Promise.all([
+          tx.subscription.update({
+            where: {
+              id: subscription.id,
+              status: SubscriptionStatus.ACTIVE,
+            },
+            data: {
+              status: SubscriptionStatus.CANCELED,
+              canceledAt: new Date(),
+            },
+          }),
+          tx.user.update({
+            where: {
+              id: userId,
+            },
+            data: {
+              status: UserStatus.DISABLED,
+            },
+          }),
+        ]),
+      );
+
       logger.info(
         `[Subscription Service]: Successfully cancelled subscription userId=${userId} subscriptionId=${subscription.id}`,
       );
 
-      this.integrations.adminEmail
-        .send({
-          content: {
-            canceledAt: new Date(
-              cancelledSubscription?.ended_at || Date.now(),
-            ).toISOString(),
-            email: subscription.user.email,
-            name: subscription.user.name || "Unknown",
-            plan: subscription.plan.type,
-          },
-          type: AdminEmailType.SUBSCRIPTION_CANCELED,
-        })
-        .catch((err) => {
-          logger.error(
-            err,
-            "[Subscription Service] Failed to send subscription cancelled admin email",
-          );
-        });
+      await this.notificationService.notifySubscriptionAction("cancel", {
+        name: subscription.user.name,
+        email: subscription.user.email,
+        plan: subscription.plan.type,
+        editionsAccessDates: editionExpiries,
+      });
     } catch (err) {
       logger.error(
         `[Subscription Service]: Failed to cancel subscription err=${(err as any).message}`,
@@ -356,8 +403,66 @@ export class SubscriptionsService {
       );
     return { ...result, isNewSubscription };
   };
+  private getActiveSubscriptionByUserId = (
+    userId: string,
+    subscriptionId: string,
+    tx?: TransactionClient,
+  ): Promise<
+    (Subscription & { plan: SubscriptionPlan; user: User }) | null
+  > => {
+    return this.db.subscription.findFirst({
+      where: {
+        id: subscriptionId,
+        userId,
+        status: SubscriptionStatus.ACTIVE,
+      },
+      include: {
+        plan: true,
+        user: true,
+      },
+    });
+  };
 
-  private findExistingDbSubscription = async ({
+  pauseSubscriptionByUserId = async (
+    userId: string,
+    subscriptionId: string,
+  ) => {
+    const response = await this.getActiveSubscriptionByUserId(
+      userId,
+      subscriptionId,
+    );
+
+    if (!response)
+      throw new Error(
+        `[Subscription Service]: Failed to find subscription by userId=${userId}`,
+      );
+
+    if (!response?.stripeSubscriptionId)
+      throw new Error(
+        `[Subscription Service]: Payment integration subscriptionId is not attached to subscriptionId=${response.id} userId=${userId}`,
+      );
+
+    const result = await this.integrations.payments.pauseSubscription(
+      response.stripeSubscriptionId,
+    );
+    await this.db.subscription.update({
+      where: {
+        id: response.id,
+        stripeSubscriptionId: result.id,
+      },
+      data: {
+        status: SubscriptionStatus.PAUSED,
+      },
+    });
+
+    await this.notificationService.notifySubscriptionAction("pause", {
+      email: response.user.email,
+      name: response.user.name,
+      plan: response.plan.type,
+    });
+  };
+
+  private getSubscriptionByUserAndPlan = async ({
     userId,
     planId,
   }: {
@@ -471,7 +576,7 @@ export class SubscriptionsService {
       }
 
       const { subscription: existingSub, user } =
-        await this.findExistingDbSubscription({
+        await this.getSubscriptionByUserAndPlan({
           userId: userId,
           planId: plan.id,
         });

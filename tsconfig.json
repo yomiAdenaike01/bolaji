@@ -14,6 +14,10 @@
         "*"
       ]
     },
+    "typeRoots": [
+      "./src/types",
+      "./node_modules/@types"
+    ],
     /* === Strictness (safe locally, tolerant in CI) === */
     "strict": true,
     "noImplicitAny": false, // prevents "implicit any" from breaking builds
@@ -21,10 +25,12 @@
     "noEmitOnError": false, // always emit JS even if type errors exist
     "forceConsistentCasingInFileNames": true
   },
+  "typeRoots": ["./src/types", "./node_modules/@types"],
   /* === Included files === */
   "include": [
     "src"
   ],
+  
   "exclude": [
     "node_modules",
     "dist",

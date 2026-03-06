@@ -114,6 +114,32 @@ const mockUserEmails = (config: Config) => {
         nextEdition: "Edition 02",
       },
     ],
+    [EmailType.SUBSCRIPTION_CANCELLED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        plan: PlanType.FULL,
+        effectiveDate: new Date(),
+        reason: "Requested by user",
+      },
+    ],
+    [EmailType.SUBSCRIPTION_PAUSED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        plan: PlanType.DIGITAL,
+        pausedAt: new Date(),
+        resumeAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    ],
+    [EmailType.SUBSCRIPTION_RESUMED]: [
+      {
+        name: "Ade",
+        email: "email@example.com",
+        plan: PlanType.PHYSICAL,
+        resumedAt: new Date(),
+      },
+    ],
     [EmailType.PREORDER_RELEASED]: [
       {
         name: "Ade",
@@ -180,6 +206,19 @@ export const mockAdminEmails = {
     email: "email@example.com",
     plan: "Full",
     canceledAt: "2025-11-03",
+  },
+  [AdminEmailType.SUBSCRIPTION_PAUSED]: {
+    name: "Ade",
+    email: "email@example.com",
+    plan: "Full",
+    pausedAt: "2025-11-05",
+    resumeAt: "2025-12-05",
+  },
+  [AdminEmailType.SUBSCRIPTION_RESUMED]: {
+    name: "Ade",
+    email: "email@example.com",
+    plan: "Full",
+    resumedAt: "2025-12-06",
   },
   [AdminEmailType.SUPPORT_TICKET_CREATED]: {
     name: "Ade",

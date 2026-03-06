@@ -174,6 +174,44 @@ export const adminEmailTemplates: {
       `,
     ),
 
+  [AdminEmailType.SUBSCRIPTION_PAUSED]: ({
+    name,
+    email,
+    plan,
+    pausedAt,
+    resumeAt,
+  }) =>
+    wrapAdmin(
+      "⏸️ Subscription Paused",
+      `
+      <p><b>User:</b> ${name} (${email})</p>
+      <p><b>Plan:</b> ${plan}</p>
+      <p><b>Paused At:</b> ${formatDate(pausedAt)}</p>
+      ${
+        resumeAt
+          ? `<p><b>Scheduled Resume:</b> ${formatDate(resumeAt)}</p>`
+          : "<p><i>No resume date set.</i></p>"
+      }
+      <p>Billing is on hold until the subscription is resumed.</p>
+      `,
+    ),
+
+  [AdminEmailType.SUBSCRIPTION_RESUMED]: ({
+    name,
+    email,
+    plan,
+    resumedAt,
+  }) =>
+    wrapAdmin(
+      "▶️ Subscription Resumed",
+      `
+      <p><b>User:</b> ${name} (${email})</p>
+      <p><b>Plan:</b> ${plan}</p>
+      <p><b>Resumed At:</b> ${formatDate(resumedAt)}</p>
+      <p>Renewal cycles and edition access are now active again.</p>
+      `,
+    ),
+
   [AdminEmailType.SUPPORT_TICKET_CREATED]: ({
     name,
     email,
@@ -222,6 +260,8 @@ export const adminEmailSubjects: Record<AdminEmailType, string> = {
   [AdminEmailType.SUBSCRIPTION_STARTED]: "💳 New Subscription Started",
   [AdminEmailType.SUBSCRIPTION_RENEWED]: "🔁 Subscription Renewed", // 👈 NEW
   [AdminEmailType.SUBSCRIPTION_CANCELED]: "⛔ Subscription Canceled",
+  [AdminEmailType.SUBSCRIPTION_PAUSED]: "⏸️ Subscription Paused",
+  [AdminEmailType.SUBSCRIPTION_RESUMED]: "▶️ Subscription Resumed",
   [AdminEmailType.SUPPORT_TICKET_CREATED]: "💬 New Support Ticket Created",
   [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: "Daily Subscriber Report",
   [AdminEmailType.WAITLIST_PREORDER_RELEASE_SUMMARY]:

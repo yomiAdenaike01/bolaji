@@ -349,6 +349,105 @@ ${planType === PlanType.FULL ? `You now have immediate access to Edition 01 digi
       </p>
     `,
     ),
+
+  [EmailType.SUBSCRIPTION_CANCELLED]: ({
+    name,
+    plan,
+    editionsAccessDates,
+    reason,
+  }) =>
+    wrap(
+      "Your Subscription Has Been Cancelled",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:14px;">
+        Your ${plan.toLowerCase()} subscription has been cancelled.
+      </p>
+      ${
+        editionsAccessDates
+          ? editionsAccessDates.map(({ number, expiryDate }) => {
+              return `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
+              Edition ${number} access remains active until: <strong>${formatDate(expiryDate)}</strong>.
+            </p>`;
+            })
+          : ""
+      }
+      ${
+        reason
+          ? `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">Reason: ${reason}</p>`
+          : ""
+      }
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;">
+        You can reactivate anytime from your account if you change your mind.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:18px;">
+        — The Bolaji&nbsp;Editions Team
+      </p>
+    `,
+    ),
+
+  [EmailType.SUBSCRIPTION_PAUSED]: ({ name, plan, pausedAt, resumeAt }) =>
+    wrap(
+      "Your Subscription Is Paused",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Hi ${name.split(" ")[0]},
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:14px;">
+        We’ve paused your ${plan.toLowerCase()} subscription as requested.
+      </p>
+      ${
+        pausedAt
+          ? `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:10px;">
+              Pause effective: <strong>${formatDate(pausedAt)}</strong>
+            </p>`
+          : ""
+      }
+      ${
+        resumeAt
+          ? `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
+              Scheduled to resume on <strong>${formatDate(resumeAt)}</strong>.
+            </p>`
+          : `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
+              You can resume anytime from your account dashboard.
+            </p>`
+      }
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;">
+        While paused, future renewals are on hold and new editions won’t unlock.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:18px;">
+        — The Bolaji&nbsp;Editions Team
+      </p>
+    `,
+    ),
+
+  [EmailType.SUBSCRIPTION_RESUMED]: ({ name, plan, resumedAt }) =>
+    wrap(
+      "Your Subscription Has Resumed",
+      `
+      <h2 style="font-family:'Georgia','Times New Roman',serif;color:#111;font-weight:400;font-size:22px;margin-bottom:16px;">
+        Welcome back, ${name.split(" ")[0]}!
+      </h2>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;margin-bottom:14px;">
+        Your ${plan.toLowerCase()} subscription is active again.
+      </p>
+      ${
+        resumedAt
+          ? `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
+              Resumed on <strong>${formatDate(resumedAt)}</strong>.
+            </p>`
+          : ""
+      }
+      <p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#444;line-height:1.6;">
+        You’ll continue receiving new editions and billing on your usual cycle.
+      </p>
+      <p style="font-family:Inter,Arial,sans-serif;font-size:13px;color:#777;margin-top:18px;">
+        — The Bolaji&nbsp;Editions Team
+      </p>
+    `,
+    ),
   [EmailType.EDITION_00_DIGITAL_RELEASE]: ({
     name,
     subscribeLink,
@@ -416,6 +515,12 @@ export const subjects: Record<EmailType, string> = {
     "Your Bolaji Editions subscription is now active!",
   [EmailType.SUBSCRIPTION_FAILED_TO_START]:
     "We couldn’t start your subscription — please retry",
+  [EmailType.SUBSCRIPTION_CANCELLED]:
+    "Your Bolaji Editions subscription has been cancelled",
+  [EmailType.SUBSCRIPTION_PAUSED]:
+    "Your Bolaji Editions subscription is paused",
+  [EmailType.SUBSCRIPTION_RESUMED]:
+    "Your Bolaji Editions subscription has resumed",
   [EmailType.PREORDER_RELEASED_REMINDER]:
     "Bolaji Editions - You're one of the first, preorders now open. Only 24 hours to preorder",
 };

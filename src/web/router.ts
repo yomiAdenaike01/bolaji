@@ -11,7 +11,6 @@ import { AuthController } from "./controllers/auth.controller";
 import { Controllers } from "./controllers/controllers";
 import { FaqController } from "./controllers/faq.controller";
 import { PreorderController } from "./controllers/preorder.controller";
-import { SubscriptionsController } from "./controllers/subscriptions.controller";
 import { UserController } from "./controllers/user.controller";
 import { AuthGuard, OptionalAuthGuard } from "./middleware";
 import { JobsQueues } from "@/infra/workers/jobs-queue";
@@ -22,69 +21,8 @@ import { Config } from "@/config";
 import { EditionsAccessController } from "./controllers/editions-access.controller";
 import { WebhookController } from "./controllers/webhook.controller";
 import { JobController } from "./controllers/job.controller";
-
-export const makeBullMqRouter = (
-  app: Application,
-  config: Config,
-  jobQueues: JobsQueues,
-  jobsController: JobController,
-) => {
-  const serverAdapter = new ExpressAdapter();
-  serverAdapter.setBasePath("/admin/queues");
-
-  createBullBoard({
-    queues: [
-      new BullMQAdapter(jobQueues.getEmailQueue()),
-      new BullMQAdapter(jobQueues.getEditionsQueue()),
-      new BullMQAdapter(jobQueues.getPaymentsQueue()),
-    ],
-    serverAdapter: serverAdapter,
-  });
-
-  const protect = (req: Request, res: Response, next: NextFunction) => {
-    const auth = {
-      login: "admin",
-      password: config.adminApiKey,
-    };
-
-    const b64auth = (req.headers.authorization || "").split(" ")[1] || "";
-    const [login, password] = Buffer.from(b64auth, "base64")
-      .toString()
-      .split(":");
-
-    if (
-      login &&
-      password &&
-      login === auth.login &&
-      password === auth.password
-    ) {
-      return next();
-    }
-
-    res.set("WWW-Authenticate", 'Basic realm="401"');
-    res.status(401).send("Authentication required.");
-  };
-  app.use("/admin/queues", protect, serverAdapter.getRouter());
-
-  const middlewares = [
-    (req: Request, res: Response, next: NextFunction) => {
-      if (req.headers["x-api-key"] !== config.adminApiKey)
-        return res.status(401).end();
-      return next();
-    },
-    express.json(),
-  ];
-  app.post(
-    "/admin/jobs/release-edition",
-    ...middlewares,
-    jobsController.handleReleaseEdition,
-  );
-  app.use(
-    "/admin/jobs/broadcast",
-    ...middlewares,
-    jobsController.handleBroadcast,
-  );
-};
+import { makeSubscriptionsRouter } from "./routers/subscriptions.router";
+import { makeEditionsAccessRouter } from "./routers/editions-access.router";
 
 const makeAuthRouter = (
   authGuard: AuthGuard,
@@ -133,33 +71,6 @@ const makeFaqsRouter = (faqController: FaqController) => {
   return r;
 };
 
-const makeSubscriptionsRouter = (
-  authGuard: AuthGuard,
-  optionalAuthGuard: OptionalAuthGuard,
-  subscriptionsController: SubscriptionsController,
-) => {
-  const r = Router();
-  r.get("/thank-you", subscriptionsController.handleThankYouPage);
-  r.post(
-    "/cancel",
-    authGuard,
-    subscriptionsController.handleCancelSubscription,
-  );
-  r.get("/cancel", subscriptionsController.handleSubscriptionCancelPage);
-  r.post(
-    "/create",
-    optionalAuthGuard,
-    subscriptionsController.handleCreateSubscription,
-  );
-  r.get(
-    "/can-subscribe",
-    authGuard,
-    subscriptionsController.handleCanSubscribe,
-  );
-
-  return r;
-};
-
 const makePreorderRouter = (
   authGuard: AuthGuard,
   preorderController: PreorderController,
@@ -177,37 +88,6 @@ const makePreorderRouter = (
     "/create-user-preorder",
     preorderController.handleCreateUserAndPreorder,
   );
-  return r;
-};
-
-export const makeWebhooksRouter = (
-  app: Application,
-  webhookController: WebhookController,
-) => {
-  const r = express.Router();
-  r.post(
-    "/emails/webhook",
-    bodyParser.raw({ type: "application/json" }),
-    webhookController.handleRecordEmailInteraction,
-  );
-
-  r.post(
-    "/payments/webhook",
-    bodyParser.raw({ type: "application/json" }),
-    webhookController.handlePayments,
-  );
-  r.get("/payments/redirect", (req, res) => {
-    res.status(StatusCodes.OK).json(req.body);
-  });
-  app.use("/api/integrations", r);
-};
-const makeEditionsAccessRouter = (
-  authGuard: AuthGuard,
-  ctrl: EditionsAccessController,
-) => {
-  const r = express.Router();
-
-  r.get("/", authGuard, ctrl.handleHasAccess);
   return r;
 };
 

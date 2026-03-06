@@ -83,7 +83,8 @@ export class SessionService {
     if (!email) throw createHttpError.Unauthorized();
     return email;
   };
-  getUserIdOrThrow = async (sessionId: string) => {
+  getUserIdOrThrow = async (sessionId?: string) => {
+    if (!sessionId) throw createHttpError.Unauthorized();
     const userId = await this.getSessionPropertyOrThrow(sessionId, "userId");
     if (!userId) throw createHttpError.Unauthorized();
     return userId;

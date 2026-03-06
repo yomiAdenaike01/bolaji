@@ -1,9 +1,7 @@
 import express, { Request, Response, NextFunction, Application } from "express";
 import cors from "cors";
-import session from "express-session";
 import cookieParser from "cookie-parser";
 import bodyParser from "body-parser";
-import { RedisStore } from "connect-redis";
 import { logger } from "@/lib/logger";
 import { Store } from "@/infra";
 import { Config } from "@/config";
@@ -11,6 +9,7 @@ import createHttpError, { HttpError } from "http-errors";
 import jwt from "jsonwebtoken";
 import compression from "compression";
 import { SessionService } from "@/domain/session/session";
+import z, { ZodError, ZodType } from "zod";
 
 function shouldCompress(req: any, res: any) {
   if (req.headers["x-no-compression"]) {
@@ -71,24 +70,6 @@ export const setupMiddlewares = (
 
   app.use(bodyParser.urlencoded());
   app.use(cookieParser());
-
-  app.use(
-    session({
-      saveUninitialized: false, // 🟢 don’t send empty sessions
-      resave: false,
-      store: new RedisStore({
-        client: store,
-      }),
-      secret: config.secret,
-      cookie: {
-        maxAge: config.maxAge,
-        sameSite: "none", // ✅ required for Framer cross-domain
-        secure: true, // ✅ works now because trust proxy is set
-        httpOnly: true,
-        partitioned: true,
-      },
-    }),
-  );
 };
 
 export const setupErrorHandlers = (app: Application) => {
@@ -108,7 +89,7 @@ export const setupErrorHandlers = (app: Application) => {
       const message =
         "message" in err && err.message ? err.message : "Internal Server Error";
 
-      logger.error(`❌ ${req.method} ${req.url} (${status}) — ${message}`);
+      logger.error(`${req.method} ${req.url} (${status}) — ${message}`);
 
       res.status(status).json({
         error: message,
@@ -126,7 +107,7 @@ export const setupErrorHandlers = (app: Application) => {
   });
 };
 
-export const initTokenAuthGuard = (session: SessionService) => {
+export const makeAuthGuard = (session: SessionService) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authHeader = req.headers.authorization?.split("Bearer ") || [];
@@ -161,10 +142,10 @@ export const initTokenAuthGuard = (session: SessionService) => {
       }
 
       const tkn = session.parseOrThrow(accessToken, "access");
-      (req as any).sessionId = tkn.sessionId;
-      (req as any).userId = decoded.sub;
-      (req as any).email = decoded.email;
-      (req as any).context = decoded.context;
+      req.sessionId = tkn.sessionId;
+      req.userId = decoded.sub;
+      req.email = decoded.email;
+      req.context = decoded.context;
 
       if (refreshed) res.setHeader("x-new-access-token", accessToken);
 
@@ -175,7 +156,7 @@ export const initTokenAuthGuard = (session: SessionService) => {
   };
 };
 
-export const initOptionalAuth = (session: SessionService) => {
+export const makeOptionalAuthGuard = (session: SessionService) => {
   return async (req, _res, next) => {
     const authHeader = req.headers.authorization?.split("Bearer ")[1];
     if (!authHeader) {
@@ -185,10 +166,10 @@ export const initOptionalAuth = (session: SessionService) => {
 
     try {
       const decoded = session.parseOrThrow(authHeader, "access");
-      (req as any).sessionId = decoded.sessionId;
-      (req as any).userId = decoded.sub;
-      (req as any).email = decoded.email;
-      (req as any).context = decoded.context;
+      req.sessionId = decoded.sessionId;
+      req.userId = decoded.sub;
+      req.email = decoded.email;
+      req.context = decoded.context;
       next();
     } catch {
       // invalid token, ignore and continue (do NOT throw)
@@ -197,5 +178,29 @@ export const initOptionalAuth = (session: SessionService) => {
   };
 };
 
-export type AuthGuard = ReturnType<typeof initTokenAuthGuard>;
-export type OptionalAuthGuard = ReturnType<typeof initOptionalAuth>;
+export type AuthGuard = ReturnType<typeof makeAuthGuard>;
+export type OptionalAuthGuard = ReturnType<typeof makeOptionalAuthGuard>;
+
+export function assertReqUserIdIsDefined(
+  req: Request,
+): asserts req is Request & { userId: string } {
+  z.string().parse(req.userId);
+}
+
+export const validateRequest =
+  <T>(schema: ZodType<T>, property: "query" | "body" | "params" = "body") =>
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const requestData = req[property];
+      schema.parse(requestData);
+      next();
+    } catch (error) {
+      next(
+        createHttpError.BadRequest(
+          error instanceof ZodError
+            ? error.issues.map((e) => e.message).join(",")
+            : (error as any).message,
+        ),
+      );
+    }
+  };

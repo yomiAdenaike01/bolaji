@@ -14,6 +14,8 @@ export enum AdminEmailType {
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED", // 👈 NEW
   SUBSCRIPTION_CANCELED = "SUBSCRIPTION_CANCELED",
+  SUBSCRIPTION_PAUSED = "SUBSCRIPTION_PAUSED",
+  SUBSCRIPTION_RESUMED = "SUBSCRIPTION_RESUMED",
   SUPPORT_TICKET_CREATED = "SUPPORT_TICKET_CREATED",
   WAITLIST_PREORDER_RELEASE_SUMMARY = "WAITLIST_PREORDER_RELEASE_SUMMARY",
   EDITION_PUBLISH_REQUEST = "EDITION_PUBLISH_REQUEST", // 👈 NEW
@@ -68,6 +70,21 @@ export type AdminEmailContent = {
     canceledAt: string;
   };
 
+  [AdminEmailType.SUBSCRIPTION_PAUSED]: {
+    name: string;
+    email: string;
+    plan: string;
+    pausedAt: string;
+    resumeAt?: string;
+  };
+
+  [AdminEmailType.SUBSCRIPTION_RESUMED]: {
+    name: string;
+    email: string;
+    plan: string;
+    resumedAt: string;
+  };
+
   [AdminEmailType.SUPPORT_TICKET_CREATED]: {
     name: string;
     email: string;
@@ -93,6 +110,9 @@ export enum EmailType {
   PAYMENT_FAILED = "PAYMENT_FAILED",
   PASSWORD_RESET = "PASSWORD_RESET",
   SUBSCRIPTION_RENEWED = "SUBSCRIPTION_RENEWED",
+  SUBSCRIPTION_CANCELLED = "SUBSCRIPTION_CANCELLED",
+  SUBSCRIPTION_PAUSED = "SUBSCRIPTION_PAUSED",
+  SUBSCRIPTION_RESUMED = "SUBSCRIPTION_RESUMED",
   SUBSCRIPTION_STARTED = "SUBSCRIPTION_STARTED",
   PREORDER_RELEASED = "PREORDER_RELEASED",
   PREORDER_RELEASED_REMINDER = "PREORDER_RELEASED_REMINDER",
@@ -164,6 +184,29 @@ export interface EmailContentMap {
     email: string;
     nextEdition: string;
     hasNextEditionReleased: boolean;
+  };
+
+  [EmailType.SUBSCRIPTION_CANCELLED]: {
+    name: string;
+    email: string;
+    plan: PlanType;
+    editionsAccessDates?: { number: number; expiryDate: Date }[];
+    reason?: string;
+  };
+
+  [EmailType.SUBSCRIPTION_PAUSED]: {
+    name: string;
+    email: string;
+    plan: PlanType;
+    pausedAt?: string | Date;
+    resumeAt?: string | Date;
+  };
+
+  [EmailType.SUBSCRIPTION_RESUMED]: {
+    name: string;
+    email: string;
+    plan: PlanType;
+    resumedAt?: string | Date;
   };
 
   [EmailType.PREORDER_RELEASED]: PreorderReleaseContent;
