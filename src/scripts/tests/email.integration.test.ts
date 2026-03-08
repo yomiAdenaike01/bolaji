@@ -6,8 +6,12 @@ import { initConfig } from "@/config";
 import { EmailIntegration } from "@/infra/integrations/email.integration";
 import { AdminEmailIntegration } from "@/infra/integrations/admin.email.integration";
 import { EmailType, AdminEmailType } from "@/infra/integrations/email-types";
-import { initInfra, initStore } from "../../infra";
-import { getMockPayloadFor } from "../../tests/integrations/email/email.integration.mock";
+import {
+  getAdminMockPayloadFor,
+  getMockPayloadFor,
+} from "../../tests/integrations/email/email.integration.mock";
+
+const config = initConfig();
 
 const ensureDirExists = () => {
   const outDir = path.join(process.cwd(), "emails_previews");
@@ -28,10 +32,6 @@ const ensureDirExists = () => {
 };
 
 async function testEmails() {
-  const config = initConfig();
-  const store = await initStore(config);
-  const { db } = initInfra(config, store);
-
   // Initialise integrations
   const userEmailIntegration = new EmailIntegration(
     config.resendApiKey,
@@ -40,14 +40,14 @@ async function testEmails() {
   const adminEmailIntegration = new AdminEmailIntegration(
     config.resendApiKey,
     config.adminEmailAddresses,
-    db,
+    {} as any,
     config.sentFromEmailAddr,
   );
 
   const outDir = ensureDirExists();
 
   for (const type of Object.values(EmailType)) {
-    const payload = getMockPayloadFor(type);
+    const payload = getMockPayloadFor(type, config);
     if (payload === null) {
       console.warn(`⚠️  No mock payload found for ${type}`);
       continue;
@@ -57,7 +57,7 @@ async function testEmails() {
         const email = await userEmailIntegration.getTemplate(type, p);
         const filePath = path.join(
           outDir,
-          `${type}_${p.planType || index}.html`,
+          `${type}_${(p as any)?.planType || index}.html`,
         );
         fs.writeFileSync(filePath, email.template);
         console.log(`✅ Rendered user email: ${type}`);
@@ -65,7 +65,7 @@ async function testEmails() {
       continue;
     }
     const email = await userEmailIntegration.getTemplate(type, payload);
-    
+
     const filePath = path.join(outDir, `${type}.html`);
     fs.writeFileSync(filePath, email.template);
     console.log(`✅ Rendered user email: ${type}`);
@@ -73,7 +73,7 @@ async function testEmails() {
 
   console.log("\n🧪 Generating admin emails...\n");
   for (const type of Object.values(AdminEmailType)) {
-    const payload = getMockPayloadFor(type);
+    const payload = getAdminMockPayloadFor(type);
     if (!payload) {
       console.warn(`⚠️  No mock payload found for ${type}`);
       continue;
@@ -82,14 +82,14 @@ async function testEmails() {
     if (Array.isArray(payload)) {
       payload.forEach((p, index) => {
         const email = adminEmailIntegration.getTemplate(type, p);
-        const filePath = path.join(outDir, `${type}_${index}.html`);
+        const filePath = path.join(outDir, `ADMIN_${type}_${index}.html`);
         fs.writeFileSync(filePath, email.template);
-        console.log(`✅ Rendered user email: ${type}`);
+        console.log(`✅ Rendered user email: ADMIN_${type}`);
       });
       continue;
     }
 
-    const email = adminEmailIntegration.getTemplate(type, payload);
+    const email = adminEmailIntegration.getTemplate(type, payload as any);
     const filePath = path.join(outDir, `ADMIN_${type}.html`);
     fs.writeFileSync(filePath, email.template);
 

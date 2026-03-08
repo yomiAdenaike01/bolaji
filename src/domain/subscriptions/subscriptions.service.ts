@@ -55,20 +55,25 @@ export class SubscriptionsService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  getAllActiveSubscriptionsByUserId = (userId: string) =>
-    this.db.subscription.findMany({
+  getAllSubscriptionsByUserId = async (
+    userId: string,
+    status?: SubscriptionStatus,
+  ): Promise<({ plan: SubscriptionPlan } & Subscription)[]> => {
+    const subs = await this.db.subscription.findMany({
       where: {
         userId,
-        status: SubscriptionStatus.ACTIVE,
+        status: status
+          ? status
+          : {
+              in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+            },
       },
       include: {
-        plan: {
-          select: {
-            type: true,
-          },
-        },
+        plan: true,
       },
     });
+    return subs as any;
+  };
 
   resumeSubscription = async (userId: string) => {
     const subscription =
@@ -105,13 +110,13 @@ export class SubscriptionsService {
     });
     return null;
   };
-  private getActiveSubscriptionAndEditionAccess = async (
+  private getActiveOrPausedSubscriptionsAndAccess = async (
     userId: string,
     subscriptionId: string,
   ) => {
     const [editionsAccess, subscription] = await this.db.$transaction((tx) => {
-      const subscriptionPromise = this.getActiveSubscriptionByUserId(
-        subscriptionId,
+      const subscriptionPromise = this.getActiveOrPausedSubscriptionByUserId(
+        userId,
         subscriptionId,
         tx,
       );
@@ -136,7 +141,7 @@ export class SubscriptionsService {
   cancelSubscription = async (userId: string, subscriptionId: string) => {
     try {
       const { subscription, editionExpiries } =
-        await this.getActiveSubscriptionAndEditionAccess(
+        await this.getActiveOrPausedSubscriptionsAndAccess(
           userId,
           subscriptionId,
         );
@@ -166,7 +171,6 @@ export class SubscriptionsService {
           tx.subscription.update({
             where: {
               id: subscription.id,
-              status: SubscriptionStatus.ACTIVE,
             },
             data: {
               status: SubscriptionStatus.CANCELED,
@@ -403,18 +407,21 @@ export class SubscriptionsService {
       );
     return { ...result, isNewSubscription };
   };
-  private getActiveSubscriptionByUserId = (
+  private getActiveOrPausedSubscriptionByUserId = (
     userId: string,
     subscriptionId: string,
     tx?: TransactionClient,
   ): Promise<
     (Subscription & { plan: SubscriptionPlan; user: User }) | null
   > => {
-    return this.db.subscription.findFirst({
+    //@ts-ignore
+    return (tx || this.db).subscription.findFirst({
       where: {
         id: subscriptionId,
         userId,
-        status: SubscriptionStatus.ACTIVE,
+        status: {
+          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+        },
       },
       include: {
         plan: true,
@@ -427,7 +434,7 @@ export class SubscriptionsService {
     userId: string,
     subscriptionId: string,
   ) => {
-    const response = await this.getActiveSubscriptionByUserId(
+    const response = await this.getActiveOrPausedSubscriptionByUserId(
       userId,
       subscriptionId,
     );

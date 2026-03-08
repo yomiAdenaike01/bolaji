@@ -14,7 +14,14 @@ import { EDITION_01_RELEASE } from "@/constants";
 import z from "zod";
 import createHttpError from "http-errors";
 import { assertReqUserIdIsDefined } from "../middleware";
-import { PlanType } from "@prisma/client";
+import { PlanType, SubscriptionStatus } from "@prisma/client";
+
+function assertSubscriptionStatus(
+  status?: string,
+): asserts status is SubscriptionStatus {
+  if (!status) return;
+  z.enum(SubscriptionStatus).parse(status);
+}
 
 export class SubscriptionsController {
   constructor(
@@ -25,9 +32,13 @@ export class SubscriptionsController {
   handleGetAllSubscriptions = async (req: Request, res: Response) => {
     try {
       assertReqUserIdIsDefined(req);
+
       const subscriptions =
-        await this.domain.subscriptions.getAllActiveSubscriptionsByUserId(
+        await this.domain.subscriptions.getAllSubscriptionsByUserId(
           req.userId,
+          req.query.status
+            ? z.enum(SubscriptionStatus).parse(req.query.status)
+            : undefined,
         );
 
       res.status(StatusCodes.OK).json(
@@ -77,7 +88,7 @@ export class SubscriptionsController {
   handleCancelSubscription = async (req: Request, res: Response) => {
     assertReqUserIdIsDefined(req);
     try {
-      const subscriptionId = z.string().parse(req.body);
+      const { subscriptionId } = req.body;
       await this.domain.subscriptions.cancelSubscription(
         req.userId,
         subscriptionId,

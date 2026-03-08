@@ -6,7 +6,6 @@ import {
 } from "@/infra/integrations/email-types";
 import { PlanType } from "@/generated/prisma/enums";
 import { Config } from "@/config";
-import { initConfig } from "@/config";
 
 const mockEdition = {
   editionTitle: "Edition 02",
@@ -119,19 +118,21 @@ const mockUserEmails = (config: Config) => {
         name: "Ade",
         email: "email@example.com",
         plan: PlanType.FULL,
-        effectiveDate: new Date(),
-        reason: "Requested by user",
+        editionsAccessDates: [
+          { expiryDate: new Date(), number: 1 },
+          { expiryDate: new Date(Date.now() + 3600 * 24 * 30), number: 2 },
+          { expiryDate: new Date(Date.now() + 3600 * 24 * 365), number: 3 },
+        ],
       },
     ],
-    [EmailType.SUBSCRIPTION_PAUSED]: [
-      {
+    [EmailType.SUBSCRIPTION_PAUSED]: Object.values(PlanType).map(
+      (planType) => ({
         name: "Ade",
         email: "email@example.com",
-        plan: PlanType.DIGITAL,
+        plan: planType,
         pausedAt: new Date(),
-        resumeAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    ],
+      }),
+    ),
     [EmailType.SUBSCRIPTION_RESUMED]: [
       {
         name: "Ade",
@@ -164,7 +165,12 @@ const mockUserEmails = (config: Config) => {
   return baseMocks;
 };
 
-export const mockAdminEmails = {
+export function getMockPayloadFor(type: EmailType, config: Config) {
+  const allMocks = mockUserEmails(config);
+  return allMocks[type];
+}
+
+const mockAdminEmails = {
   [AdminEmailType.NEW_USER]: {
     name: "Ade",
     email: "email@example.com",
@@ -201,12 +207,7 @@ export const mockAdminEmails = {
     renewedAt: "2025-11-01",
     nextPeriodEnd: "2025-12-01",
   },
-  [AdminEmailType.SUBSCRIPTION_CANCELED]: {
-    name: "Ade",
-    email: "email@example.com",
-    plan: "Full",
-    canceledAt: "2025-11-03",
-  },
+
   [AdminEmailType.SUBSCRIPTION_PAUSED]: {
     name: "Ade",
     email: "email@example.com",
@@ -240,10 +241,14 @@ export const mockAdminEmails = {
   [AdminEmailType.SUBSCRIBER_DAILY_DIGEST]: {
     timeOfDay: "morning",
   },
+  [AdminEmailType.SUBSCRIPTION_CANCELED]: Object.values(PlanType).map((t) => ({
+    name: "Ade",
+    email: "info@adebayobolaji.com",
+    plan: t,
+    canceledAt: new Date(),
+  })),
 };
 
-export function getMockPayloadFor(type: EmailType | AdminEmailType) {
-  const config = initConfig();
-  const allMocks = mockUserEmails(config);
-  return allMocks[type];
+export function getAdminMockPayloadFor(type: AdminEmailType) {
+  return mockAdminEmails[type];
 }

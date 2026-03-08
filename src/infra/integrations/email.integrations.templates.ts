@@ -10,6 +10,7 @@ import path from "path";
 const formatDate = (date: Date | string | number) => {
   const day = format(date, "d"); // day number without leading zero
   const month = format(date, "MMMM"); // full month name
+  const year = format(date, "yyyy");
 
   // Compute ordinal suffix
   const dayNum = parseInt(day, 10);
@@ -22,7 +23,7 @@ const formatDate = (date: Date | string | number) => {
           ? "rd"
           : "th";
 
-  return `${day}${suffix} ${month}`;
+  return `${day}${suffix} ${month} ${year}`;
 };
 
 const defaultPasswordSubtitle =
@@ -367,11 +368,13 @@ ${planType === PlanType.FULL ? `You now have immediate access to Edition 01 digi
       </p>
       ${
         editionsAccessDates
-          ? editionsAccessDates.map(({ number, expiryDate }) => {
-              return `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;margin-bottom:12px;">
-              Edition ${number} access remains active until: <strong>${formatDate(expiryDate)}</strong>.
+          ? editionsAccessDates
+              .map(({ number, expiryDate }) => {
+                return `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#555;">
+              Edition ${number} access remains active until: <strong>${formatDate(expiryDate)}</strong>
             </p>`;
-            })
+              })
+              .join("")
           : ""
       }
       ${

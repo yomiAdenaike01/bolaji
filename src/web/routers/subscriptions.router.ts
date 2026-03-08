@@ -3,6 +3,14 @@ import z from "zod";
 import { SubscriptionsController } from "../controllers/subscriptions.controller";
 import { AuthGuard, OptionalAuthGuard, validateRequest } from "../middleware";
 
+const subscriptionIdValidationSchema = z.object({
+  subscriptionId: z
+    .string({
+      error: "Subscription Id is not a string or undefined",
+    })
+    .min(1, { error: "Subscription Id is empty" }),
+});
+
 export const makeSubscriptionsRouter = (
   authGuard: AuthGuard,
   optionalAuthGuard: OptionalAuthGuard,
@@ -11,13 +19,6 @@ export const makeSubscriptionsRouter = (
   const r = Router();
   r.get("/", authGuard, subscriptionsController.handleGetAllSubscriptions);
   r.get("/thank-you", subscriptionsController.handleThankYouPage);
-  const subscriptionIdValidationSchema = z.object({
-    subscriptionId: z
-      .string({
-        error: "Subscription Id is not a string or undefined",
-      })
-      .min(1, { error: "Subscription Id is empty" }),
-  });
   r.delete(
     "/cancel",
     authGuard,
