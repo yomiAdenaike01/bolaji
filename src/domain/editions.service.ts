@@ -73,26 +73,24 @@ export class EditionsService {
     const now = new Date();
     if (!tx) {
       const cached = await this.store.get(cacheKey);
-      if (!cached)
-        throw new Error(
-          "Cannot fetch db details since cached is false and tx client is defined",
-        );
-      try {
-        return JSON.parse(cached) as ({
-          id: string;
-          userId: string;
-          editionId: string;
-          unlockedAt: Date | null;
-          unlockAt: Date | null;
-          status: AccessStatus;
-          subscriptionId: string | null;
-          grantedAt: Date;
-          expiresAt: Date | null;
-          accessType: PlanType;
-        } & {
-          edition: Edition | null;
-        })[];
-      } catch {}
+      if (cached) {
+        try {
+          return JSON.parse(cached) as ({
+            id: string;
+            userId: string;
+            editionId: string;
+            unlockedAt: Date | null;
+            unlockAt: Date | null;
+            status: AccessStatus;
+            subscriptionId: string | null;
+            grantedAt: Date;
+            expiresAt: Date | null;
+            accessType: PlanType;
+          } & {
+            edition: Edition | null;
+          })[];
+        } catch {}
+      }
     }
 
     const activeAccess = (await (tx || this.db).editionAccess.findMany({
