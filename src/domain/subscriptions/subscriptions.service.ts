@@ -1,14 +1,12 @@
-import bcrypt from "bcrypt";
-import { Db, TransactionClient } from "@/infra";
-import { Integrations } from "@/infra/integrations";
+import { Config } from "@/config";
 import {
-  CreateSubscriptionInput,
-  CreateSubscriptionResult,
-  UpdateSubscriptionInput,
-} from "./dto";
-import crypto from "crypto";
+  Subscription,
+  SubscriptionPlan,
+  User,
+} from "@/generated/prisma/client";
 import {
   AccessStatus,
+  EditionStatus,
   OrderStatus,
   OrderType,
   PaymentStatus,
@@ -16,27 +14,23 @@ import {
   ShipmentStatus,
   SubscriptionStatus,
   UserStatus,
-  EditionStatus,
 } from "@/generated/prisma/enums";
+import { Db, TransactionClient } from "@/infra";
+import { Integrations } from "@/infra/integrations";
 import { logger } from "@/lib/logger";
-import { JobsQueues } from "../../infra/workers/jobs-queue";
-import {
-  AdminEmailType,
-  EmailContentMap,
-  EmailType,
-} from "@/infra/integrations/email-types";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { addYears } from "date-fns";
-import { Config } from "@/config";
-import { PricingService } from "../pricing.service";
-import { EditionsService } from "../editions.service";
 import z from "zod";
+import { JobsQueues } from "../../infra/workers/jobs-queue";
+import { EditionsService } from "../editions.service";
 import { NotificationService } from "../notifications/notification.service";
+import { PricingService } from "../pricing.service";
 import {
-  Edition,
-  Subscription,
-  SubscriptionPlan,
-  User,
-} from "@/generated/prisma/client";
+  CreateSubscriptionInput,
+  CreateSubscriptionResult,
+  UpdateSubscriptionInput,
+} from "./dto";
 
 export class SubscriptionAlreadyActiveError extends Error {
   constructor(message: string) {
