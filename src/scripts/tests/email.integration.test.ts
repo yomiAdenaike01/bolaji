@@ -11,7 +11,7 @@ import {
   getMockPayloadFor,
 } from "../../tests/integrations/email/email.integration.mock";
 
-const config = initConfig();
+const config = initConfig(); // comments: test-commit
 
 const ensureDirExists = () => {
   const outDir = path.join(process.cwd(), "emails_previews");
