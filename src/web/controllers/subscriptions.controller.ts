@@ -14,14 +14,7 @@ import { EDITION_01_RELEASE } from "@/constants";
 import z from "zod";
 import createHttpError from "http-errors";
 import { assertReqUserIdIsDefined } from "../middleware";
-import { PlanType, SubscriptionStatus } from "@prisma/client";
-
-function assertSubscriptionStatus(
-  status?: string,
-): asserts status is SubscriptionStatus {
-  if (!status) return;
-  z.enum(SubscriptionStatus).parse(status);
-}
+import { SubscriptionStatus, PlanType } from "@/generated/prisma/enums";
 
 export class SubscriptionsController {
   constructor(
