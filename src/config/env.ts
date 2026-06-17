@@ -18,6 +18,7 @@ export const loadEnv = () => {
       staging: ".env.staging",
       development: ".env.local",
       local: ".env.local",
+      test: ".env.local",
     }[env] ?? ".env.local";
 
   const envPath = path.resolve(process.cwd(), envFile);

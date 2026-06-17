@@ -5,7 +5,6 @@ declare module "express-serve-static-core" {
     userId?: string;
     email?: string;
     context?: string;
-    session?: Session & Partial<SessionData>;
   }
 }
 

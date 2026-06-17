@@ -19,9 +19,12 @@
     "noImplicitAny": false, // prevents "implicit any" from breaking builds
     "skipLibCheck": true, // skip type checking of node_modules
     "noEmitOnError": false, // always emit JS even if type errors exist
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"]
   },
-  "typeRoots": ["./src/types", "./node_modules/@types"],
+  "ts-node": {
+    "files": true
+  },
   /* === Included files === */
   "include": [
     "src"

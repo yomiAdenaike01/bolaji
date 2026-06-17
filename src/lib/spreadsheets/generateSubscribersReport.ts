@@ -1,11 +1,13 @@
 // domain/reports/subscriber-editions.report.ts
 import ExcelJS from "exceljs";
-import { Db } from "@/infra";
+import { Db, initDb } from "@/infra";
 import { logger } from "@/lib/logger";
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale";
-import { PlanType, SubscriptionStatus } from "@/generated/prisma/enums";
+import { SubscriptionStatus } from "@/generated/prisma/enums";
 import { Address, AccessStatus } from "@/generated/prisma/client";
+import path from "path";
+import { loadEnv } from "@/config/env";
 
 type SubPeriod = {
   start: Date;
@@ -21,14 +23,14 @@ const fmtAddress = (address: Address) => {
     : "-";
 };
 
-export async function generateSubscriberReport(db: Db) {
+export async function generateSubscriberReport(db: Db, saveFilePath?: string) {
   logger.info("[Admin Digest] Building daily subscriber + editions report…");
   const [editionAccess, activeSubs] = await db.$transaction(async (tx) => {
     return Promise.all([
       tx.editionAccess.findMany({
         where: {
           status: {
-            in: [AccessStatus.ACTIVE],
+            in: [AccessStatus.ACTIVE, AccessStatus.SCHEDULED],
           },
         },
         include: {
@@ -73,6 +75,7 @@ export async function generateSubscriberReport(db: Db) {
   };
 
   type Row = {
+    entitledEdition: number
     subscriberName: string;
     subscriberEmail: string;
     periodStart: string;
@@ -98,6 +101,7 @@ export async function generateSubscriberReport(db: Db) {
       const addressDetails = fmtAddress(address);
 
       rows.push({
+        entitledEdition: 0,
         subscriberName: sub.user?.name ?? "—",
         subscriberEmail: sub.user?.email ?? "—",
         periodStart: fmt(period.start),
@@ -116,14 +120,17 @@ export async function generateSubscriberReport(db: Db) {
       const address = sub.user.addresses?.[0];
       const addressDetails = fmtAddress(address);
 
+      const editionsCount = covered.find((c) => c.status === AccessStatus.ACTIVE)?.edition
+        ?.number || 0
+
       rows.push({
         subscriberName: sub.user?.name ?? "—",
         subscriberEmail: sub.user?.email ?? "—",
         periodStart: fmt(period.start),
         periodEnd: fmt(period.end),
+        entitledEdition: covered.find(c => c.status === AccessStatus.SCHEDULED)?.edition?.number || editionsCount,
         editionsCount:
-          covered.find((c) => c.status === AccessStatus.ACTIVE)?.edition
-            ?.number || 0,
+          editionsCount,
         editionNumber: String(e.edition.number).padStart(2, "0"),
         editionCode: e.edition.code,
         editionTitle: e.edition.title,
@@ -148,13 +155,14 @@ export async function generateSubscriberReport(db: Db) {
     { header: "Period Start", key: "start", width: 22 },
     { header: "Period End", key: "end", width: 22 },
     { header: "Covered Editions", key: "count", width: 18 },
+    { header: "Entited Edition", key: 'entitledEdition', width: 18 },
     { header: "Address", key: "address", width: 30 },
   ];
   subsSheet.getRow(1).font = { bold: true };
 
   const byEmail = new Map<
     string,
-    { name: string; start: string; end: string; count: number; address: string }
+    { name: string; start: string; end: string; count: number; address: string, entitledEdition: number }
   >();
   for (const r of rows) {
     const key = r.subscriberEmail;
@@ -166,6 +174,7 @@ export async function generateSubscriberReport(db: Db) {
         end: r.periodEnd,
         count: r.editionsCount,
         address: r.subscriberAddress,
+        entitledEdition: r.entitledEdition
       });
     }
   }
@@ -177,6 +186,7 @@ export async function generateSubscriberReport(db: Db) {
       end: rec.end,
       count: rec.count,
       address: rec.address,
+      entitledEdition: rec.entitledEdition
     });
   }
 
@@ -206,7 +216,13 @@ export async function generateSubscriberReport(db: Db) {
       release: r.editionRelease,
     });
   }
-
+  if (saveFilePath) {
+    await wb.xlsx.writeFile(saveFilePath)
+    logger.info(
+      `[Admin Digest] Built report: ${activeSubs.length} active subs, ${rows.length} schedule lines.`,
+    );
+    return
+  }
   const buffer = await wb.xlsx.writeBuffer();
   logger.info(
     `[Admin Digest] Built report: ${activeSubs.length} active subs, ${rows.length} schedule lines.`,
@@ -214,3 +230,19 @@ export async function generateSubscriberReport(db: Db) {
 
   return buffer;
 }
+
+
+
+const IS_TEST = process.env.NODE_ENV === 'test'
+
+if (IS_TEST) {
+  loadEnv()
+  const REPORT_TEST_PATH = path.resolve(__dirname, '../../../', 'report-test/test-file.xlsx')
+  const db = initDb()
+  generateSubscriberReport(db, REPORT_TEST_PATH).then(() => {
+    logger.info('Generated test report successfully')
+  }).catch(err => {
+    logger.error('Failed to generate test report')
+  })
+}
+

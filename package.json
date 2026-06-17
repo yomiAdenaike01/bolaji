@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
+    "report:subscribers": "NODE_ENV=test node --inspect=5431 -r ts-node/register -r tsconfig-paths/register src/lib/spreadsheets/generateSubscribersReport.ts",
     "build": "tsc && tsc-alias",
     "build:prod": "yarn install --frozen-lockfile && yarn prisma generate && yarn tsc --skipLibCheck --noEmitOnError false && yarn tsc-alias",
     "migrate:prod": "sudo yarn prisma migrate deploy",
@@ -70,5 +71,6 @@
     "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
     "zod": "^4.1.12"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

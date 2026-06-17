@@ -7,7 +7,7 @@ import { seed } from "./seed";
 import { JobWorkers } from "./workers/workers";
 import { Domain } from "@/domain/domain";
 
-const initDb = () => {
+export const initDb = () => {
   const db = new PrismaClient().$extends(withAccelerate());
   return db;
 };
