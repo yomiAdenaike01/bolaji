@@ -10,29 +10,18 @@
     "moduleResolution": "node",
     "baseUrl": "./src",
     "paths": {
-      "@/*": [
-        "*"
-      ]
+      "@/*": ["*"]
     },
     /* === Strictness (safe locally, tolerant in CI) === */
     "strict": true,
     "noImplicitAny": false, // prevents "implicit any" from breaking builds
     "skipLibCheck": true, // skip type checking of node_modules
     "noEmitOnError": false, // always emit JS even if type errors exist
-    "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "forceConsistentCasingInFileNames": true
   },
-  "ts-node": {
-    "files": true
-  },
+  "typeRoots": ["./src/types", "./node_modules/@types"],
   /* === Included files === */
-  "include": [
-    "src"
-  ],
-  
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".render"
-  ]
+  "include": ["src"],
+
+  "exclude": ["node_modules", "dist", ".render"]
 }

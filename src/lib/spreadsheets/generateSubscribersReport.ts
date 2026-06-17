@@ -221,7 +221,7 @@ export async function generateSubscriberReport(db: Db, saveFilePath?: string) {
     logger.info(
       `[Admin Digest] Built report: ${activeSubs.length} active subs, ${rows.length} schedule lines.`,
     );
-    return
+    return null
   }
   const buffer = await wb.xlsx.writeBuffer();
   logger.info(

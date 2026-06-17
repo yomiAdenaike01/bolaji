@@ -13,7 +13,7 @@ import { generateSubscriberReport } from "@/lib/spreadsheets/generateSubscribers
 import { BaseEmailIntegration } from "./base.email.integration";
 
 const reportGenerators: Partial<
-  Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer>>
+  Record<AdminEmailType, (db: Db) => Promise<ExcelJS.Buffer | null>>
 > = {
   [AdminEmailType.NEW_USER]: generateUsersReportSheet,
   [AdminEmailType.NEW_PREORDER]: generatePreorderSummaryReport,
